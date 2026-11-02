@@ -547,6 +547,30 @@ function _flex_selectors(x)
     return unique(xs)
 end
 
+# Portable seed mix for the phase-43 `_flex_*` helpers (WR-02). `Base.hash` makes no
+# cross-Julia-version guarantee (its algorithm changed in 1.12), so the new flex draws never
+# touch it: fold integer-coded tags through the SplitMix64 finalizer (fixed constants, pure
+# UInt64 arithmetic => identical on every Julia version / platform). `_case_a_house_seed` and
+# `sub_seed` are golden-pinned and deliberately still hash-based (known follow-up).
+function _flex_mix(vals::Integer...)
+    h = 0x9e3779b97f4a7c15 % UInt64
+    for v in vals
+        z = (h + (v % UInt64) + 0x9e3779b97f4a7c15) % UInt64
+        z = (z ⊻ (z >> 30)) * 0xbf58476d1ce4e5b9
+        z = (z ⊻ (z >> 27)) * 0x94d049bb133111eb
+        h = z ⊻ (z >> 31)
+    end
+    return Int(h % UInt64(typemax(UInt32)))
+end
+# Integer tag codes (never hash a Symbol).
+const _FLEX_TAG_EV = 1
+const _FLEX_TAG_HP = 2
+const _FLEX_SUB_ARR = 11
+const _FLEX_SUB_DEP = 12
+const _FLEX_SUB_ENERGY = 13
+const _FLEX_SUB_SOC0 = 14
+const _FLEX_SUB_TIN0 = 15
+
 # Truncated normal by rejection (own tagged StableRNG stream; never the global RNG).
 function _flex_trunc_normal(seed::Integer, μ::Real, sd::Real, lo::Real, hi::Real)
     rng = StableRNGs.LehmerRNG(seed)
@@ -563,21 +587,21 @@ _flex_uniform(seed::Integer, lo::Real, hi::Real) =
 """
     _flex_ev(s_pop, bus, house_index, T; scale) -> ElectricVehicle
 
-One seeded EV session. Seed `Int(hash((s_pop, :ev, bus, house_index)) % typemax(UInt32))`
-(the `_case_a_house_seed` per-HOUSE idiom, never per-bus), then tag-split sub-seeds
-`hash((ev_seed, :arr|:dep|:energy|:soc0))` so the four draws are independent.
+One seeded EV session. Seed `_flex_mix(s_pop, _FLEX_TAG_EV, bus, house_index)` (per-HOUSE,
+never per-bus; a portable SplitMix64 mix, not `Base.hash`), then tag-split sub-seeds
+`_flex_mix(ev_seed, _FLEX_SUB_ARR|DEP|ENERGY|SOC0)` so the four draws are independent.
 """
 function _flex_ev(s_pop::Integer, bus::Int, house_index::Int, T::Int; scale::Real)
     T >= 2 || throw(ArgumentError("flex EV: horizon T must be >= 2; got T=$T"))
-    ev_seed = Int(hash((s_pop, :ev, bus, house_index)) % typemax(UInt32))
-    sub(tag) = Int(hash((ev_seed, tag)) % typemax(UInt32))
+    ev_seed = _flex_mix(s_pop, _FLEX_TAG_EV, bus, house_index)
+    sub(tag) = _flex_mix(ev_seed, tag)
     hour_to_t(h) = clamp(round(Int, h * T / 24), 1, T)
 
     t_arr = hour_to_t(
-        _flex_trunc_normal(sub(:arr), _EV_ARR_MU, _EV_ARR_SD, _EV_ARR_LO, _EV_ARR_HI),
+        _flex_trunc_normal(sub(_FLEX_SUB_ARR), _EV_ARR_MU, _EV_ARR_SD, _EV_ARR_LO, _EV_ARR_HI),
     )
     t_dep = hour_to_t(
-        _flex_trunc_normal(sub(:dep), _EV_DEP_MU, _EV_DEP_SD, _EV_DEP_LO, _EV_DEP_HI),
+        _flex_trunc_normal(sub(_FLEX_SUB_DEP), _EV_DEP_MU, _EV_DEP_SD, _EV_DEP_LO, _EV_DEP_HI),
     )
     if t_dep == t_arr   # degenerate (tiny T): shift departure by one slot
         t_dep = mod1(t_arr + 1, T)
@@ -585,10 +609,10 @@ function _flex_ev(s_pop::Integer, bus::Int, house_index::Int, T::Int; scale::Rea
     frac = min(
         _EV_ENERGY_CAP,
         _EV_ENERGY_MEDIAN *
-        exp(_EV_ENERGY_SIGMA * randn(StableRNGs.LehmerRNG(sub(:energy)))),
+        exp(_EV_ENERGY_SIGMA * randn(StableRNGs.LehmerRNG(sub(_FLEX_SUB_ENERGY)))),
     )
     Emax = _EV_EMAX_FACTOR * scale
-    soc0 = _flex_uniform(sub(:soc0), _EV_SOC0_LO, _EV_SOC0_HI) * Emax
+    soc0 = _flex_uniform(sub(_FLEX_SUB_SOC0), _EV_SOC0_LO, _EV_SOC0_HI) * Emax
     E_target = min(Emax, soc0 + frac * Emax)
     return ElectricVehicle(
         bus,
@@ -609,8 +633,8 @@ function _flex_ev(s_pop::Integer, bus::Int, house_index::Int, T::Int; scale::Rea
 end
 
 function _flex_heatpump(s_pop::Integer, bus::Int, house_index::Int, T::Int; scale::Real)
-    hp_seed = Int(hash((s_pop, :heatpump, bus, house_index)) % typemax(UInt32))
-    Tin0 = 21.0 + _flex_uniform(Int(hash((hp_seed, :tin0)) % typemax(UInt32)), -1.0, 1.0)
+    hp_seed = _flex_mix(s_pop, _FLEX_TAG_HP, bus, house_index)
+    Tin0 = 21.0 + _flex_uniform(_flex_mix(hp_seed, _FLEX_SUB_TIN0), -1.0, 1.0)
     Tout = Float64[5.0 + 4.0 * sin(2π * (t - 9) / 24) for t in 1:T]
     COP = Float64[clamp(3.0 + 0.05 * (x - 5.0), 2.0, 4.5) for x in Tout]
     return HeatPump(

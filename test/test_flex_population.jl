@@ -108,13 +108,24 @@ end
     )
 end
 
+@testitem "flex population: _flex_mix is a portable integer mix (pinned values, WR-02)" tags =
+    [:population] begin
+    using TSODSO: _flex_mix
+    # SplitMix64-fold values are pure UInt64 arithmetic: identical on every Julia version.
+    # (Base.hash-derived seeds are NOT — hence these pins would catch a regression to hash.)
+    @test _flex_mix(1_234_567_890, 1, 2, 3) == 2692509415
+    @test _flex_mix(0) == 271713375
+    @test _flex_mix(5, 11) == 472329139
+    @test _flex_mix(1, 2) != _flex_mix(2, 1)
+end
+
 @testitem "flex population: EV session seeding is deterministic, per-house distinct and valid" tags =
     [:population] begin
     using TSODSO
     using TSODSO: _flex_devices_for_house, sub_seed
 
     T = 24
-    s_pop = sub_seed(42, :population)
+    s_pop = 1_234_567_890   # literal: independent of Base.hash (WR-02)
     mk(bus, h; sp = s_pop) =
         only(_flex_devices_for_house(sp, bus, h, [:ev], T; scale = 0.005, ppv = nothing))
     sess(e) = (e.t_arr, e.t_dep, e.E_target, e.soc0)
@@ -127,7 +138,7 @@ end
     # per-bus distinctness too
     @test length(Set(sess(mk(b, 1)) for b in 2:11)) > 7
     # different population seed -> different sessions
-    @test any(h -> sess(mk(2, h)) != sess(mk(2, h; sp = sub_seed(43, :population))), 1:10)
+    @test any(h -> sess(mk(2, h)) != sess(mk(2, h; sp = 987_654_321)), 1:10)
 
     # validity for the constructor / contribute! guards; overnight wrap sessions occur
     evs = [mk(3, h) for h in 1:200]
