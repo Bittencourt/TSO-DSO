@@ -60,3 +60,59 @@ end
     @test_throws ArgumentError _expand_actors([p1], [a])                    # site missing from aggregators
     @test_throws ArgumentError _expand_actors([p1], [a, b, c])              # aggregator in no portfolio
 end
+
+@testitem "actor objective: AgrOpt default build is bit-identical, margin rides linear_offset" setup =
+    [TwoBusFixtures] tags = [:actors, :admm] begin
+    using TSODSO
+    using JuMP
+
+    feeder = TwoBusFixtures.two_bus_feeder()
+    agg = TwoBusFixtures.build_two_bus_aggregators(feeder)[1]
+    Th = TwoBusFixtures.T
+    ρ = TwoBusFixtures.RHO_2BUS
+
+    a0 = build_agr_opt(agg, Th; ρ = ρ)
+    a1 = build_agr_opt(agg, Th; ρ = ρ, objective = WelfareObjective())
+    @test a0.linear_offset === nothing && a1.linear_offset === nothing
+    @test num_variables(a0.model) == num_variables(a1.model)
+    @test num_constraints(a0.model; count_variable_in_set_constraints = true) ==
+          num_constraints(a1.model; count_variable_in_set_constraints = true)
+    @test string(objective_function(a0.model)) == string(objective_function(a1.model))
+
+    # Test 2: the pag coefficient after solve_agr! is -λ - ρc + m (read, not inferred).
+    m = collect(range(0.1, 0.5; length = Th))
+    ap = build_agr_opt(agg, Th; ρ = ρ, objective = ProfitObjective(m))
+    @test ap.linear_offset == m
+    λ = fill(4.0, Th)
+    c = fill(0.01, Th)
+    solve_agr!(ap, λ, c, ρ)
+    aff = objective_function(ap.model).aff
+    coefs = [aff.terms[ap.pag[t]] for t in 1:Th]
+    @test coefs ≈ -λ .- ρ .* c .+ m
+    # re-solve: the margin survives a second coefficient overwrite
+    solve_agr!(ap, λ .+ 1, c, ρ)
+    aff2 = objective_function(ap.model).aff
+    @test [aff2.terms[ap.pag[t]] for t in 1:Th] ≈ -(λ .+ 1) .- ρ .* c .+ m
+end
+
+@testitem "actor objective: margin is live in the AGR optimum; zero wedge matches default bitwise" setup =
+    [TwoBusFixtures] tags = [:actors, :admm] begin
+    using TSODSO
+
+    feeder = TwoBusFixtures.two_bus_feeder()
+    agg = TwoBusFixtures.build_two_bus_aggregators(feeder)[1]
+    Th = TwoBusFixtures.T
+    ρ = TwoBusFixtures.RHO_2BUS
+    λ = fill(4.0, Th)
+    c = zeros(Th)
+
+    pag_of(obj) = begin
+        a = build_agr_opt(agg, Th; ρ = ρ, objective = obj)
+        solve_agr!(a, λ, c, ρ).pag
+    end
+    p_def = pag_of(WelfareObjective())
+    p_zero = pag_of(ProfitObjective(0.0))
+    p_m = pag_of(ProfitObjective(2.0))
+    @test p_zero == p_def                 # x + 0.0 == x, bitwise
+    @test maximum(abs.(p_m .- p_def)) > 1e-6
+end

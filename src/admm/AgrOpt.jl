@@ -73,6 +73,7 @@ struct AgrOpt
     T::Int
     bus::Int
     ρ::Float64
+    linear_offset::Union{Nothing, Vector{Float64}}
 end
 
 """
@@ -116,6 +117,13 @@ ONCE, reusing `Aggregator.contribute!` verbatim:
 block, mirroring `ρ`'s role for the active `pag` block and [`build_dso_opt`](@ref)'s `ρ_q`
 default. Unused (never referenced) under `OFF`/`CERTIFIED`.
 
+`objective::AbstractActorObjective = WelfareObjective()`: the actor objective (phase 44). The default
+leaves the built model bit-identical (`agr_objective(WelfareObjective(), U, pag, T) === U`,
+`linear_offset === nothing`). A [`ProfitObjective`](@ref) margin `m_t` is stored as
+`AgrOpt.linear_offset` and added to the `pag` coefficient inside every [`solve_agr!`](@ref)
+update (`-λ - ρc + m_t`); it is never baked into the objective, since `set_objective_coefficient`
+would overwrite it.
+
 `optimizer = select_optimizer(QP())`: ADDITIVE solver-factory kwarg — the default is
 byte-identical to the previous hardcoded `Model(select_optimizer(QP()))` build. Intended
 use (POP-04): pass a TIGHTER Clarabel factory of the shape
@@ -138,6 +146,7 @@ function build_agr_opt(
     reactive_mode = ReactiveMode.OFF,
     ρ_q::Real = ρ,
     optimizer = select_optimizer(QP()),
+    objective::AbstractActorObjective = WelfareObjective(),
 )
     mode = normalize_reactive_mode(reactive_mode)
 
@@ -170,7 +179,7 @@ function build_agr_opt(
     # Under LIVE ONLY, declare + pin qag_live and fold its (ρ_q/2)·Σ qag_live² penalty into the
     # SAME accumulator BEFORE the single @objective call — OFF/CERTIFIED never construct or touch
     # it (bit-for-bit identical built objective under those two modes).
-    obj_expr = ctx.objective - 0.5 * ρ * sum(pag[t]^2 for t in 1:T)
+    obj_expr = agr_objective(objective, ctx.objective, pag, T) - 0.5 * ρ * sum(pag[t]^2 for t in 1:T)
     qag_live = nothing
     if mode == ReactiveMode.LIVE
         # NEW: qag_live[t] genuinely PINNED to the aggregator's TOTAL reactive
@@ -188,7 +197,10 @@ function build_agr_opt(
     end
     @objective(model, Max, obj_expr)
 
-    return AgrOpt(model, ctx, collect(pag), qag, qag_live, T, agg.bus, Float64(ρ))
+    # Actor-objective margin (phase 44): stored, never baked into `obj_expr`, because
+    # `solve_agr!` overwrites the pag coefficient every iteration (RESEARCH Pitfall 1).
+    linear_offset = agr_linear_offset(objective, T)
+    return AgrOpt(model, ctx, collect(pag), qag, qag_live, T, agg.bus, Float64(ρ), linear_offset)
 end
 
 """
@@ -309,7 +321,10 @@ function solve_agr!(
     # The qag_live update (when μ_j !== nothing) lives in the SAME loop as pag's, mirroring the
     # active-power update exactly — never a second loop.
     for t in 1:agr.T
-        set_objective_coefficient(agr.model, agr.pag[t], -λ_j[t] - ρ * c_j[t])
+        coef = -λ_j[t] - ρ * c_j[t]
+        # Actor margin (ProfitObjective): +m_t; the default path performs no extra float op.
+        agr.linear_offset === nothing || (coef += agr.linear_offset[t])
+        set_objective_coefficient(agr.model, agr.pag[t], coef)
         if μ_j !== nothing
             set_objective_coefficient(agr.model, agr.qag_live[t], -μ_j[t] - ρ_q * d_j[t])
         end
