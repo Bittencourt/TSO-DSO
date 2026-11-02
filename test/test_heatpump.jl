@@ -15,7 +15,26 @@
 #
 # (2R2C lineage: Kircher / Bacher-Madsen RC models -- cited at MEDIUM bibliographic confidence.)
 
-# CROSSVAL_TABLE_PLACEHOLDER
+# MEASUREMENT-BEFORE-GOLDEN (DEV-10b): the centralized-vs-ADMM crossval bands below were MEASURED
+# (2026-11-02) on the HeatPump-only two-bus fixture (`TwoBusFixtures.two_bus_feeder`, T = 24,
+# rho = RHO_2BUS, SWING price lambda0 = 1 (hours 18..24, 1..4) | 12 (hours 5..8) | 4 (else), pu power
+# Pmax = 0.02, 2R2C (a_ie, a_ia, a_me, a_ma) = (0.1, 0.05, 0.05, 0.02), beta = 30, comfort band
+# 19..23, envelope band 5..35, Tin0 = 21, Tem0 = 20, b = 0.05, Tout = 5 + 4 sin(2 pi (t-9)/24),
+# COP[t] = 3 + 0.05 (Tout[t] - 5), aggregator phi = 0.90) across 5 seeds, `solve_welfare` (SOCP, default
+# optimizer, reactive balance live) vs `solve_admm` (DEFAULT reactive mode = LIVE because the
+# HeatPump is a flexible load; every run converges in iters = 2, dispatch is genuine: p hits Pmax,
+# Tin touches the 19 lower band):
+#
+#   seed        |dWelfare|    |dLambda|_2 (T=24)   |dMu_q|_2 (T=24)    (|lambda_c|_2 ~ 27.04, |mu_c|_2 ~ 4e-4..6e-4)
+#   20260719    3.993e-5      5.129e-6             2.484e-6
+#   20260720    4.925e-5      5.082e-6             2.462e-6
+#   20260721    2.734e-5      2.928e-6             1.418e-6
+#   20260722    4.625e-5      4.652e-6             2.253e-6
+#   20260723    2.832e-5      3.001e-6             1.453e-6
+#   max         4.925e-5      5.129e-6             2.484e-6
+#
+# The bands are PINNED AT those observed maxima (rounded UP to 4 significant digits, never padded
+# to a round number): welfare atol 4.926e-5; lambda ||.||_2 atol 5.130e-6; mu_q ||.||_2 atol 2.485e-6.
 
 @testitem "heatpump: HeatPump constructor guards reject physics / stability violations" tags =
     [:heatpump] begin
@@ -397,4 +416,77 @@ end
     @test length(all_variables(model)) == 2 * (3T + 4)
     @test r1.vars.Tin0 != r2.vars.Tin0
     @test isempty(object_dictionary(model))
+end
+
+# --- centralized-vs-ADMM crossval (gate-then-golden), bands pinned from the header table ---
+
+@testitem "heatpump: centralized vs ADMM crossval, LIVE reactive default, measured bands pinned (crossval)" setup =
+    [TwoBusFixtures] tags = [:heatpump, :admm] begin
+    using TSODSO, JuMP, LinearAlgebra
+
+    T = TwoBusFixtures.T
+    λswing = [(t in 5:8) ? 12.0 : ((t >= 18 || t <= 4) ? 1.0 : 4.0) for t in 1:T]
+    Tout = [5.0 + 4.0 * sin(2π * (t - 9) / 24) for t in 1:T]
+    COP = [3.0 + 0.05 * (Tout[t] - 5.0) for t in 1:T]
+
+    function hp_aggs(seed::Integer)
+        prof = generate_profiles(seed = seed + 2, T = T)
+        Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * p for p in prof.demand]
+        hp = TSODSO.HeatPump(
+            2,
+            0.1,
+            0.05,
+            0.05,
+            0.02,
+            30.0,
+            19.0,
+            23.0,
+            5.0,
+            35.0,
+            21.0,
+            20.0,
+            0.02,
+            0.05,
+            Tout,
+            COP,
+        )
+        return [TSODSO.Aggregator(2, 0.90, [hp], Pdc)]
+    end
+
+    band_W, band_λ, band_μ = 4.926e-5, 5.130e-6, 2.485e-6
+
+    for k in 0:4
+        seed = TwoBusFixtures.SEED_2BUS + k
+        ctx, obj, _ = solve_welfare(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            hp_aggs(seed);
+            T = T,
+            λ₀ = λswing,
+            allow_export = true,
+        )
+        dl = extract_dlmp(ctx; bus = 2, T = T)
+        mc = TSODSO.extract_reactive_dlmp(ctx; bus = 2, T = T)
+        res = solve_admm(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            hp_aggs(seed);
+            T = T,
+            λ₀ = λswing,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+        )
+        @test abs(res.welfare - obj) <= band_W
+        @test norm(vec(res.λ) - vec(dl)) <= band_λ
+        @test norm(vec(res.mu_q) - vec(mc)) <= band_μ
+        # Trait exercised end-to-end: a flexible-load member resolves the default reactive mode LIVE.
+        @test res.reactive_consensus_mode === ReactiveMode.LIVE
+        @test res.mu_q !== nothing
+        # Dispatch is genuine (non-degenerate certificate): the heat pump actually runs.
+        hpv = ctx.agg_device_vars[2][1]
+        @test maximum(value.(hpv.p)) > 0.5 * 0.02
+        # Structural identity, exact: the comfort band holds through T+1 in the centralized solve.
+        @test all(19.0 - 1e-7 <= value(x) <= 23.0 + 1e-7 for x in hpv.Tin)
+        @test ctx.agg_device_types[2] == DataType[TSODSO.HeatPump{Float64}]
+    end
 end
