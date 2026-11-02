@@ -732,7 +732,10 @@ opt-in is a kwarg, not a population selector). Otherwise a Symbol or collection 
 `(:ev, :heatpump, :smartinverterpv)` appends per-HOUSE seeded flexible devices (one per
 `:case_a_784` house, one per `:default` bus aggregator); unknown selectors throw `ArgumentError`.
 EV session distributions are documented LOW-CONFIDENCE calibration (see the constants block
-above `_flex_selectors`).
+above `_flex_selectors`). LIMITATION: flex populations are supported by the day-ahead
+centralized / ADMM paths only. `fit_baseline` / `compare_tariffs` and `run_mpc` have no
+model for `ElectricVehicle` / `HeatPump` / `SmartInverterPV` and throw an explicit
+`ArgumentError` naming them (the `Scenario` schema cannot carry `flex_devices` anyway).
 
 # IEEE-8500 real-per-load-kW path
 

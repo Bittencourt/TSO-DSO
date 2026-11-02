@@ -197,3 +197,53 @@ end
     @test isfinite(res.welfare)
     @test abs(res.welfare - obj) <= 1e-3 * max(1.0, abs(obj))
 end
+
+@testitem "flex population: FIT and MPC paths reject the phase-43 devices explicitly (WR-05)" tags =
+    [:population] begin
+    using TSODSO
+    using TSODSO: Bus, Branch, Feeder, _flex_devices_for_house, _reject_unsupported_flex_devices
+
+    T = 3
+    feeder = Feeder(
+        [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+        [Branch(1, 2, 0.01, 0.02, 10.0)],
+        1,
+    )
+    # each new device type, alone, must be rejected with a message naming it
+    function rejects(which, name)
+        devs = _flex_devices_for_house(
+            1_234_567_890,
+            2,
+            1,
+            which,
+            T;
+            scale = 0.1,
+            ppv = fill(0.05, T),
+        )
+        batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+        agg = Aggregator(2, 0.9, AbstractDevice[batt; devs], fill(0.1, T))
+        err_fit = try
+            fit_baseline(feeder, ConvexBranchFlow(), [agg]; λ_fit = 40.0, T = T)
+            nothing
+        catch e
+            e
+        end
+        err_mpc = try
+            _reject_unsupported_flex_devices(agg.devices, "run_mpc")
+            nothing
+        catch e
+            e
+        end
+        return err_fit isa ArgumentError &&
+               occursin(name, err_fit.msg) &&
+               err_mpc isa ArgumentError &&
+               occursin(name, err_mpc.msg) &&
+               occursin("run_mpc", err_mpc.msg)
+    end
+    @test rejects(:ev, "ElectricVehicle")
+    @test rejects(:heatpump, "HeatPump")
+    @test rejects(:smartinverterpv, "SmartInverterPV")
+    # the legacy device set is NOT rejected
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    @test _reject_unsupported_flex_devices([batt], "run_mpc") === nothing
+end

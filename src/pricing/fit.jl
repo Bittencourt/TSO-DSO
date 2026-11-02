@@ -68,6 +68,32 @@ const FIT_λ_SELF = 5.6     # self-consumed PV                (λ_s,  page 93)
 const FIT_SITE3_ALMOST_GAP_TOL = 7.74884392740205e-5
 
 """
+    _reject_unsupported_flex_devices(devices, caller) -> Nothing
+
+Phase-43 guard (WR-05): the FIT-OPT and the MPC loop have NO model for the opt-in
+`ElectricVehicle` / `HeatPump` / `SmartInverterPV` devices (`build_population(...;
+flex_devices = ...)`). Without this guard the FIT "flexible load" branch would silently
+treat a `SmartInverterPV` as negative consumption (its generation read as load reduction, its
+`q` ignored) and V2G EV discharge as negative load. Throws `ArgumentError` naming the
+offending device types.
+"""
+function _reject_unsupported_flex_devices(devices, caller::AbstractString)
+    bad = unique(
+        nameof(typeof(d)) for
+        d in devices if d isa Union{ElectricVehicle,HeatPump,SmartInverterPV}
+    )
+    isempty(bad) || throw(
+        ArgumentError(
+            "$caller does not support the phase-43 flexible devices " *
+            "$(join(string.(bad), ", ")) (build_population `flex_devices` opt-in): they " *
+            "have no FIT-OPT / MPC model here. Use the day-ahead centralized/ADMM " *
+            "strategies, or drop `flex_devices`.",
+        ),
+    )
+    return nothing
+end
+
+"""
     _fit_pv_and_flex(agg, ctx; T) -> (; Ppv, consumption, utility, flex_vars)
 
 Split an aggregator's member devices into the FIT-OPT ingredients (Assumption A4, thesis
@@ -89,6 +115,7 @@ it, so no storage variable/constraint enters the FIT-OPT (the thesis FIT prosume
 flexible loads but no battery).
 """
 function _fit_pv_and_flex(agg::Aggregator, ctx::ModelContext; T::Int)
+    _reject_unsupported_flex_devices(agg.devices, "fit_baseline (FIT-OPT)")
     Ppv = zeros(Float64, T)
     consumption = AffExpr[zero(AffExpr) for _ in 1:T]
     utility = zero(QuadExpr)

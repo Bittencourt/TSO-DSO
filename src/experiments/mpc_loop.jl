@@ -286,6 +286,11 @@ function _run_mpc(s::Scenario, st::MPC; _truth_settlement::Symbol = :ac)
         sub_seed(s.seed, :population),
     )
     pf = build_powerflow(s)
+    # WR-05: the phase-43 flex devices (EV / HeatPump / SmartInverterPV) have no MPC window
+    # model; fail loudly rather than with a late MethodError.
+    for agg in aggs
+        _reject_unsupported_flex_devices(agg.devices, "run_mpc")
+    end
 
     # --- 1b. Deferrable-excluded aggregator list for the WINDOW model (see this file's
     # header design note) — the day-ahead benchmark below still uses the FULL `aggs`. ------
