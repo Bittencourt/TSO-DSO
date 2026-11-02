@@ -4,7 +4,7 @@ milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
 stopped_at: "**Operator-ordered clean stop 2026-10-24 (autonomous run halted mid-gap-closure).** Phase 39 complete+verified. Phase 40: 4/4 main plans complete, verification returned gaps_found (POP-04); gap-closure plans 40-05 (AGR solver-precision seam) and 40-06 (bounded tolerance ladder → pin band → lift skip) created; **40-05 COMPLETE; 40-06 INTERRUPTED mid-execution** — ladder already CERTIFIED at rung `gap_1e-10` (stop-on-first-certified, commits 99982c1/e9ebb66/eac9400), remaining 40-06 tail work uncommitted in the working tree."
-last_updated: "2026-11-02T22:25:35.131Z"
+last_updated: "2026-11-02T22:25:38.712Z"
 last_activity: 2026-11-02
 progress:
   total_phases: 8
@@ -234,6 +234,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 43 P04 | 45min | 3 tasks | 4 files |
 | Phase 44 P02 | 75min | 3 tasks | 7 files |
 | Phase 44 P04 | 110min | 2 tasks | 9 files |
+| Phase 44 P03 | 2h | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -340,6 +341,7 @@ Recent decisions affecting current work:
 - [Phase 43]: SmartInverterPV crossval bands pinned at measured maxima; OFF/CERTIFIED fail loud so routing proof uses LIVE no-slack :balance_q
 - [Phase 44]: [44-02] Wedge added in solve_welfare from ctx.meta[:agg_net] (local objective only), not via Aggregator.contribute!; welfare return is SOCIAL on actor path
 - [Phase 44]: [44-04] Behavioural baseline is a per-device FIT flat-price solve (not fit_baseline); tie-break 1e-6 measured; storage wrapped only with include_storage
+- [Phase ?]: [44-03] DsoOpt gets no new field; slot_bus in ctx.meta[:slot_bus]; AdmmState.slot_bus trailing with 18-arg constructor; _force_slot_path test seam
 
 ### Roadmap Evolution
 
