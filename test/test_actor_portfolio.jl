@@ -205,3 +205,81 @@ end
     # DsoOpt keeps its 10-field layout
     @test length(fieldnames(typeof(st_slot.dso))) == 10
 end
+
+@testitem "actor portfolio: forced slot path parallel == serial bitwise (thread-gated, no skip record)" setup =
+    [ExperimentHarnessFixtures] tags = [:actors, :admm, :parallel] begin
+    using TSODSO
+    using LinearAlgebra: BLAS
+
+    # Under the default 1-thread suite the threaded executor throws by design (fail-loud), so
+    # the equality comparison runs only when threads are available. It deliberately emits NO
+    # `@test_skip`: that would need a new test/expected_broken.txt record. Run it with
+    # `JULIA_NUM_THREADS=4 TSODSO_TEST_FILES=test_actor_portfolio.jl`.
+    function run_case()
+        kw0 = ExperimentHarnessFixtures.minimal_scenario_kwargs()
+        s = TSODSO.Scenario(; kw0..., strategy = :admm)
+        st = s.strategy
+        feeder, λ₀, aggs = TSODSO._materialize(s)
+        pf = TSODSO.build_powerflow(s)
+        kw = (
+            T = s.T, λ₀ = λ₀, ρ = st.ρ, maxiter = st.maxiter, ε_abs = st.ε_abs,
+            ε_rel = st.ε_rel, τ = st.τ_ratio, μ = st.μ, allow_export = s.allow_export,
+        )
+        acts = [Portfolio(a; name = Symbol("site", i)) for (i, a) in enumerate(aggs)]
+        ser = solve_admm(feeder, pf, aggs; kw..., actors = acts, _force_slot_path = true)
+        par = solve_admm(
+            feeder, pf, aggs; kw..., actors = acts, _force_slot_path = true, parallel = true,
+        )
+        return (; ser, par)
+    end
+    if Threads.nthreads() > 1
+        blas0 = BLAS.get_num_threads()
+        try
+            r = run_case()
+            @test r.par.welfare == r.ser.welfare
+            @test r.par.dadp == r.ser.dadp
+            @test r.par.iters == r.ser.iters
+            @test r.par.residuals.primal_trace == r.ser.residuals.primal_trace
+            @test r.par.residuals.dual_trace == r.ser.residuals.dual_trace
+            @test r.par.agr_dispatch == r.ser.agr_dispatch
+        finally
+            BLAS.set_num_threads(blas0)
+        end
+    else
+        @info "actor portfolio: 1-thread runtime; threaded slot-path equality not exercised"
+        @test Threads.nthreads() == 1
+    end
+end
+
+@testitem "actor portfolio: forced slot path LIVE reactive with a 4Q-BESS site equals legacy bitwise" setup =
+    [TwoBusFixtures, FourQuadBESSFixtures] tags = [:actors, :admm, :reactive] begin
+    using TSODSO
+
+    function run_case()
+        feeder = TwoBusFixtures.two_bus_feeder()
+        aggs = FourQuadBESSFixtures.build_two_bus_aggregators_4q(feeder)
+        kw = (
+            T = TwoBusFixtures.T,
+            λ₀ = TwoBusFixtures.two_bus_lambda0(),
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+            reactive_consensus = ReactiveMode.LIVE,
+            maxiter = 500,
+        )
+        legacy = solve_admm(feeder, ConvexBranchFlow(), aggs; kw...)
+        acts = [Portfolio(a; name = Symbol("site", i)) for (i, a) in enumerate(aggs)]
+        slot = solve_admm(
+            feeder, ConvexBranchFlow(), aggs; kw..., actors = acts, _force_slot_path = true,
+        )
+        return (; legacy, slot)
+    end
+    r = run_case()
+    @test r.slot.mu_q !== nothing && r.slot.q_devices !== nothing
+    @test r.slot.welfare == r.legacy.welfare
+    @test r.slot.dadp == r.legacy.dadp
+    @test r.slot.iters == r.legacy.iters
+    @test r.slot.mu_q == r.legacy.mu_q
+    @test r.slot.q_devices == r.legacy.q_devices
+    @test r.slot.agr_dispatch == r.legacy.agr_dispatch
+    @test r.slot.residuals.primal_trace == r.legacy.residuals.primal_trace
+end
