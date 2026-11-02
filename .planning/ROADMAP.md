@@ -62,7 +62,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 - [x] **Phase 40: 784-House Thesis Population** - True Case A population via a new selector, per-house seeding, household map, centralized-vs-ADMM agreement and scaling report (completed 2026-10-24)
 - [x] **Phase 41: Settlement, Ledger & Equity** - Conserved per-actor ledger, tariff schemes, AC feasibility status, equity metrics, rebound (completed 2026-10-26)
 - [x] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation (completed 2026-10-26)
-- [ ] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized
+- [x] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized (completed 2026-11-02)
 - [ ] **Phase 44: Aggregator as Actor** - Welfare vs profit (wedge) objectives, multi-bus portfolios, exogenous compliance/opt-out/rebound
 - [ ] **Phase 45: Flexibility Market vs Price Coordination** - DSO flexibility market with explicit baseline/payment rule and the cross-scheme comparison table
 - [ ] **Phase 46: IEEE-8500 Headline Measurement (go/no-go)** - Recorded go/no-go and a measured 8500 table through `Scenario`
@@ -225,7 +225,7 @@ Plans:
 - [x] 43-02-PLAN.md — ElectricVehicle V1G/V2G (session windows as bounds, quadratic soft target, c_deg > 0, EV certificate + negative-price fixture) + crossval gate — DEV-06/07/10
 - [x] 43-03-PLAN.md — HeatPump 2R2C (exogenous COP, comfort band, joint terminal rule, flexible-load roll-up) + crossval gate — DEV-08/10
 - [x] 43-04-PLAN.md — SmartInverterPV (anonymous apparent-power cone, zero-utility Q through reactive consensus, μ crossval) — DEV-09/10
-- [ ] 43-05-PLAN.md — build_population flex_devices opt-in + hash-seeded EV sessions (Scenario untouched); SOCP exactness re-measurement script + committed CSV + droop post-hoc comparator + literate page — DEV-06/09
+- [x] 43-05-PLAN.md — build_population flex_devices opt-in + hash-seeded EV sessions (Scenario untouched); SOCP exactness re-measurement script + committed CSV + droop post-hoc comparator + literate page — DEV-06/09
 
 ### Phase 44: Aggregator as Actor
 
@@ -281,7 +281,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 40. 784-House Thesis Population | 6/6 | Complete    | 2026-10-24 |
 | 41. Settlement, Ledger & Equity | 4/4 | Complete    | 2026-10-26 |
 | 42. Thesis Case A Magnitude | 6/6 | Complete    | 2026-10-26 |
-| 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 4/5 | In Progress|  |
+| 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 5/5 | Complete   | 2026-11-02 |
 | 44. Aggregator as Actor | 0/TBD | Not started | - |
 | 45. Flexibility Market vs Price Coordination | 0/TBD | Not started | - |
 | 46. IEEE-8500 Headline Measurement (go/no-go) | 0/TBD | Not started | - |

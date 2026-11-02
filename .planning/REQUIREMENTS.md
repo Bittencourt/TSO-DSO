@@ -58,10 +58,10 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 
 ### Devices (DEV)
 
-- [ ] **DEV-06**: A researcher can add EVs with arrival/departure windows and a (soft) departure energy target as smart-charging (V1G) devices, with seeded session sampling.
+- [x] **DEV-06**: A researcher can add EVs with arrival/departure windows and a (soft) departure energy target as smart-charging (V1G) devices, with seeded session sampling.
 - [x] **DEV-07**: A researcher can enable V2G on EVs with a strictly positive degradation cost, and a certificate reports any simultaneous charge/discharge (including a negative-price fixture).
 - [x] **DEV-08**: A researcher can add heat pumps with a 2R2C building thermal model, an exogenous COP(T_out) profile and a comfort band, with a consistent terminal-temperature rule.
-- [ ] **DEV-09**: A researcher can give PV a smart-inverter reactive capability (apparent-power cone, optimal Q), with SOCP exactness re-measured in the high-PV regime; a Volt-VAR droop curve is evaluated only after the fact as a comparator.
+- [x] **DEV-09**: A researcher can give PV a smart-inverter reactive capability (apparent-power cone, optimal Q), with SOCP exactness re-measured in the high-PV regime; a Volt-VAR droop curve is evaluated only after the fact as a comparator.
 - [x] **DEV-10**: Each new device class is validated against the centralized solve before ADMM use, and existing fixtures keep their resolved reactive mode (the device-capability trait refactor changes no behaviour).
 
 ### Aggregator as actor (ACTOR)
@@ -126,10 +126,10 @@ Deferred; tracked but not in this roadmap.
 | REPRO-03 | Phase 42 | Complete |
 | REPRO-04 | Phase 42 | Complete |
 | REPRO-05 | Phase 42 | Complete |
-| DEV-06 | Phase 43 | Pending |
+| DEV-06 | Phase 43 | Complete |
 | DEV-07 | Phase 43 | Complete |
 | DEV-08 | Phase 43 | Complete |
-| DEV-09 | Phase 43 | Pending |
+| DEV-09 | Phase 43 | Complete |
 | DEV-10 | Phase 43 | Complete |
 | ACTOR-01 | Phase 44 | Pending |
 | ACTOR-02 | Phase 44 | Pending |
