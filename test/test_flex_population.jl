@@ -23,13 +23,44 @@
     profiles = generate_profiles(; seed = sub_seed(42, :profiles), T = 24)
     s_pop = sub_seed(42, :population)
 
-    shape(aggs) = [(a.bus, a.φ, [typeof(d) for d in a.devices], a.Pdc) for a in aggs]
+    # Full structural fold over EVERY field (device parameters, profiles, Pdc): FNV-1a over the
+    # bit patterns. Pinned digests were computed at the PRE-phase-43 commit 0fe0777 (before any
+    # flex code existed) and are byte-identical today (WR-06): they fail on any change to the
+    # default path's device values, not just its shape.
+    function fold(h::UInt64, x)
+        if x isa AbstractFloat
+            return (h ⊻ reinterpret(UInt64, Float64(x))) * 0x100000001b3
+        elseif x isa Integer
+            return (h ⊻ (x % UInt64)) * 0x100000001b3
+        elseif x isa Symbol || x isa AbstractString
+            for c in codeunits(string(x))
+                h = (h ⊻ c) * 0x100000001b3
+            end
+            return h
+        elseif x isa AbstractArray
+            h = fold(h, length(x))
+            for e in x
+                h = fold(h, e)
+            end
+            return h
+        elseif x === nothing
+            return h * 0x100000001b3
+        else
+            h = fold(h, string(nameof(typeof(x))))
+            for f in fieldnames(typeof(x))
+                h = fold(h, getfield(x, f))
+            end
+            return h
+        end
+    end
+    digest(aggs) = fold(0xcbf29ce484222325, aggs)
+    golden = Dict(:default => 0x9358a27f6c14df69, :case_a_784 => 0x2c853fe6bee1cb41)
 
     for sym in (:default, :case_a_784)
         a = build_population(sym, feeder, :ieee13, profiles, s_pop)
         b = build_population(sym, feeder, :ieee13, profiles, s_pop; flex_devices = nothing)
-        @test isequal(shape(a), shape(b))
-        # the pre-change device set per aggregator is the fixed 3-device house (+ n houses)
+        @test digest(a) == digest(b)
+        @test digest(a) == golden[sym]
         @test all(x -> !(TSODSO.ElectricVehicle in (typeof(d) for d in x.devices)), b)
     end
     # :default is exactly one 3-device aggregator per load bus
@@ -173,29 +204,33 @@ end
         return [TSODSO.Aggregator(2, 0.90, devs, Pdc)]
     end
 
-    seed = TwoBusFixtures.SEED_2BUS
-    feeder = TwoBusFixtures.two_bus_feeder()
-    ctx, obj, _ = solve_welfare(
-        feeder,
-        ConvexBranchFlow(),
-        flex_aggs(seed);
-        T = T,
-        λ₀ = λswing,
-        allow_export = true,
-    )
-    @test isfinite(obj)
-    res = solve_admm(
-        TwoBusFixtures.two_bus_feeder(),
-        ConvexBranchFlow(),
-        flex_aggs(seed);
-        T = T,
-        λ₀ = λswing,
-        ρ = TwoBusFixtures.RHO_2BUS,
-        allow_export = true,
-    )
-    @test res.iters >= 1
-    @test isfinite(res.welfare)
-    @test abs(res.welfare - obj) <= 1e-3 * max(1.0, abs(obj))
+    function relgap(seed)
+        ctx, obj, _ = solve_welfare(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            flex_aggs(seed);
+            T = T,
+            λ₀ = λswing,
+            allow_export = true,
+        )
+        res = solve_admm(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            flex_aggs(seed);
+            T = T,
+            λ₀ = λswing,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+        )
+        return (isfinite(obj) && isfinite(res.welfare) && res.iters >= 1) ?
+               abs(res.welfare - obj) / max(1.0, abs(obj)) : Inf
+    end
+    # Band is a stated multiple of a MEASURED maximum (WR-06): the relative ADMM-vs-centralized
+    # welfare gap max(1,|obj|)-normalised was measured over 6 seeds (SEED_2BUS + 0:5) as
+    # max 3.910e-5 (all six within [2.6e-5, 3.9e-5]); band = 3 x measured max = 1.2e-4.
+    gaps = [relgap(TwoBusFixtures.SEED_2BUS + k) for k in 0:5]
+    @test all(isfinite, gaps)
+    @test maximum(gaps) <= 1.2e-4
 end
 
 @testitem "flex population: FIT and MPC paths reject the phase-43 devices explicitly (WR-05)" tags =
