@@ -292,6 +292,42 @@ end
     end
 end
 
+@testitem "electricvehicle: wrap session -- evening charge does NOT reduce the departure shortfall (pinned limitation, WR-01)" tags =
+    [:electricvehicle] begin
+    using TSODSO, JuMP
+
+    # PINS the documented wrap-session semantics (ElectricVehicle.jl header): for t_dep < t_arr the
+    # target is tied to soc[t_dep+1], reachable only through hours 1..t_dep; evening charging in
+    # t_arr..T raises soc[T+1] but leaves the shortfall untouched. If the model is later changed
+    # to a true overnight (arrive -> depart) session, this test MUST be revisited, not silenced.
+    T = 24
+    t_arr, t_dep = 20, 5
+    Pmax, η, soc0, E_target = 5.0, 0.9, 10.0, 30.0
+    function shortfall_and_terminal(evening::Float64)
+        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        ctx = TSODSO.ModelContext(model)
+        ev = TSODSO.ElectricVehicle(
+            2, η, 1.0, Pmax, 0.0, 40.0, soc0, E_target, 10.0, 1.0, 4.0, 9.0, t_arr, t_dep,
+        )
+        res = TSODSO.contribute!(ev, ctx; T = T)
+        for t in 1:T
+            if t >= t_arr
+                fix(res.vars.p_ch[t], evening; force = true)
+            else
+                fix(res.vars.p_ch[t], 0.0; force = true)   # no morning charge
+            end
+        end
+        @objective(model, Max, res.utility)
+        TSODSO.assert_solved!(model; dual = true, allow_local = false)
+        return max(0.0, E_target - value(res.vars.soc[t_dep + 1])), value(res.vars.soc[T + 1])
+    end
+    s0, term0 = shortfall_and_terminal(0.0)
+    s1, term1 = shortfall_and_terminal(Pmax)
+    @test s0 ≈ E_target - soc0 atol = 1e-8
+    @test s1 ≈ s0 atol = 1e-8                         # evening charge: shortfall UNCHANGED
+    @test term1 > term0 + 10.0                        # ... though it does fill the pack
+end
+
 @testitem "electricvehicle: zero binary / zero integer variables (V1G and V2G shapes)" tags =
     [:electricvehicle] begin
     using TSODSO, JuMP

@@ -16,6 +16,17 @@
 #   2. A SOFT DEPARTURE TARGET. A shortfall variable `s >= 0` with `s >= E_target - soc[t_dep+1]`
 #      and a welfare penalty `-(κ/2)·s²` (quadratic, matching the codebase's QuadExpr utility
 #      style). The target can always be missed at a price, so the device is always feasible.
+#      WRAP-SESSION LIMITATION (review WR-01, pinned by test). The model has ONE SOC trajectory over
+#      the horizon `t = 1:T` with `soc[1] = soc0` and the target tied to `soc[t_dep+1]`. For a wrap
+#      session (`t_dep < t_arr`, e.g. arrive 20 -> depart 5 of the NEXT cycle) the energy that
+#      counts toward the target is therefore ONLY what is charged in hours `1..t_dep`: `soc0` acts as
+#      the SOC at hour 1 (already plugged in), NOT the SOC at arrival `t_arr`, and the evening
+#      window `t_arr..T` is NOT linked to the departure shortfall (charging there only raises
+#      `soc[T+1]`, which is free unless `soc_terminal` is set; no trip energy is consumed between
+#      departure and re-arrival). It is the "morning-top-up + optional evening charge" model, not
+#      a full overnight arrive-to-depart session. Flex-population results inherit this. A true
+#      overnight session needs a cyclic/trip-consumption model (`soc_terminal = :cyclic` plus an
+#      explicit trip-energy term) and is deferred; the current behaviour is not silently redefined.
 #   3. V2G (`v2g = true`) adds a `p_dch` leg whose utility carries a STRICTLY positive linear
 #      degradation cost `-c_deg·Σ p_dch`.
 #
@@ -54,8 +65,11 @@ it schedules `p_ch[t] ≥ 0` (and, if `v2g`, `p_dch[t] ≥ 0`) and the state of 
     Emin ≤ soc[t] ≤ Emax, t = 1:(T+1) ;  soc[1] = soc0         # SOC band + arrival IC (3.9)
     s ≥ 0,  s ≥ E_target − soc[t_dep+1]                        # soft departure target
 
-`in_window(t)` is `t_arr ≤ t ≤ t_dep` when `t_arr ≤ t_dep`, else (wrap / overnight session)
-`t ≥ t_arr || t ≤ t_dep`. The recursion closes the WHOLE horizon `t = 1:T` (so `soc` is `T+1`
+`in_window(t)` is `t_arr ≤ t ≤ t_dep` when `t_arr ≤ t_dep`, else (wrap session)
+`t ≥ t_arr || t ≤ t_dep`. **Wrap-session limitation:** `soc0` is the SOC at hour 1 (not at
+arrival `t_arr`), and for a wrap session only charging in hours `1..t_dep` counts toward the
+departure target — the evening window `t_arr..T` only raises `soc[T+1]` (unconstrained unless
+`soc_terminal` is given) and no trip energy is modelled; see the file header. The recursion closes the WHOLE horizon `t = 1:T` (so `soc` is `T+1`
 long and hour-`T` charge is never free energy).
 
 The preference is the App. C charge utility, the quadratic shortfall penalty, and (V2G only) the

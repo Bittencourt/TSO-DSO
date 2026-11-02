@@ -502,7 +502,9 @@ end
 const _FLEX_VALID = (:ev, :heatpump, :smartinverterpv)
 
 # EV session: arrival hour ~ truncated Normal(18.5, 2.0) on [15, 22]; departure hour
-# ~ truncated Normal(7.5, 1.5) on [5, 10] (morning, so evening sessions WRAP the horizon edge);
+# ~ truncated Normal(7.5, 1.5) on [5, 10] (morning, so evening sessions WRAP the horizon edge;
+# NOTE the EV model's wrap semantics: only hours 1..t_dep count toward the departure target and
+# `soc0` is the SOC at hour 1 — see the ElectricVehicle.jl header, review WR-01);
 # energy need fraction of the pack ~ LogNormal(log(0.30), 0.40) capped at 0.60; arrival SOC
 # fraction ~ Uniform(0.15, 0.40). Hours are on a 24 h clock, mapped onto `1:T`.
 const _EV_ARR_MU, _EV_ARR_SD, _EV_ARR_LO, _EV_ARR_HI = 18.5, 2.0, 15.0, 22.0
