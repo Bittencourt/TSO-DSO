@@ -10,7 +10,7 @@
                 ieee8500_modified ieee8500_mv_modified generate_profiles assert_radial
                 AbstractDevice Aggregator Deferrable ElectricVehicle HeatPump SmartInverterPV FixedCapacitor FourQuadBESS Interruptible
                 PVBattery Thermostatic
-                PartialCompliance OptOut Rebound
+                PartialCompliance OptOut Rebound BehaviourSpec apply_behaviour
                 AbstractActorObjective WelfareObjective ProfitObjective Portfolio actor_efficiency
                 AbstractPowerFlow ACPowerFlow ConvexBranchFlow DCPowerFlow LinDistFlow
                 MeshedFlow RestrictedBranchFlow
@@ -74,6 +74,9 @@
     @test isdefined(TSODSO, :converged)
     unexported = (
         :Actor,
+        :_BEH_TAG_OPTOUT,
+        :_device_baseline,
+        :baseline_net_load,
         :BendersMaster,
         :BendersMasterInteger,
         :BilevelKKT,

@@ -16,6 +16,13 @@
 #   blend |U' - ((1-xi)Ub + xi U)|                 5.26e-11 (EV)         1.58e-10
 #   Rebound recovery violation (u = max(0,p-b))    4.85e-11 (HeatPump)   1.46e-10
 #   baseline permutation agreement (tie-break)     1.85e-10 (EV)         see `_BASELINE_TIEBREAK`
+#   Ub (regularised solve) vs unregularised U      7.37e-11 (EV)         2.2e-10
+#   wrapped two-bus crossval, 5 seeds x {hand-built [PartialCompliance(EV, .5), OptOut(HP),
+#     Rebound(PartialCompliance(Thermostatic, .5), W=6)], apply_behaviour(compliance=.5,
+#     opt_out=.4, rebound=(W=6, r=1), seed)}, swing price, solve_welfare (SOCP) vs solve_admm:
+#       |dWelfare|   hand max 6.25e-5, spec max 6.91e-5     pinned 2.08e-4 (3 x 6.91e-5)
+#       |dlambda|_2  hand max 6.30e-6, spec max 7.58e-6     pinned 2.28e-5 (3 x 7.58e-6)
+#     (|lambda|_2 ~ 27.04; every run converges in iters = 2; EV certificate ratio 0.0)
 
 @testmodule BehaviourFixtures begin
     using TSODSO, JuMP
@@ -50,18 +57,7 @@
 
     """Per-device flat-price baseline (the same shape `apply_behaviour` uses)."""
     function baseline(d)
-        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
-        set_silent(model)
-        ctx = TSODSO.ModelContext(model)
-        res = TSODSO.contribute!(d, ctx; T = T)
-        @objective(
-            model,
-            Max,
-            res.utility + sum(6.6 * res.p_inject[t] for t in 1:T) -
-            1e-6 * sum(res.p_inject[t]^2 for t in 1:T)
-        )
-        TSODSO.assert_solved!(model; dual = false)
-        return (; b = value.(res.p_inject), Ub = value(res.utility))
+        return TSODSO._device_baseline(d, T)
     end
 end
 
@@ -367,4 +363,225 @@ end
         T = T,
         λ₀ = fill(4.0, T),
     )
+end
+
+@testitem "behaviour: default BehaviourSpec returns its input ===; default population untouched" tags =
+    [:behaviour] begin
+    using TSODSO
+    using TSODSO: build_feeder, build_population, generate_profiles, sub_seed
+
+    feeder = build_feeder(:ieee13)
+    profiles = generate_profiles(; seed = sub_seed(42, :profiles), T = 24)
+    s_pop = sub_seed(42, :population)
+    aggs = build_population(:default, feeder, :ieee13, profiles, s_pop)
+    @test apply_behaviour(aggs, BehaviourSpec(); T = 24) === aggs
+    # seed / include_storage alone do not wrap anything either
+    @test apply_behaviour(aggs, BehaviourSpec(seed = 7, include_storage = true); T = 24) ===
+          aggs
+    # the golden digests of the default population are pinned by test_flex_population.jl,
+    # which this plan leaves byte-identical (`git diff -- test/test_flex_population.jl` empty).
+    @test all(a -> !any(d -> d isa Union{PartialCompliance, OptOut, Rebound}, a.devices), aggs)
+end
+
+@testitem "behaviour: seeded opt-out draws (SplitMix64 mix, same seed same draws)" tags =
+    [:behaviour] begin
+    using TSODSO
+    using TSODSO: build_feeder, build_population, generate_profiles, sub_seed
+
+    @test TSODSO._BEH_TAG_OPTOUT == 21
+    feeder = build_feeder(:ieee13)
+    profiles = generate_profiles(; seed = sub_seed(42, :profiles), T = 24)
+    aggs = build_population(:default, feeder, :ieee13, profiles, sub_seed(42, :population))
+    function drawn(seed; p = 0.5)
+        out = apply_behaviour(aggs, BehaviourSpec(opt_out = p, seed = seed); T = 24)
+        return [(a.bus, i) for a in out for (i, d) in enumerate(a.devices) if d isa OptOut]
+    end
+    a1 = drawn(1)
+    @test a1 == drawn(1)                      # reproducible
+    @test a1 != drawn(2)                      # a different seed changes the draws
+    @test !isempty(a1)
+    # the draw is exactly rand(LehmerRNG(_flex_mix(seed, 21, bus, i))) < opt_out
+    wrapset(d) = TSODSO.is_flexible_load(d)
+    expected = [
+        (a.bus, i) for a in aggs for (i, d) in enumerate(a.devices) if wrapset(d) &&
+        rand(TSODSO.StableRNGs.LehmerRNG(TSODSO._flex_mix(1, 21, a.bus, i))) < 0.5
+    ]
+    @test a1 == expected
+    # opt_out = 1.0 => every wrapped-set device is an OptOut; opt_out = 0 => no wrapper at all
+    full = apply_behaviour(aggs, BehaviourSpec(opt_out = 1.0, seed = 3); T = 24)
+    @test all(
+        d -> (d isa OptOut) == wrapset(d),
+        (d for a in full for d in a.devices),
+    )
+    @test apply_behaviour(aggs, BehaviourSpec(opt_out = 0.0, compliance = 1.0); T = 24) ===
+          aggs
+end
+
+@testitem "behaviour: per-device baseline is deterministic, covers every class, unregularised Ub" setup =
+    [BehaviourFixtures, TwoBusFixtures] tags = [:behaviour] begin
+    using TSODSO, JuMP
+    F = BehaviourFixtures
+    T = F.T
+
+    for mk in (F.ev, F.therm, F.hp)
+        a = TSODSO._device_baseline(mk(), T)
+        b = TSODSO._device_baseline(mk(), T)
+        @test a.b == b.b && a.Ub == b.Ub
+        @test length(a.b) == T && all(isfinite, a.b) && isfinite(a.Ub)
+        # Ub is the UNREGULARISED utility at the baseline: compare with a tie-break-free solve
+        model = Model(TSODSO.select_optimizer(TSODSO.QP()))
+        set_silent(model)
+        ctx = TSODSO.ModelContext(model)
+        r = TSODSO.contribute!(mk(), ctx; T = T)
+        @objective(model, Max, r.utility + sum(6.6 * r.p_inject[t] for t in 1:T))
+        TSODSO.assert_solved!(model; dual = false)
+        @test abs(a.Ub - value(r.utility)) <= 2.2e-10   # header table
+    end
+    @test TSODSO._BASELINE_TIEBREAK == 1e-6
+    # an EV that must charge is non-unique in time: the tie-break returns a spread schedule
+    ev = TSODSO._device_baseline(F.ev(), T)
+    @test count(<(-1e-6), ev.b) > 1
+    # a FixedCapacitor has no variable: constants returned without a solve
+    cap = TSODSO._device_baseline(FixedCapacitor(2, 0.1), T)
+    @test cap.b == zeros(T) && cap.Ub == 0.0
+
+    # PVBattery only with include_storage = true
+    aggs = TwoBusFixtures.build_two_bus_aggregators(TwoBusFixtures.two_bus_feeder())
+    kinds(out) = [nameof(typeof(d)) for d in out[1].devices]
+    off = apply_behaviour(aggs, BehaviourSpec(compliance = 0.5); T = T)
+    @test :PVBattery in kinds(off)
+    on = apply_behaviour(aggs, BehaviourSpec(compliance = 0.5, include_storage = true); T = T)
+    @test !(:PVBattery in kinds(on))
+    @test TSODSO.storage_kind.(typeof.(on[1].devices))[3] === :battery
+
+    # baseline cost is paid at transform time: a wrapper contributes with NO optimizer attached
+    model = Model()
+    ctx = TSODSO.ModelContext(model)
+    for d in on[1].devices
+        TSODSO.contribute!(d, ctx; T = T)
+    end
+    @test !isempty(all_variables(model))
+end
+
+@testitem "behaviour: compliance 0 routes to OptOut; spec validation is fail-loud" setup =
+    [TwoBusFixtures] tags = [:behaviour] begin
+    using TSODSO
+    T = TwoBusFixtures.T
+    aggs = TwoBusFixtures.build_two_bus_aggregators(TwoBusFixtures.two_bus_feeder())
+    types(out) = [typeof(d) for d in out[1].devices]
+    z = apply_behaviour(aggs, BehaviourSpec(compliance = 0.0); T = T)
+    @test types(z)[1] <: OptOut
+    h = apply_behaviour(aggs, BehaviourSpec(compliance = 0.5); T = T)
+    @test types(h)[1] <: PartialCompliance && h[1].devices[1].xi == 0.5
+    r = apply_behaviour(
+        aggs,
+        BehaviourSpec(compliance = 0.5, rebound = (W = 3, r = 1.2)); T = T,
+    )
+    @test types(r)[1] <: Rebound && r[1].devices[1].inner isa PartialCompliance
+    @test r[1].devices[1].W == 3 && r[1].devices[1].r == 1.2
+    # rebound alone (compliance 1): bare device wrapped by Rebound
+    ro = apply_behaviour(aggs, BehaviourSpec(rebound = (W = 2, r = 1.0)); T = T)
+    @test types(ro)[1] <: Rebound && !(ro[1].devices[1].inner isa PartialCompliance)
+    # bus, Pdc and phi are carried over
+    @test h[1].bus == aggs[1].bus && h[1].Pdc == aggs[1].Pdc && h[1].φ == aggs[1].φ
+
+    @test_throws ArgumentError BehaviourSpec(compliance = -0.1)
+    @test_throws ArgumentError BehaviourSpec(compliance = 1.1)
+    @test_throws ArgumentError BehaviourSpec(compliance = NaN)
+    @test_throws ArgumentError BehaviourSpec(opt_out = -0.1)
+    @test_throws ArgumentError BehaviourSpec(opt_out = 1.5)
+    @test_throws ArgumentError BehaviourSpec(rebound = (W = 3, r = 0.5))
+    @test_throws ArgumentError BehaviourSpec(rebound = (W = 0, r = 1.0))
+    @test_throws ArgumentError BehaviourSpec(rebound = (W = 3, r = Inf))
+    @test_throws ArgumentError BehaviourSpec(rebound = 3)
+    @test_throws ArgumentError BehaviourSpec(nonsense = 1)
+end
+
+@testitem "behaviour: baseline_net_load is Pdc minus the baselines, deterministic" setup =
+    [BehaviourFixtures, TwoBusFixtures] tags = [:behaviour] begin
+    using TSODSO
+    using TSODSO: baseline_net_load
+    F = BehaviourFixtures
+    T = F.T
+
+    prof = generate_profiles(seed = TwoBusFixtures.SEED_2BUS + 2, T = T)
+    Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * p for p in prof.demand]
+    e, h = F.ev(), F.hp()
+    be, bh = F.baseline(e), F.baseline(h)
+    wrapped = [
+        TSODSO.Aggregator(
+            2, 0.9, [PartialCompliance(e, 0.5, be.b, be.Ub), OptOut(h, bh.b, bh.Ub)], Pdc,
+        ),
+    ]
+    nl = baseline_net_load(wrapped, T)
+    @test length(nl) == 1 && length(nl[1]) == T
+    # all devices wrapped: exactly Pdc minus the stored b vectors
+    @test nl[1] == (Pdc[1:T] .- be.b) .- bh.b
+    @test baseline_net_load(wrapped, T) == nl
+
+    # plain aggregators (incl. storage and unwrapped flexible devices) are handled too
+    plain = TwoBusFixtures.build_two_bus_aggregators(TwoBusFixtures.two_bus_feeder())
+    @test apply_behaviour(plain, BehaviourSpec(); T = T) === plain
+    n1 = baseline_net_load(plain, T)
+    @test n1 == baseline_net_load(plain, T)
+    @test length(n1) == 1 && length(n1[1]) == T && all(isfinite, n1[1])
+    # sum over aggregators
+    @test length(reduce(+, baseline_net_load([plain[1], plain[1]], T))) == T
+end
+
+@testitem "behaviour: wrapped two-bus population, centralized vs ADMM crossval, certificates pass (crossval)" setup =
+    [BehaviourFixtures, TwoBusFixtures] tags = [:behaviour, :admm] begin
+    using TSODSO, JuMP, LinearAlgebra
+    F = BehaviourFixtures
+    T = F.T
+
+    # bands: 3 x observed max over 5 seeds x 2 constructions (header table)
+    BAND_W = 2.08e-4
+    BAND_L = 2.28e-5
+
+    pdc(seed) = Float64[
+        TwoBusFixtures.LOAD_SCALE_2BUS * p for p in generate_profiles(seed = seed + 2, T = T).demand
+    ]
+    function hand(seed)
+        e, h, t = F.ev(), F.hp(), F.therm()
+        be, bh, bt = F.baseline(e), F.baseline(h), F.baseline(t)
+        devs = AbstractDevice[
+            PartialCompliance(e, 0.5, be.b, be.Ub),
+            OptOut(h, bh.b, bh.Ub),
+            Rebound(PartialCompliance(t, 0.5, bt.b, bt.Ub), bt.b, 6, 1.0),
+        ]
+        return [TSODSO.Aggregator(2, 0.9, devs, pdc(seed))]
+    end
+    function spec(seed)
+        base = [TSODSO.Aggregator(2, 0.9, AbstractDevice[F.ev(), F.hp(), F.therm()], pdc(seed))]
+        return apply_behaviour(
+            base,
+            BehaviourSpec(compliance = 0.5, opt_out = 0.4, rebound = (W = 6, r = 1.0), seed = seed);
+            T = T,
+        )
+    end
+    function crossval(aggs)
+        ctx, obj, _ = solve_welfare(
+            TwoBusFixtures.two_bus_feeder(), ConvexBranchFlow(), aggs;
+            T = T, λ₀ = F.SWING, allow_export = true,
+        )
+        dl = extract_dlmp(ctx; bus = 2, T = T)
+        res = solve_admm(
+            TwoBusFixtures.two_bus_feeder(), ConvexBranchFlow(), aggs;
+            T = T, λ₀ = F.SWING, ρ = TwoBusFixtures.RHO_2BUS, allow_export = true,
+        )
+        ok = abs(res.welfare - obj) <= BAND_W && norm(vec(res.λ) - vec(dl)) <= BAND_L
+        # certificates still pass on the wrapped population (storage_kind routing)
+        ok &= isfinite(TSODSO.assert_ev_complementarity!(ctx; T = T))
+        ok &= all(isfinite, extract_dlmp(ctx; bus = 2, T = T))
+        return ok, ctx
+    end
+    for k in 0:4, mk in (hand, spec)
+        ok, ctx = crossval(mk(TwoBusFixtures.SEED_2BUS + k))
+        @test ok
+        # the type-paired stash records the WRAPPER types in lockstep
+        kinds = TSODSO.storage_kind.(ctx.agg_device_types[2])
+        @test all(in((:ev, :none)), kinds)
+    end
+    @test TSODSO.storage_kind(typeof(hand(1)[1].devices[1])) === :ev
 end

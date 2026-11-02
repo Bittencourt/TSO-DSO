@@ -708,6 +708,224 @@ function _with_flex(a::Aggregator, s_pop::Integer, house_index::Int, sel, T::Int
     return Aggregator(a.bus, a.φ, AbstractDevice[a.devices...; extra...], a.Pdc)
 end
 
+# ---------------------------------------------------------------------------------------------
+# Behavioural scenarios (phase 44, ACTOR-04): an OPT-IN population transform, applied once.
+# ---------------------------------------------------------------------------------------------
+
+# Integer tag for the opt-out draw (never hash a Symbol; `_flex_*` tags are 1, 2, 11-15).
+const _BEH_TAG_OPTOUT = 21
+
+# Strictly convex tie-break added to the per-device BASELINE objective only. The flat-price
+# optimum of a device is non-unique in time (an EV that must charge may do so in any hour); the
+# regulariser `- _BASELINE_TIEBREAK * sum(p_inject^2)` makes the baseline unique and independent of
+# JuMP variable creation order. MEASURED (2026-11-02, julia 1.12.5, Clarabel QP, flat price 6.6,
+# T = 24; an EV that must charge V1G/V2G, Thermostatic, HeatPump, flex EV): two solves that differ
+# only by a dummy variable created first agree to 1.85e-10 (max, EV V1G) for EVERY tie-break in
+# {0, 1e-8 .. 1e-2} (Clarabel returns the analytic centre of the optimal face), so the tie-break is
+# there for solver-independent uniqueness, not to rescue this solver. Its own bias on `b` scales
+# linearly: 3.84e-11 at 1e-6 (V2G, the worst device), 3.84e-10 at 1e-5. 1e-6 is the smallest power
+# of ten (largest regularisation) whose bias stays below the 1.85e-10 permutation agreement
+# floor. `Ub` is evaluated on the UNREGULARISED utility.
+const _BASELINE_TIEBREAK = 1e-6
+
+"""
+    _device_baseline(dev, T; price = FIT_λ_IMPORT) -> (; b, Ub)
+
+No-response baseline of ONE device: a single-device QP at the FIT flat price (`FIT_λ_IMPORT`, in
+the `price_taker_dispatch` shape: anonymous model, `select_optimizer(QP())`, no ρ term),
+`max U(p) + price * sum(p_inject) - _BASELINE_TIEBREAK * sum(p_inject^2)`. Returns the baseline
+injection `b = p_inject` (length `T`) and its UNREGULARISED utility `Ub`. Computed once per
+device at transform time, never inside a solve loop.
+
+This is a per-device FIT PRICE SIGNAL, deliberately NOT `fit_baseline`'s output: `fit_baseline`
+returns per-aggregator flows, drops batteries, rejects EV / HeatPump / SmartInverterPV and runs a
+nested AC power flow, so it cannot give a per-device baseline (CONTEXT decision revised
+2026-11-02). `fit_baseline` is untouched. A device with no variable (a `FixedCapacitor`) returns its
+constants directly. The flat-price baseline of storage is degenerate (a flat price carries no
+arbitrage), which is why storage is wrapped only on request (`include_storage`).
+"""
+function _device_baseline(dev::AbstractDevice, T::Int; price::Real = FIT_λ_IMPORT)
+    isfinite(price) || throw(ArgumentError("_device_baseline: price must be finite"))
+    model = Model(select_optimizer(QP()))
+    set_silent(model)
+    ctx = ModelContext(model)
+    ctx.T = T
+    res = contribute!(dev, ctx; T = T)
+    if num_variables(model) == 0
+        return (;
+            b = Float64[JuMP.constant(res.p_inject[t]) for t in 1:T],
+            Ub = Float64(JuMP.constant(res.utility)),
+        )
+    end
+    @objective(
+        model,
+        Max,
+        res.utility + sum(price * res.p_inject[t] for t in 1:T) -
+        _BASELINE_TIEBREAK * sum(res.p_inject[t]^2 for t in 1:T)
+    )
+    assert_solved!(model; dual = false)
+    return (;
+        b = Float64[value(res.p_inject[t]) for t in 1:T],
+        Ub = Float64(value(res.utility)),
+    )
+end
+
+"""
+    BehaviourSpec(; compliance = 1.0, opt_out = 0.0, rebound = nothing, seed = 0,
+                    include_storage = false)
+
+Exogenous, seeded behavioural scenario for [`apply_behaviour`](@ref). Applied ONCE to a built
+population (it is not a `build_population` keyword; `Scenario` is untouched).
+
+  - `compliance` in `[0, 1]` -- the responding share `xi`: realised injection
+    `p' = b + xi (p - b)`, utility `U' = (1 - xi) U(b) + xi U(p)` ([`PartialCompliance`](@ref));
+    `0` routes to [`OptOut`](@ref), `1` leaves the device unwrapped. Exact expectation over a
+    population in which a `xi`-share responds (assumption A2); an interpretation for a single
+    device.
+  - `opt_out` in `[0, 1]` -- probability that a device opts out entirely (becomes [`OptOut`](@ref)).
+    The draw is PER DEVICE (not per house: on `:default` a house is one aggregator).
+  - `rebound = nothing | (; W, r)` -- wrap [`Rebound`](@ref) (`W >= 1` hours, `r >= 1`) on the
+    realised power of every non-opted-out wrapped device.
+  - `seed` -- opt-out draws use `rand(LehmerRNG(_flex_mix(seed, 21, bus, device_index)))` with the
+    portable SplitMix64 mix (never `Base.hash`): same seed, same draws.
+  - `include_storage` -- also wrap batteries (`PVBattery`); off by default because a flat-price
+    storage baseline is degenerate.
+
+Default wrap set: devices with `is_flexible_load` true, `ElectricVehicle`, `HeatPump`.
+Validation is fail-loud (`ArgumentError`), including unknown keywords.
+"""
+struct BehaviourSpec
+    compliance::Float64
+    opt_out::Float64
+    rebound::Union{Nothing, NamedTuple{(:W, :r), Tuple{Int, Float64}}}
+    seed::Int
+    include_storage::Bool
+end
+
+const _BEH_KEYS = (:compliance, :opt_out, :rebound, :seed, :include_storage)
+
+function BehaviourSpec(;
+    compliance::Real = 1.0,
+    opt_out::Real = 0.0,
+    rebound = nothing,
+    seed::Integer = 0,
+    include_storage::Bool = false,
+    kwargs...,
+)
+    isempty(kwargs) || throw(
+        ArgumentError(
+            "BehaviourSpec: unknown keyword(s) $(join(string.(keys(kwargs)), ", ")); " *
+            "valid keywords are $(join(string.(_BEH_KEYS), ", "))",
+        ),
+    )
+    (isfinite(compliance) && 0 <= compliance <= 1) ||
+        throw(ArgumentError("BehaviourSpec: compliance must lie in [0, 1]; got $compliance"))
+    (isfinite(opt_out) && 0 <= opt_out <= 1) ||
+        throw(ArgumentError("BehaviourSpec: opt_out must lie in [0, 1]; got $opt_out"))
+    reb = nothing
+    if rebound !== nothing
+        (rebound isa NamedTuple && haskey(rebound, :W) && haskey(rebound, :r)) || throw(
+            ArgumentError("BehaviourSpec: rebound must be nothing or a NamedTuple (; W, r)"),
+        )
+        (rebound.W isa Integer && rebound.W >= 1) || throw(
+            ArgumentError("BehaviourSpec: rebound W must be an integer >= 1; got $(rebound.W)"),
+        )
+        (rebound.r isa Real && isfinite(rebound.r) && rebound.r >= 1) || throw(
+            ArgumentError("BehaviourSpec: rebound r must be finite and >= 1; got $(rebound.r)"),
+        )
+        reb = (; W = Int(rebound.W), r = Float64(rebound.r))
+    end
+    return BehaviourSpec(Float64(compliance), Float64(opt_out), reb, Int(seed), include_storage)
+end
+
+_is_default_behaviour(s::BehaviourSpec) =
+    s.compliance == 1.0 && s.opt_out == 0.0 && s.rebound === nothing
+
+_beh_wrapped(d) = d isa Union{PartialCompliance, OptOut, Rebound}
+_beh_in_wrap_set(d, spec::BehaviourSpec) =
+    !_beh_wrapped(d) &&
+    (is_flexible_load(d) || d isa ElectricVehicle || d isa HeatPump ||
+     (spec.include_storage && d isa PVBattery))
+
+"""
+    apply_behaviour(aggregators, spec::BehaviourSpec; T) -> aggregators
+
+Apply a [`BehaviourSpec`](@ref) once. The default spec returns its input `===`. Otherwise each
+`Aggregator` is rebuilt (same `bus`, `Pdc`, `φ`) with its wrap-set devices replaced by
+[`OptOut`](@ref) (seeded opt-out draw, or `compliance == 0`), [`PartialCompliance`](@ref)
+(`0 < compliance < 1`) and/or [`Rebound`](@ref) (on the realised power of a non-opted-out device);
+unwrapped devices are carried over unchanged, and an aggregator with nothing to wrap is returned
+as is. The per-device baseline is the FIT flat-price single-device solve ([`_device_baseline`](@ref),
+NOT `fit_baseline`), computed exactly once per wrapped device HERE, never in a loop; wrappers'
+`contribute!` perform no solve. The blended utility is exact only for the expectation reading
+(assumption A2). Output feeds `Portfolio` sites directly.
+"""
+function apply_behaviour(aggregators, spec::BehaviourSpec; T::Int)
+    _is_default_behaviour(spec) && return aggregators
+    T >= 1 || throw(ArgumentError("apply_behaviour: horizon T=$T must be >= 1"))
+    return [_behave_aggregator(a, spec, T) for a in aggregators]
+end
+
+function _behave_aggregator(a::Aggregator, spec::BehaviourSpec, T::Int)
+    changed = false
+    devs = AbstractDevice[]
+    for (i, d) in enumerate(a.devices)
+        if !_beh_in_wrap_set(d, spec)
+            push!(devs, d)
+            continue
+        end
+        u = rand(StableRNGs.LehmerRNG(_flex_mix(spec.seed, _BEH_TAG_OPTOUT, a.bus, i)))
+        opted = spec.opt_out > 0 && u < spec.opt_out
+        if spec.compliance == 1.0 && !opted && spec.rebound === nothing
+            push!(devs, d)
+            continue
+        end
+        bs = _device_baseline(d, T)
+        w = if opted || spec.compliance == 0.0
+            OptOut(d, bs.b, bs.Ub)
+        elseif spec.compliance < 1.0
+            PartialCompliance(d, spec.compliance, bs.b, bs.Ub)
+        else
+            d
+        end
+        if spec.rebound !== nothing && !(w isa OptOut)
+            w = Rebound(w, bs.b, spec.rebound.W, spec.rebound.r)
+        end
+        push!(devs, w)
+        changed = true
+    end
+    changed || return a
+    return Aggregator(a.bus, a.φ, devs, a.Pdc)
+end
+
+"""
+    baseline_net_load(aggregators, T) -> Vector{Vector{Float64}}
+
+Per aggregator (same order), the per-hour NO-RESPONSE net LOAD `Pdc[t] - sum_d b_d[t]` (positive =
+consumption). `b_d` is the stored baseline of a wrapped device and the FIT flat-price
+[`_device_baseline`](@ref) (same price, same tie-break) of an unwrapped one, storage included
+(its flat-price baseline is the degenerate one). Consumed by plans 44-06/44-07; internal.
+"""
+function baseline_net_load(aggregators, T::Int)
+    return [_baseline_net_load(a, T) for a in aggregators]
+end
+
+function _baseline_net_load(a::Aggregator, T::Int)
+    length(a.Pdc) >= T || throw(
+        ArgumentError("baseline_net_load: Pdc has length $(length(a.Pdc)) < horizon T=$T"),
+    )
+    net = Float64[a.Pdc[t] for t in 1:T]
+    for d in a.devices
+        b = _beh_wrapped(d) ? d.b : _device_baseline(d, T).b
+        for t in 1:T
+            net[t] -= b[t]
+        end
+    end
+    return net
+end
+
+export BehaviourSpec, apply_behaviour
+
 """
     build_population(sym::Symbol, feeder, feeder_sym::Symbol, profiles, seed::Integer;
                      flex_devices = nothing) -> Vector{<:Aggregator}
