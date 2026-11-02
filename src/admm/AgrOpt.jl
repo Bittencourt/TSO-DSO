@@ -197,7 +197,8 @@ end
                d_j::Union{Nothing,AbstractVector} = nothing,
                ρ_q::Union{Nothing,Real} = nothing,
                check_battery::Bool = true, τ_batt::Real = 1e-6, strict::Bool = true,
-               check_4q::Bool = false, rtol_4q::Real = 1e-4, atol_4q::Real = 1e-8)
+               check_4q::Bool = false, rtol_4q::Real = 1e-4, atol_4q::Real = 1e-8,
+               check_ev::Bool = false, τ_ev::Real = TAU_EV, ev_on_violation::Symbol = :error)
         -> (; pag::Vector{Float64}, utility::Float64)
 
 Re-solve the AGR-OPT subproblem for one ADMM iteration (thesis 3.46)
@@ -273,6 +274,9 @@ function solve_agr!(
     atol_4q::Real = 1e-8,
     battery_on_violation::Symbol = :error,
     report_4q::Bool = false,
+    check_ev::Bool = false,
+    τ_ev::Real = TAU_EV,
+    ev_on_violation::Symbol = :error,
 )
     length(λ_j) == agr.T || throw(
         ArgumentError("solve_agr!: λ_j has length $(length(λ_j)), expected T=$(agr.T)"),
@@ -329,6 +333,19 @@ function solve_agr!(
             τ = τ_batt,
             T = agr.T,
             on_violation = battery_on_violation,
+        )
+    end
+
+    # V2G ElectricVehicle certificate (43-02), SAME convergence-only discipline as
+    # check_battery: mid-loop iterates are legitimately off-consensus, so `solve_admm` passes
+    # `check_ev = false` mid-loop and `true` on the final converged re-solve. Default false keeps
+    # every pre-existing caller byte-identical.
+    if check_ev
+        assert_ev_complementarity!(
+            agr.ctx;
+            τ = τ_ev,
+            T = agr.T,
+            on_violation = ev_on_violation,
         )
     end
 

@@ -284,6 +284,11 @@ function solve_welfare(
     on_violation = problem_class(pf) isa SOCP ? :error : :warn
     assert_battery_complementarity!(ctx; τ = τ, T = T, on_violation = on_violation)
 
+    # V2G ElectricVehicle certificate (43-02): trait-routed selection makes this a no-op on
+    # EV-free populations; same problem-class-aware on_violation convention as the battery check
+    # (non-SOCP oracle paths report, SOCP path throws). Its τ is its OWN measured constant.
+    assert_ev_complementarity!(ctx; T = T, on_violation = on_violation)
+
     # DADP = dual of the ACTIVE balance at the first aggregator's bus over the horizon.
     priced = aggregators[1].bus
     dadp = dual.(balance_p[priced, :])

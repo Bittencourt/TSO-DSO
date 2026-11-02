@@ -8,7 +8,7 @@
                 TSODSO ReactiveMode
                 AbstractFeeder Branch Bus Feeder MeshedFeeder ieee13_modified ieee123_modified
                 ieee8500_modified ieee8500_mv_modified generate_profiles assert_radial
-                AbstractDevice Aggregator Deferrable FixedCapacitor FourQuadBESS Interruptible
+                AbstractDevice Aggregator Deferrable ElectricVehicle FixedCapacitor FourQuadBESS Interruptible
                 PVBattery Thermostatic
                 AbstractPowerFlow ACPowerFlow ConvexBranchFlow DCPowerFlow LinDistFlow
                 MeshedFlow RestrictedBranchFlow
@@ -18,7 +18,8 @@
                 ProblemClass select_optimizer SMAX_NO_LIMIT
                 solve_welfare solve_toy_dc solve_linear operational_oracle assert_socp_exact!
                 assert_ac_exact! assert_restriction_exact! certify_angle_recoverable!
-                assert_4q_complementarity! assert_battery_complementarity! socp_relaxation_gap
+                assert_4q_complementarity! assert_battery_complementarity! assert_ev_complementarity!
+                socp_relaxation_gap
                 extract_dlmp decompose_dlmp DlmpDecomposition economic_direction_checks
                 welfare_accounting fit_baseline
                 solve_admm AdmmResiduals build_agr_opt build_dso_opt AgrOpt DsoOpt solve_agr!

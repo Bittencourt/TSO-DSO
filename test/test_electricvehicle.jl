@@ -105,7 +105,22 @@ end
     using TSODSO, JuMP
 
     T = 24
-    ev = TSODSO.ElectricVehicle(2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 2, 8)
+    ev = TSODSO.ElectricVehicle(
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        10.0,
+        30.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        2,
+        8,
+    )
 
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
@@ -134,8 +149,22 @@ end
 
     # V2G vars shape and injection sign: p_inject = p_dch - p_ch.
     ev2 = TSODSO.ElectricVehicle(
-        2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 2, 8;
-        v2g = true, c_deg = 0.05,
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        10.0,
+        30.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        2,
+        8;
+        v2g = true,
+        c_deg = 0.05,
     )
     m2 = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx2 = TSODSO.ModelContext(m2)
@@ -159,7 +188,20 @@ end
         model = Model(TSODSO.select_optimizer(TSODSO.QP()))
         ctx = TSODSO.ModelContext(model)
         ev = TSODSO.ElectricVehicle(
-            2, η, 1.0, Pmax, 0.0, 40.0, soc0, E_target, κ, 1.0, 4.0, 9.0, t_arr, t_dep,
+            2,
+            η,
+            1.0,
+            Pmax,
+            0.0,
+            40.0,
+            soc0,
+            E_target,
+            κ,
+            1.0,
+            4.0,
+            9.0,
+            t_arr,
+            t_dep,
         )
         res = TSODSO.contribute!(ev, ctx; T = T)
         @objective(model, Max, res.utility + sum(price * res.p_inject[t] for t in 1:T))
@@ -200,8 +242,22 @@ end
     t_arr, t_dep = 20, 5                 # arrives hour 20, departs hour 5 of the NEXT cycle
     Pmax = 5.0
     ev = TSODSO.ElectricVehicle(
-        2, 0.9, 1.0, Pmax, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, t_arr, t_dep;
-        v2g = true, c_deg = 0.05,
+        2,
+        0.9,
+        1.0,
+        Pmax,
+        0.0,
+        40.0,
+        10.0,
+        30.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        t_arr,
+        t_dep;
+        v2g = true,
+        c_deg = 0.05,
     )
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
@@ -220,8 +276,22 @@ end
     T = 4
     function count_vars(; v2g::Bool)
         ev = TSODSO.ElectricVehicle(
-            2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 1, 3;
-            v2g = v2g, c_deg = v2g ? 0.05 : 0.0,
+            2,
+            0.9,
+            1.0,
+            5.0,
+            0.0,
+            40.0,
+            10.0,
+            30.0,
+            10.0,
+            1.0,
+            4.0,
+            9.0,
+            1,
+            3;
+            v2g = v2g,
+            c_deg = v2g ? 0.05 : 0.0,
         )
         model = Model(TSODSO.select_optimizer(TSODSO.QP()))
         ctx = TSODSO.ModelContext(model)
@@ -248,7 +318,20 @@ end
 
     T = 6
     mk() = TSODSO.ElectricVehicle(
-        2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 1, 4,
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        10.0,
+        30.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        1,
+        4,
     )
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
@@ -270,8 +353,22 @@ end
     T = 24
     Pmax, η = 5.0, 0.9
     ev = TSODSO.ElectricVehicle(
-        2, η, 1.0, Pmax, 0.0, 40.0, 20.0, 20.0, 10.0, 1.0, 4.0, 9.0, 1, 24;
-        v2g = true, c_deg = 0.01,
+        2,
+        η,
+        1.0,
+        Pmax,
+        0.0,
+        40.0,
+        20.0,
+        20.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        1,
+        24;
+        v2g = true,
+        c_deg = 0.01,
     )
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
@@ -292,7 +389,9 @@ end
     ratio = TSODSO.assert_ev_complementarity!(ctx; T = T, report = true)
     @test ratio > 1.0
     @test_logs (:warn, r"EV complementarity") match_mode = :any TSODSO.assert_ev_complementarity!(
-        ctx; T = T, on_violation = :warn,
+        ctx;
+        T = T,
+        on_violation = :warn,
     )
     @test_throws TSODSO.CertificateError TSODSO.assert_ev_complementarity!(ctx; T = T)
 
@@ -305,7 +404,9 @@ end
     ctx_legacy.T = T
     ctx_legacy.agg_device_vars[2] = Any[res.vars]
     @test_throws TSODSO.CertificateError TSODSO.assert_battery_complementarity!(
-        ctx_legacy; τ = 1e-6, T = T,
+        ctx_legacy;
+        τ = 1e-6,
+        T = T,
     )
 end
 
@@ -315,7 +416,20 @@ end
 
     T = 6
     ev = TSODSO.ElectricVehicle(
-        2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 1, 4,
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        10.0,
+        30.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        1,
+        4,
     )
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)

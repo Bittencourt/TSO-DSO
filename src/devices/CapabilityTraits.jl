@@ -29,6 +29,10 @@ has_reactive_decision(::FourQuadBESS) = true
 # selection reads off the type-paired stash):
 storage_kind(::Type{<:PVBattery}) = :battery
 storage_kind(::Type{<:FourQuadBESS}) = :four_quadrant
+# ElectricVehicle (43-02): its vars carry the battery SHAPE (p_ch/p_dch, no :q), which would
+# false-match the battery certificate's shape predicate. `:ev` routes it to its OWN certificate
+# (`assert_ev_complementarity!`) and keeps battery semantics off EV vars.
+storage_kind(::Type{<:ElectricVehicle}) = :ev
 
 # --- type-paired stash-entry selection ----------------------------------------------------
 # Selection over the device stash (`ctx.agg_device_vars`) for the certificate

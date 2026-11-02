@@ -124,6 +124,7 @@ include("devices/Deferrable.jl")
 include("devices/PVBattery.jl")
 include("devices/FourQuadBESS.jl")
 include("devices/FixedCapacitor.jl") # second q_inject consumer
+include("devices/ElectricVehicle.jl") # V1G/V2G flexible storage (phase 43)
 # --- Capability-trait overrides for the EXISTING device library ---
 # Included after every existing device file (it references `FourQuadBESS`/`PVBattery`)
 # and BEFORE Aggregator.jl: the golden device files are byte-identical and must show
@@ -145,6 +146,7 @@ include("models/welfare_solve.jl")
 # --- SOCP relaxation exactness gate ---
 include("models/exactness.jl")
 include("models/complementarity_4q.jl")
+include("models/complementarity_ev.jl")
 
 # --- operational_oracle (frontier coupling dual wrapper) ---
 include("models/oracle.jl")
