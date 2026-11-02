@@ -10,6 +10,32 @@
 #
 # Signature under test:  SmartInverterPV(bus, S_inv, Ppv)
 
+# MEASUREMENT-BEFORE-GOLDEN (DEV-10b): the centralized-vs-ADMM crossval bands below were MEASURED
+# (2026-11-02) on the SmartInverterPV-only two-bus fixture (`TwoBusFixtures.two_bus_feeder`, T = 24,
+# rho = RHO_2BUS, SWING price lambda0 = 1 (hours 18..24, 1..4) | 12 (hours 5..8) | 4 (else), load
+# Pdc = 0.02*demand, Ppv = 0.06*pv profile, S_inv = 0.03 pu, aggregator phi = 0.90) across 5 seeds,
+# `solve_welfare` (SOCP, reactive balance live) vs `solve_admm` (DEFAULT reactive mode = LIVE because
+# the device carries `has_reactive_decision`; every run converges in iters = 2; dispatch is genuine:
+# pv_used reaches S_inv = 0.03, 1-5 hours are curtailed below availability, and the centralized q
+# reaches ~0.0087 (it covers the aggregator's reactive load) with |mu_c|_2 ~ 5e-5..1.2e-4):
+#
+#   seed        |dWelfare|    |dLambda|_2 (T=24)   |dMu_q|_2 (T=24)
+#   20260719    1.208e-5      2.129e-6             2.665e-6
+#   20260720    3.167e-5      3.910e-6             2.003e-6
+#   20260721    7.272e-7      1.439e-6             3.788e-6
+#   20260722    1.061e-5      2.974e-6             2.195e-6
+#   20260723    6.229e-6      1.788e-6             4.621e-6
+#   max         3.167e-5      3.910e-6             4.621e-6
+#
+# The bands are PINNED AT those observed maxima (rounded UP to 4 significant digits, never padded
+# to a round number): welfare atol 3.168e-5; lambda ||.||_2 atol 3.911e-6; mu_q ||.||_2 atol 4.622e-6.
+#
+# ROUTING NOTE (T-43-04-1): an explicit OFF/CERTIFIED reactive mode on a population containing a
+# has_reactive_decision device FAILS LOUD (DsoOpt.jl guard) -- the device's q would otherwise be silently
+# dropped from the network model. So the "routing proof" below is: (a) CERTIFIED throws, never
+# silently bypasses; (b) LIVE publishes a no-slack :balance_q certificate that prices the device's q;
+# (c) the centralized :Rq carries the q_inject variable through the Aggregator (no direct :Rq write).
+
 @testitem "smartinverterpv: constructor guards reject degenerate cone / negative profile" tags =
     [:smartinverterpv] begin
     using TSODSO, JuMP
@@ -169,5 +195,128 @@ end
     for t in 1:T
         @test get(Rq[2, t].terms, q[t], 0.0) ≈ 1.0 atol = 1e-12
         @test get(Rq[2, t].terms, p[t], 0.0) == 0.0
+    end
+end
+
+# --- centralized-vs-ADMM crossval (gate-then-golden), bands pinned from the header table ---
+
+@testitem "smartinverterpv: centralized vs ADMM crossval, LIVE reactive default, measured bands pinned (crossval)" setup =
+    [TwoBusFixtures] tags = [:smartinverterpv, :admm] begin
+    using TSODSO, JuMP, LinearAlgebra
+
+    T = TwoBusFixtures.T
+    S_inv = 0.03
+    λswing = [(t in 5:8) ? 12.0 : ((t >= 18 || t <= 4) ? 1.0 : 4.0) for t in 1:T]
+
+    function sipv_aggs(seed::Integer)
+        prof = generate_profiles(seed = seed + 2, T = T)
+        Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * p for p in prof.demand]
+        Ppv = Float64[0.06 * p for p in prof.pv]
+        return [Aggregator(2, 0.90, [TSODSO.SmartInverterPV(2, S_inv, Ppv)], Pdc)], Ppv
+    end
+
+    band_W, band_λ, band_μ = 3.168e-5, 3.911e-6, 4.622e-6
+
+    for k in 0:4
+        seed = TwoBusFixtures.SEED_2BUS + k
+        aggs, Ppv = sipv_aggs(seed)
+        ctx, obj, _ = solve_welfare(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            aggs;
+            T = T,
+            λ₀ = λswing,
+            allow_export = true,
+        )
+        dl = extract_dlmp(ctx; bus = 2, T = T)
+        mc = TSODSO.extract_reactive_dlmp(ctx; bus = 2, T = T)
+        aggs2, _ = sipv_aggs(seed)
+        res = solve_admm(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            aggs2;
+            T = T,
+            λ₀ = λswing,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+        )
+        @test abs(res.welfare - obj) <= band_W
+        @test norm(vec(res.λ) - vec(dl)) <= band_λ
+        @test norm(vec(res.mu_q) - vec(mc)) <= band_μ
+        # Trait exercised end-to-end: the device resolves the default reactive mode LIVE.
+        @test res.reactive_consensus_mode === ReactiveMode.LIVE
+        @test res.mu_q !== nothing
+        # Dispatch is genuine (non-degenerate): PV runs, reactive support is used, cone respected.
+        v = ctx.agg_device_vars[2][1]
+        pv = value.(v.pv_used)
+        q = value.(v.q)
+        @test maximum(pv) > 0.5 * S_inv
+        @test maximum(abs.(q)) > 1e-3
+        for t in 1:T
+            @test pv[t] <= Ppv[t] + 1e-7
+            @test pv[t]^2 + q[t]^2 <= S_inv^2 + 1e-7   # apparent-power cone holds (exact identity)
+        end
+        @test ctx.agg_device_types[2] == DataType[TSODSO.SmartInverterPV{Float64}]
+    end
+end
+
+@testitem "smartinverterpv: reactive routing proof -- CERTIFIED fails loud, LIVE certifies :balance_q, q enters :Rq via the Aggregator (routing)" setup =
+    [TwoBusFixtures] tags = [:smartinverterpv, :admm] begin
+    using TSODSO, JuMP
+
+    T = TwoBusFixtures.T
+    prof = generate_profiles(seed = TwoBusFixtures.SEED_2BUS + 2, T = T)
+    Pdc = Float64[TwoBusFixtures.LOAD_SCALE_2BUS * p for p in prof.demand]
+    Ppv = Float64[0.06 * p for p in prof.pv]
+    mk() = [Aggregator(2, 0.90, [TSODSO.SmartInverterPV(2, 0.03, Ppv)], Pdc)]
+    λ₀ = TwoBusFixtures.two_bus_lambda0()
+
+    # (a) An explicit non-LIVE mode must NOT silently drop the device's q: it throws.
+    for mode in (ReactiveMode.OFF, ReactiveMode.CERTIFIED)
+        @test_throws ArgumentError solve_admm(
+            TwoBusFixtures.two_bus_feeder(),
+            ConvexBranchFlow(),
+            mk();
+            T = T,
+            λ₀ = λ₀,
+            ρ = TwoBusFixtures.RHO_2BUS,
+            allow_export = true,
+            reactive_consensus = mode,
+        )
+    end
+
+    # (b) LIVE: the published :balance_q carries no hidden slack (the no-slack certificate).
+    res = solve_admm(
+        TwoBusFixtures.two_bus_feeder(),
+        ConvexBranchFlow(),
+        mk();
+        T = T,
+        λ₀ = λ₀,
+        ρ = TwoBusFixtures.RHO_2BUS,
+        allow_export = true,
+        reactive_consensus = ReactiveMode.LIVE,
+    )
+    @test res.reactive_consensus_mode === ReactiveMode.LIVE
+    balance_q = res.dso_ctx.constraints[:balance_q]
+    max_slack = maximum(
+        abs(assert_no_slack(res.dso_ctx.model, balance_q[j, t]; atol = 1e-6)) for
+        j in 1:size(balance_q, 1), t in 1:size(balance_q, 2)
+    )
+    @test max_slack <= 1e-6
+
+    # (c) Centralized: the device's q variable reaches the network ONLY as the Aggregator's +1 :Rq
+    # coefficient (never a direct :Rq write by the device) and its reactive dual is the published mu.
+    ctx, _, _ = solve_welfare(
+        TwoBusFixtures.two_bus_feeder(),
+        ConvexBranchFlow(),
+        mk();
+        T = T,
+        λ₀ = λ₀,
+        allow_export = true,
+    )
+    v = ctx.agg_device_vars[2][1]
+    Rq = ctx.residuals[:Rq]
+    for t in 1:T
+        @test get(Rq[2, t].terms, v.q[t], 0.0) ≈ 1.0 atol = 1e-12
     end
 end
