@@ -277,9 +277,9 @@ row of `dadp`); see `_agr_result_keys`.
 # Throws
 
   - `ArgumentError` on empty `aggregators`, a `λ₀` shape mismatch, a non-positive `maxiter`
-    (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node (the
-    1:1 node↔aggregator coupling this loop assumes; multi-aggregator-per-bus netflow
-    splitting is a possible generalization).
+    (`maxiter < 1` cannot even attempt consensus), or more than one aggregator per load node
+    when `actors = nothing` (the legacy 1:1 node↔aggregator coupling; pass `actors` to place
+    several sites at one bus).
   - `ArgumentError` (via [`build_dso_opt`](@ref) — guards against silently dropping device-level reactive decisions;
     widened to flexible-load devices) when any aggregator carries a `q_inject`-bearing device
     (`FourQuadBESS`) OR an `is_flexible_load` member (Thermostatic/Deferrable/Interruptible,
@@ -308,10 +308,22 @@ row of `dadp`); see `_agr_result_keys`.
 `actors` (optional `Vector{Portfolio}` partitioning `aggregators`) applies each portfolio's
 objective to its sites; a [`ProfitObjective`](@ref) adds a retail margin to the AGR-OPT `pag`
 coefficient (a weighted objective inside the same price-taking equilibrium, not a strategic
-aggregator). Supported on this legacy one-aggregator-per-bus path. When some objective is
+aggregator). When some objective is
 non-default the converged result gains a trailing `actor` key
 `(; social_welfare, actor_objective_value, profit_by_actor, retail_wedge)`; `welfare` always
 stays SOCIAL welfare. `actors = nothing` is byte-identical to before.
+
+Several actors/sites at ONE bus (ACTOR-03): when `actors` is given and any bus carries more
+than one site, the solve routes automatically to the slot branch. Each site is one consensus pair
+keyed by a slot id (the first site at a bus keeps id = bus, the k-th further one gets N + k) and
+injects into its bus, so all slots at a bus share the nodal price. `dadp`/`λ`/`mu_q` stay
+`(n_load_nodes, T)` per BUS (the primary slot's row); per-slot results (`agr_*`, `q_devices`)
+are keyed by slot id. Additive keys appear on such a run only: `lambda_slots` (per-slot price),
+`slot_lambda_gap` (`max_s |λ_s − λ_bus|`) and `slot_lambda_agree` (`gap ≤ tol`), a REPORTED
+certificate that is never thrown, and `slot_bus`/`slot_actor` (slot id to bus / portfolio index).
+The adaptive-ρ normaliser counts slots (`p = n_slots·T`, the legacy value when 1:1). Iteration
+counts may differ from the merged single-aggregator problem; no parity is claimed. With
+`actors = nothing` a shared bus still throws the legacy guard.
 
 `_force_slot_path` is a TEST SEAM (not API): it forces the slot-indexed build (ids, AGR-OPTs and
 DSO-OPT coupling variables keyed by (actor, bus) slot) onto a population with at most one site
