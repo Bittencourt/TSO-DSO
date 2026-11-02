@@ -92,7 +92,22 @@
 
     # Mixed-type call (Int among Float64s) promotes to one common type.
     mixed = TSODSO.HeatPump(
-        2, 0.1, 0.05, 0.05, 0.02, 1, 19, 23, 10, 35, 21, 20, 1, 1, fill(5, T), fill(3.0, T),
+        2,
+        0.1,
+        0.05,
+        0.05,
+        0.02,
+        1,
+        19,
+        23,
+        10,
+        35,
+        21,
+        20,
+        1,
+        1,
+        fill(5, T),
+        fill(3.0, T),
     )
     @test mixed isa TSODSO.HeatPump{Float64}
     @test mixed.Pmax === 1.0
@@ -108,7 +123,22 @@ end
     Tout = fill(10.0, T)
     COP = [3.0, 3.5, 4.0]
     hp = TSODSO.HeatPump(
-        2, aie, aia, ame, ama, β, 19.0, 23.0, 10.0, 35.0, Tin0, Tem0, 1.0, 1.0, Tout, COP,
+        2,
+        aie,
+        aia,
+        ame,
+        ama,
+        β,
+        19.0,
+        23.0,
+        10.0,
+        35.0,
+        Tin0,
+        Tem0,
+        1.0,
+        1.0,
+        Tout,
+        COP,
     )
 
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
@@ -136,10 +166,14 @@ end
     TSODSO.assert_solved!(model; dual = false, allow_local = false)
     Tin = Float64[value(x) for x in res.vars.Tin]
     Tem = Float64[value(x) for x in res.vars.Tem]
-    @test Tin[1] ≈ Tin0 atol = 1e-9 && Tem[1] ≈ Tem0 atol = 1e-9
+    @test Tin[1] ≈ Tin0 atol = 1e-9
+    @test Tem[1] ≈ Tem0 atol = 1e-9
     for t in 1:T
         exp_in =
-            Tin[t] + aie * (Tem[t] - Tin[t]) + aia * (Tout[t] - Tin[t]) + β * COP[t] * pfix[t]
+            Tin[t] +
+            aie * (Tem[t] - Tin[t]) +
+            aia * (Tout[t] - Tin[t]) +
+            β * COP[t] * pfix[t]
         exp_em = Tem[t] + ame * (Tin[t] - Tem[t]) + ama * (Tout[t] - Tem[t])
         @test Tin[t + 1] ≈ exp_in atol = 1e-8
         @test Tem[t + 1] ≈ exp_em atol = 1e-8
@@ -156,10 +190,25 @@ end
 
     T = 6
     Tin0, Tem0 = 21.0, 20.0
-    function solve_hp(; terminal = nothing, price = 1.0)
+    function solve_hp(; terminal = nothing, price = 1.0, Tem0 = 20.0, tout = 15.0)
         hp = TSODSO.HeatPump(
-            2, 0.1, 0.05, 0.05, 0.02, 1.0, 19.0, 23.0, 10.0, 35.0, Tin0, Tem0, 1.0, 1.0,
-            fill(5.0, T), fill(3.0, T); terminal = terminal,
+            2,
+            0.1,
+            0.05,
+            0.05,
+            0.02,
+            1.0,
+            19.0,
+            23.0,
+            10.0,
+            35.0,
+            Tin0,
+            Tem0,
+            1.0,
+            1.0,
+            fill(tout, T),
+            fill(3.0, T);
+            terminal = terminal,
         )
         model = Model(TSODSO.select_optimizer(TSODSO.QP()))
         ctx = TSODSO.ModelContext(model)
@@ -189,9 +238,9 @@ end
     @test value(rc.vars.Tem[T + 1]) ≈ Tem0 atol = 1e-6
 
     # Real ⇒ BOTH states pinned to the value (joint terminal, A3).
-    rr = solve_hp(terminal = 21.0)
-    @test value(rr.vars.Tin[T + 1]) ≈ 21.0 atol = 1e-6
-    @test value(rr.vars.Tem[T + 1]) ≈ 21.0 atol = 1e-6
+    rr = solve_hp(terminal = 20.5, Tem0 = 21.0, tout = 17.0)
+    @test value(rr.vars.Tin[T + 1]) ≈ 20.5 atol = 1e-6
+    @test value(rr.vars.Tem[T + 1]) ≈ 20.5 atol = 1e-6
 
     # nothing ⇒ both free: with cheap-comfort pricing they are NOT forced to the IC.
     rn = solve_hp(price = 5.0)
@@ -204,11 +253,34 @@ end
 
     T = 6
     mk(Tout, COP) = TSODSO.HeatPump(
-        2, 0.1, 0.05, 0.05, 0.02, 1.0, 19.0, 23.0, 10.0, 35.0, 21.0, 20.0, 1.0, 1.0, Tout, COP,
+        2,
+        0.1,
+        0.05,
+        0.05,
+        0.02,
+        1.0,
+        19.0,
+        23.0,
+        10.0,
+        35.0,
+        21.0,
+        20.0,
+        1.0,
+        1.0,
+        Tout,
+        COP,
     )
     ctx() = TSODSO.ModelContext(Model())
-    @test_throws ArgumentError TSODSO.contribute!(mk(fill(5.0, T), fill(3.0, T - 1)), ctx(); T = T)
-    @test_throws ArgumentError TSODSO.contribute!(mk(fill(5.0, T - 1), fill(3.0, T)), ctx(); T = T)
+    @test_throws ArgumentError TSODSO.contribute!(
+        mk(fill(5.0, T), fill(3.0, T - 1)),
+        ctx();
+        T = T,
+    )
+    @test_throws ArgumentError TSODSO.contribute!(
+        mk(fill(5.0, T - 1), fill(3.0, T)),
+        ctx();
+        T = T,
+    )
     # Exactly length T is accepted.
     @test TSODSO.contribute!(mk(fill(5.0, T), fill(3.0, T)), ctx(); T = T) isa NamedTuple
 end
@@ -220,8 +292,23 @@ end
     T = 4
     bus = 2
     mk(; φ = nothing) = TSODSO.HeatPump(
-        bus, 0.1, 0.05, 0.05, 0.02, 1.0, 19.0, 23.0, 10.0, 35.0, 21.0, 20.0, 1.0, 1.0,
-        fill(5.0, T), fill(3.0, T); φ = φ,
+        bus,
+        0.1,
+        0.05,
+        0.05,
+        0.02,
+        1.0,
+        19.0,
+        23.0,
+        10.0,
+        35.0,
+        21.0,
+        20.0,
+        1.0,
+        1.0,
+        fill(5.0, T),
+        fill(3.0, T);
+        φ = φ,
     )
     @test TSODSO.is_flexible_load(mk()) === true
     @test TSODSO.has_reactive_decision(mk()) === true
@@ -246,13 +333,28 @@ end
     end
 end
 
-@testitem "heatpump: zero binary / zero integer variables, exact variable count" tags = [:heatpump] begin
+@testitem "heatpump: zero binary / zero integer variables, exact variable count" tags =
+    [:heatpump] begin
     using TSODSO, JuMP
 
     T = 5
     hp = TSODSO.HeatPump(
-        2, 0.1, 0.05, 0.05, 0.02, 1.0, 19.0, 23.0, 10.0, 35.0, 21.0, 20.0, 1.0, 1.0,
-        fill(5.0, T), fill(3.0, T),
+        2,
+        0.1,
+        0.05,
+        0.05,
+        0.02,
+        1.0,
+        19.0,
+        23.0,
+        10.0,
+        35.0,
+        21.0,
+        20.0,
+        1.0,
+        1.0,
+        fill(5.0, T),
+        fill(3.0, T),
     )
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
@@ -270,8 +372,23 @@ end
 
     T = 6
     mk() = TSODSO.HeatPump(
-        2, 0.1, 0.05, 0.05, 0.02, 1.0, 19.0, 23.0, 10.0, 35.0, 21.0, 20.0, 1.0, 1.0,
-        fill(5.0, T), fill(3.0, T); terminal = :cyclic,
+        2,
+        0.1,
+        0.05,
+        0.05,
+        0.02,
+        1.0,
+        19.0,
+        23.0,
+        10.0,
+        35.0,
+        21.0,
+        20.0,
+        1.0,
+        1.0,
+        fill(5.0, T),
+        fill(3.0, T);
+        terminal = :cyclic,
     )
     model = Model(TSODSO.select_optimizer(TSODSO.QP()))
     ctx = TSODSO.ModelContext(model)
