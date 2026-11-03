@@ -34,3 +34,22 @@ MethodErrorReport | TSODSO.solve_agr! | AgrOpt.jl | no matching method found `ge
 UndefVarErrorReport | TSODSO._mpc_truth_import_acpf | mpc_loop.jl | local variable `q_import_t` may be undefined
 UndefVarErrorReport | TSODSO.build_dso_opt | DsoOpt.jl | local variable `qag_dso` is not defined
 UndefVarErrorReport | TSODSO.fit_baseline | fit.jl | local variable `seed_q_import` may be undefined
+
+# Group 4: `Union{Nothing, T}` arguments / fields indexed or forwarded behind an earlier
+# `=== nothing` / `!== nothing` guard that inference does not carry into the closure or loop
+# body (objective tables in admm_phases.jl, optional EV fields, the optional AC start/limits
+# arguments in ac_feasibility_status); the Nothing branch cannot reach the reported call. These
+# eight pre-date Phase 44 (measured identical on the pre-phase commit 1506ef5, JET 20 reports
+# there vs 20 now) and were first recorded in the Phase 44 closing JET run; the ratchet had
+# not been re-run since Phases 39-41 introduced them.
+MethodErrorReport | TSODSO. | admm_phases.jl | no matching method found `getindex(::Nothing, ::Int64)`
+MethodErrorReport | TSODSO. | admm_phases.jl | no matching method found `getindex(::Nothing, ::Int64)`
+MethodErrorReport | TSODSO. | admm_phases.jl | no matching method found `getindex(::Nothing, ::Int64)`
+MethodErrorReport | TSODSO.ac_feasibility_status | feasibility.jl | no matching method found `_analytic_distflow_start!(::Nothing, ::AbstractFeeder, ::AbstractVector{<:Aggregator}, ::AbstractVector{<:Vector{<:Real}}, ::Int64, ::Vector{JuMP.VariableRef}, ::Vector{JuMP.VariableRef}, ::Bool)` (1/2 union split)
+MethodErrorReport | TSODSO.ac_feasibility_status | feasibility.jl | no matching method found `_settlement_feasibility_violations(::AbstractFeeder, ::Nothing, ::Int64)` (1/2 union split)
+MethodErrorReport | TSODSO.contribute! | ElectricVehicle.jl | no matching method found `getindex(::Nothing, ::Int64)` (1/2 union split)
+MethodErrorReport | TSODSO.contribute! | ElectricVehicle.jl | no matching method found `getindex(::Nothing, ::Int64)` (1/2 union split)
+
+# Group 5: `blas0` is defined in the `parallel` branch of solve_admm and read back only under
+# the same condition when the BLAS thread count is restored (conditionally-defined local).
+UndefVarErrorReport | TSODSO.solve_admm | solve_admm.jl | local variable `blas0` may be undefined

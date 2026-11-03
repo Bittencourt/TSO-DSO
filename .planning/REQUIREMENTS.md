@@ -66,10 +66,10 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 
 ### Aggregator as actor (ACTOR)
 
-- [ ] **ACTOR-01**: A researcher can choose an aggregator objective — social welfare (default, unchanged) or profit between the DSO price and a retail tariff (wedge) — per aggregator.
-- [ ] **ACTOR-02**: With a zero wedge the profit objective reproduces the welfare optimum (pass-through test), and the efficiency loss of a non-zero wedge is reported; reported `welfare` always stays social welfare.
-- [ ] **ACTOR-03**: A researcher can assign one aggregator a portfolio spanning several buses, with ADMM consensus keyed by (aggregator, bus); single-bus aggregators are byte-identical to v4.0.
-- [ ] **ACTOR-04**: A researcher can set partial compliance, opt-out and rebound as exogenous seeded scenario parameters and see their effect on welfare, prices and settlement.
+- [x] **ACTOR-01**: A researcher can choose an aggregator objective — social welfare (default, unchanged) or profit between the DSO price and a retail tariff (wedge) — per aggregator.
+- [x] **ACTOR-02**: With a zero wedge the profit objective reproduces the welfare optimum (pass-through test), and the efficiency loss of a non-zero wedge is reported; reported `welfare` always stays social welfare.
+- [x] **ACTOR-03**: A researcher can assign one aggregator a portfolio spanning several buses, with ADMM consensus keyed by (aggregator, bus); single-bus aggregators are byte-identical to v4.0.
+- [x] **ACTOR-04**: A researcher can set partial compliance, opt-out and rebound as exogenous seeded scenario parameters and see their effect on welfare, prices and settlement.
 
 ### Scale at IEEE-8500 (SCALE)
 
@@ -131,10 +131,10 @@ Deferred; tracked but not in this roadmap.
 | DEV-08 | Phase 43 | Complete |
 | DEV-09 | Phase 43 | Complete |
 | DEV-10 | Phase 43 | Complete |
-| ACTOR-01 | Phase 44 | Pending |
-| ACTOR-02 | Phase 44 | Pending |
-| ACTOR-03 | Phase 44 | Pending |
-| ACTOR-04 | Phase 44 | Pending |
+| ACTOR-01 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
+| ACTOR-02 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
+| ACTOR-03 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
+| ACTOR-04 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
 | SETL-07 | Phase 45 | Pending |
 | SETL-08 | Phase 45 | Pending |
 | SCALE-07 | Phase 46 | Pending |

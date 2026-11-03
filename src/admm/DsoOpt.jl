@@ -383,7 +383,8 @@ function build_dso_opt(
     # Per-load-node CONSTANT reactive draw q_ag_j[t] = Σ_{agg@j} −Pdc[t]·tan(acos φ) (thesis
     # 3.23). Summed over any aggregators sharing a bus; the temporal guard mirrors Aggregator.
     q_draw = Dict{Int, Vector{Float64}}(j => zeros(Float64, T) for j in load_nodes)
-    site_slot = slots === nothing ? nothing : Dict(v => s for (s, v) in slots.site)
+    # concrete (possibly empty) map, never `nothing`, so `site_slot[k]` infers on the slot branch
+    site_slot = slots === nothing ? Dict{Int, Int}() : Dict{Int, Int}(v => s for (s, v) in slots.site)
     for (k, agg) in enumerate(aggregators)
         length(agg.Pdc) >= T || throw(
             ArgumentError(
