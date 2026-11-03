@@ -185,5 +185,7 @@ end
 # ## Reproduce
 #
 # `julia --project=. scripts/actor_behaviour_sweep.jl` regenerates the CSV (the total runtime is
-# printed at the top of this page, recomputed from the artifact). The slow test
+# printed at the top of this page, recomputed from the artifact). The columns are written in a
+# fixed order; every column except `runtime_s` is deterministic, while `runtime_s` is a wall-clock
+# measurement and differs on every run and machine. The slow test
 # `test/test_actor_sweep.jl` checks the schema and re-solves one reference wedge point.

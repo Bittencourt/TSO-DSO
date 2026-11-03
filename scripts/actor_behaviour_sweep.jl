@@ -36,7 +36,8 @@
 # other failure) | "refused:impossible_dW". Refusals are first-class rows with the measured
 # diagnostics available (status column), never dropped.
 #
-# CSV KEY: (fixture, wedge, xi, opt_out, r, seed), String keys, `cols = :union`, upsert.
+# CSV KEY: (fixture, wedge, xi, opt_out, r, seed), String keys, `cols = :union`, upsert; columns in
+# the fixed order `COLS` (runtime_s, the last one, is non-reproducible wall-clock).
 # RUNTIME BUDGET: see RUNTIME note below (target < ~45 min total); `:case_a_784` is NOT used.
 # One process at a time.
 
@@ -306,6 +307,28 @@ end
 
 # ---- upsert ----------------------------------------------------------------------------------
 const KEYCOLS = (:fixture, :wedge, :xi, :opt_out, :r, :seed)
+# FIXED, deterministic output column order (WR-05): the rows are `Dict`s whose iteration order is
+# hash-dependent, so the CSV columns are always re-selected in this order. A column that no row
+# carries is omitted (e.g. `detail` appears only once a refusal is recorded); a column not listed
+# here is an error rather than a silently scrambled position.
+# `runtime_s` is a WALL-CLOCK measurement: it is informational only and is NOT reproducible
+# across runs/machines. Every other column is deterministic (seeded, single process).
+const COLS = (
+    :fixture, :wedge, :xi, :opt_out, :r, :seed, :verdict, :status, :detail, :iters,
+    :welfare, :cent_welfare, :cent_dadp_gap, :dW_abs, :dW_rel, :actor_objective,
+    :dadp_mean, :dadp_max, :n_increase_hours, :n_reduction_hours,
+    :rebound_amount, :rebound_ratio,
+    :ledger_wholesale, :ledger_merchandising, :ledger_total_aggregators,
+    :ledger_total_actor_1, :ledger_total_actor_2, :ledger_residual,
+    :runtime_s,
+)
+
+function ordered_columns(df)
+    names_ = Symbol.(names(df))
+    unknown = setdiff(names_, collect(COLS))
+    isempty(unknown) || error("actor_behaviour_sweep: columns missing from COLS: $unknown")
+    return select(df, [c for c in COLS if c in names_])
+end
 rowkey(r) = join((string(r[k]) for k in KEYCOLS), "|")
 
 function upsert!(rows)
@@ -328,6 +351,7 @@ function upsert!(rows)
         (DataFrame([k => [v] for (k, v) in allrows[o]]) for o in order)...;
         cols = :union,
     )
+    df = ordered_columns(df)
     CSV.write(OUT, df)
     return df
 end
