@@ -86,8 +86,10 @@ end
 #
 # Under ADMM the consensus variable is keyed by `(actor, bus)`, a *slot*, not by the bus alone.
 # Several sites at one bus therefore iterate separately, the published DADP is per bus, and every
-# slot at a bus must agree with the DSO's nodal balance dual. That agreement is reported as the
-# slot-lambda certificate (`slot_lambda_gap` / `slot_lambda_agree`), never thrown. Portfolios are
+# slot at a bus must carry the same nodal price. That agreement is reported as the
+# slot-lambda certificate (`slot_lambda_gap` = max over slots of the distance to the *primary*
+# slot's multiplier at the same bus, `slot_lambda_agree` = gap within the measured 1e-12 floor;
+# observed gap 2.7e-15), never thrown. Portfolios are
 # a **grouping only**: a portfolio spanning several buses has no shared-resource coupling between
 # its sites (a joint capacity limit across buses is deferred as ACTOR-F2). The settlement adapters
 # sum nets and utilities per bus on shared buses, and the actor profit is a separate, exactly

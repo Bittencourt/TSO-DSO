@@ -319,7 +319,7 @@ keyed by a slot id (the first site at a bus keeps id = bus, the k-th further one
 injects into its bus, so all slots at a bus share the nodal price. `dadp`/`λ`/`mu_q` stay
 `(n_load_nodes, T)` per BUS (the primary slot's row); per-slot results (`agr_*`, `q_devices`)
 are keyed by slot id. Additive keys appear on such a run only: `lambda_slots` (per-slot price),
-`slot_lambda_gap` (`max_s |λ_s − λ_bus|`) and `slot_lambda_agree` (`gap ≤ tol`), a REPORTED
+`slot_lambda_gap` (`max_s |λ_s − λ_primary(bus(s))|`, the PRIMARY slot's multiplier) and `slot_lambda_agree` (`gap ≤ SLOT_LAMBDA_AGREE_TOL = 1e-12`, independent of `tol`), a REPORTED
 certificate that is never thrown, and `slot_bus`/`slot_actor` (slot id to bus / portfolio index).
 The adaptive-ρ normaliser counts slots (`p = n_slots·T`, the legacy value when 1:1). Iteration
 counts may differ from the merged single-aggregator problem; no parity is claimed. With
@@ -544,8 +544,7 @@ function solve_admm(
                     λ₀,
                     atol_exact,
                     rtol_exact,
-                    parallel;
-                    slot_tol = tol,
+                    parallel,
                 )
             catch err
                 (err isa CertificateError && err.iterations === nothing) || rethrow()

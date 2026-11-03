@@ -444,6 +444,14 @@ function _admm_iterate!(
     return nothing
 end
 
+# Slot-lambda agreement tolerance (Phase 44, WR-01). MEASURED, not picked: the observed max
+# |lambda_s - lambda_primary(bus(s))| over the shared-bus fixtures of test_actor_portfolio.jl
+# (4-bus split population and 2-bus OFF/CERTIFIED/LIVE/4Q, seeds 20260719..21, julia 1.12.5) is
+# 2.7e-15 (a few ulps of lambda ~ O(10)). 3x that is 8.1e-15; the pin is the repo's numerical-zero
+# floor 1e-12 (= `PortfolioFixtures.TOL_FLOOR`) so the REPORTED flag is not platform-fragile.
+# Deliberately NOT coupled to `solve_admm`'s superseded `tol` keyword.
+const SLOT_LAMBDA_AGREE_TOL = 1e-12
+
 """
 CERTIFICATION phase (moved verbatim from the former monolithic `solve_admm`): the converged
 consolidation pass running the PHYSICAL gates:
@@ -465,8 +473,7 @@ function _admm_certify(
     λ₀,
     atol_exact,
     rtol_exact,
-    parallel::Bool = false;
-    slot_tol::Real = 1e-5,
+    parallel::Bool = false,
 )
     dso = st.dso
     load_nodes = st.load_nodes
@@ -567,7 +574,10 @@ function _admm_certify(
     # Slot-branch additive keys, ONLY when some bus actually carries several slots (a 1:1 forced
     # slot run keeps the legacy key set bitwise). The slot-lambda agreement certificate is
     # REPORTED, never thrown (status policy): every slot at a bus sees the same nodal price, so
-    # at consensus lambda_s == lambda_primary(bus(s)); `slot_lambda_gap` is the measured max.
+    # at consensus lambda_s == lambda_primary(bus(s)); `slot_lambda_gap` is the measured max
+    # against the PRIMARY slot's multiplier (not against `dual(balance_p)`), and
+    # `slot_lambda_agree = gap <= SLOT_LAMBDA_AGREE_TOL` (a measured constant, independent of
+    # the superseded `tol` keyword).
     if any(j -> st.slot_bus[j] != j, load_nodes)
         lambda_slots =
             Dict{Int, Vector{Float64}}(j => Float64[-λ[j][t] for t in 1:T] for j in load_nodes)
@@ -579,7 +589,7 @@ function _admm_certify(
             result...,
             lambda_slots = lambda_slots,
             slot_lambda_gap = gap,
-            slot_lambda_agree = gap <= slot_tol,
+            slot_lambda_agree = gap <= SLOT_LAMBDA_AGREE_TOL,
             slot_bus = copy(st.slot_bus),
             slot_actor = copy(dso.ctx.meta[:slot_actor]),
         )
