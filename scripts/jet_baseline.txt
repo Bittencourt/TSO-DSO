@@ -37,11 +37,15 @@ UndefVarErrorReport | TSODSO.fit_baseline | fit.jl | local variable `seed_q_impo
 
 # Group 4: `Union{Nothing, T}` arguments / fields indexed or forwarded behind an earlier
 # `=== nothing` / `!== nothing` guard that inference does not carry into the closure or loop
-# body (objective tables in admm_phases.jl, optional EV fields, the optional AC start/limits
-# arguments in ac_feasibility_status); the Nothing branch cannot reach the reported call. These
-# eight pre-date Phase 44 (measured identical on the pre-phase commit 1506ef5, JET 20 reports
-# there vs 20 now) and were first recorded in the Phase 44 closing JET run; the ratchet had
-# not been re-run since Phases 39-41 introduced them.
+# body (the optional `has_4q_by_bus[j]` / `has_4q_by_bus[jj]` lookups in admm_phases.jl, optional
+# EV fields, the optional AC start/limits arguments in ac_feasibility_status); the Nothing branch
+# cannot reach the reported call. These eight PRE-DATE Phase 44: measured by running
+# `jet_check.jl --update --baseline <scratch>` on a detached worktree of the pre-phase commit
+# 1506ef5 (Julia 1.12.7, JET 0.11.6), which yielded the same 20 signatures as the current tree
+# (the committed pre-phase baseline listed only 12; Phases 39-41 had introduced these eight
+# without a ratchet re-run). The three admm_phases.jl entries come from the pre-phase
+# `has_4q_by_bus` lookups; Phase 44's own new code in that file (the `objectives[...]` /
+# `site_objectives[...]` tables) adds NO report (20 current vs 20 baseline, 0 NEW).
 MethodErrorReport | TSODSO. | admm_phases.jl | no matching method found `getindex(::Nothing, ::Int64)`
 MethodErrorReport | TSODSO. | admm_phases.jl | no matching method found `getindex(::Nothing, ::Int64)`
 MethodErrorReport | TSODSO. | admm_phases.jl | no matching method found `getindex(::Nothing, ::Int64)`

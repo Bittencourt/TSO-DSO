@@ -285,7 +285,7 @@ JULIA_LOAD_PATH="@:$PWD/test:@stdlib" julia --project=. -t2 scripts/run_tests_fi
 ```
 
 **JET ratchet.** `scripts/jet_check.jl` compares static-inference reports with the committed
-baseline `scripts/jet_baseline.txt` (12 signature lines). It is a ratchet over a multiset:
+baseline `scripts/jet_baseline.txt` (20 signature lines). It is a ratchet over a multiset:
 each baseline line allows one report, so a new report fails even when it normalizes to an
 already-listed signature, and a fixed one must be removed from the baseline (`--update`
 rewrites it). The check also fails while the baseline still has an UNJUSTIFIED block, or
