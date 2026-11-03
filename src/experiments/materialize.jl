@@ -863,10 +863,20 @@ NOT `fit_baseline`), computed exactly once per wrapped device HERE, never in a l
 function apply_behaviour(aggregators, spec::BehaviourSpec; T::Int)
     _is_default_behaviour(spec) && return aggregators
     T >= 1 || throw(ArgumentError("apply_behaviour: horizon T=$T must be >= 1"))
-    return [_behave_aggregator(a, spec, T) for a in aggregators]
+    # Per-bus occurrence rank (0 for the FIRST site at each bus): sites sharing a bus (ACTOR-03)
+    # must get independent opt-out draws, so the rank joins the key ONLY when > 0. A population
+    # with one site per bus (every pre-existing path) keeps its draws bit-for-bit.
+    seen = Dict{Int, Int}()
+    ranks = Int[]
+    for a in aggregators
+        r = get(seen, a.bus, 0)
+        seen[a.bus] = r + 1
+        push!(ranks, r)
+    end
+    return [_behave_aggregator(a, spec, T, r) for (a, r) in zip(aggregators, ranks)]
 end
 
-function _behave_aggregator(a::Aggregator, spec::BehaviourSpec, T::Int)
+function _behave_aggregator(a::Aggregator, spec::BehaviourSpec, T::Int, rank::Int = 0)
     changed = false
     devs = AbstractDevice[]
     for (i, d) in enumerate(a.devices)
@@ -874,7 +884,10 @@ function _behave_aggregator(a::Aggregator, spec::BehaviourSpec, T::Int)
             push!(devs, d)
             continue
         end
-        u = rand(StableRNGs.LehmerRNG(_flex_mix(spec.seed, _BEH_TAG_OPTOUT, a.bus, i)))
+        key =
+            rank == 0 ? _flex_mix(spec.seed, _BEH_TAG_OPTOUT, a.bus, i) :
+            _flex_mix(spec.seed, _BEH_TAG_OPTOUT, a.bus, i, rank)
+        u = rand(StableRNGs.LehmerRNG(key))
         opted = spec.opt_out > 0 && u < spec.opt_out
         if spec.compliance == 1.0 && !opted && spec.rebound === nothing
             push!(devs, d)

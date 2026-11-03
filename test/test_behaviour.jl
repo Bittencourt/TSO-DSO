@@ -383,6 +383,33 @@ end
     @test all(a -> !any(d -> d isa Union{PartialCompliance, OptOut, Rebound}, a.devices), aggs)
 end
 
+@testitem "behaviour: opt-out draws are independent for sites sharing a bus, first site unchanged" tags =
+    [:behaviour] begin
+    using TSODSO
+    using TSODSO: build_feeder, build_population, generate_profiles, sub_seed
+
+    feeder = build_feeder(:ieee13)
+    profiles = generate_profiles(; seed = sub_seed(42, :profiles), T = 24)
+    aggs = build_population(:default, feeder, :ieee13, profiles, sub_seed(42, :population))
+    # twin population: every aggregator duplicated as a SECOND identical site at the same bus
+    twins = [
+        Aggregator(a.bus, a.φ, copy(a.devices), copy(a.Pdc)) for a in aggs
+    ]
+    shared = vcat(aggs, twins)
+    optouts(a) = [i for (i, d) in enumerate(a.devices) if d isa OptOut]
+    function patterns(seed)
+        out = apply_behaviour(shared, BehaviourSpec(opt_out = 0.5, seed = seed); T = 24)
+        n = length(aggs)
+        return (first = [optouts(out[k]) for k in 1:n], twin = [optouts(out[n + k]) for k in 1:n])
+    end
+    differ(seed) = (p = patterns(seed); p.first != p.twin)
+    # the first site at each bus keeps its single-site draws bit-for-bit
+    single = apply_behaviour(aggs, BehaviourSpec(opt_out = 0.5, seed = 5); T = 24)
+    @test patterns(5).first == [optouts(a) for a in single]
+    # the twin at the same bus is no longer perfectly correlated with the first site
+    @test any(differ, 1:8)
+end
+
 @testitem "behaviour: seeded opt-out draws (SplitMix64 mix, same seed same draws)" tags =
     [:behaviour] begin
     using TSODSO
