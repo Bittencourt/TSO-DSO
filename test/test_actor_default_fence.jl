@@ -10,7 +10,13 @@
 #
 # Captured: 2026-11-02, Julia 1.12.5, git HEAD 1506ef5 (src tree clean).
 # The digests are valid only on Julia 1.12.5 (1.12.7 drifts numerically): digest assertions are
-# gated on `VERSION == v"1.12.5"` and `@test_skip` elsewhere; structural assertions always run.
+# gated on `VERSION == v"1.12.5"` and `@test_skip` elsewhere. This is a DELIBERATE plan decision
+# (Phase 44 review WR-03): re-pinning per Julia version would defeat a never-re-pinned fence.
+# The fence is therefore NOT inert on other versions: the VERSION-INDEPENDENT assertions below run
+# on every Julia (structural `!haskey(ctx.meta, :actor)`, the knife-edge canary, and a same-process
+# BITWISE `==` comparison of the default `solve_admm` / `solve_welfare` against the same call
+# routed through the actor machinery with all-welfare portfolios, i.e. whatever this version
+# computes, the default path and the actor path must agree to the last bit).
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -152,6 +158,39 @@ end
     @info "fence digests ieee13" admm = repr(da) welfare = repr(dw)
 
     @test !haskey(ctx.meta, :actor)
+
+    # Version-independent same-process fence (WR-03): the default result equals, bit for bit, the
+    # all-welfare actor/slot routing computed on THIS Julia version.
+    acts = [Portfolio(a; name = Symbol("site", i)) for (i, a) in enumerate(aggs)]
+    res_slot = solve_admm(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        ρ = 100.0,
+        maxiter = 300,
+        allow_export = true,
+        actors = acts,
+        _force_slot_path = true,
+    )
+    @test res_slot.welfare == res.welfare
+    @test res_slot.dadp == res.dadp
+    @test res_slot.iters == res.iters
+    same_fields(a, b) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(typeof(a)))
+    @test same_fields(res_slot.residuals, res.residuals)
+    @test keys(res_slot) == keys(res)
+    ctx_a, obj_a, dadp_a = solve_welfare(
+        feeder,
+        ConvexBranchFlow(),
+        aggs;
+        T = Th,
+        λ₀ = λ₀,
+        allow_export = true,
+        actors = acts,
+    )
+    @test obj_a == obj
+    @test dadp_a == dadp
 
     # Knife-edge canary (same pins as test_admm_knifeedge_canary.jl; never re-pinned here).
     kw = ExperimentHarnessFixtures.minimal_scenario_kwargs()
