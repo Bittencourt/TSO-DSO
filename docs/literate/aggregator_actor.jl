@@ -10,13 +10,22 @@
 #
 # A `Portfolio` groups single-bus site aggregators under one objective. With
 # `WelfareObjective` a site maximises its utility minus its payment at the distribution
-# price (the default, bit-identical to the pre-phase code). With `ProfitObjective``(m)`
+# price (the default, bit-identical to the pre-phase code). With `ProfitObjective(m)`
 # the actor adds a retail margin `m[t]` per unit of net consumption: the customers of the
 # portfolio face `DADP + m` and the actor books
 #
 # ```math
 # \text{profit}_k = \sum_{t} m_t \,\ell_{k,t}, \qquad \ell_{k,t} = \text{net load of the portfolio's sites}.
 # ```
+#
+# **The wedge is a symmetric price shift (assumption A6).** `m[t]` is added to the aggregator's
+# price for net injection of EITHER sign: a net buyer pays `DADP + m` per unit bought, and a net
+# seller also receives `DADP + m` per unit sold. It is not the usual buy-only retail margin. The
+# actor's profit `m * (net load)` is therefore negative whenever its portfolio is a net exporter:
+# the margin is then a subsidy paid on exports. The IEEE-13 ground fixture is PV-heavy and its
+# portfolio is a net exporter, so the reported actor profit is a LOSS on every `m > 0` row (the
+# live check after the table below prints the committed numbers). For the same reason
+# `actor_objective = social welfare - profit` is higher than the social welfare on those rows.
 #
 # **First-welfare-theorem framing (read this before interpreting any number).** The wedge is a
 # weighted objective inside the SAME price-taking equilibrium: the actor takes the DSO price as
@@ -68,9 +77,22 @@ for r in sort(wedge; by = r -> num(r["wedge"]))
     )
 end
 
-# The loss grows with `m` and then saturates: the response of the flexible devices is piecewise
-# linear in the retail price, so beyond the last kink a larger margin changes nothing. The ratio
-# below is computed from the table above, not typed.
+# The actor profit column is negative on every `m > 0` row (see the wedge section above: the
+# wedge is a symmetric price shift and this fixture's portfolio is a net exporter). The count and
+# the values below are read from the table, not typed.
+
+let ws = sort(wedge; by = r -> num(r["wedge"]))
+    pos = filter(r -> r["verdict"] == "ok" && num(r["wedge"]) > 0, ws)
+    neg = count(r -> num(r["ledger_total_actor_1"]) < 0, pos)
+    @printf("m > 0 rows with a negative actor profit: %d of %d (profits: %s)\n", neg, length(pos),
+        join((@sprintf("%.4f", num(r["ledger_total_actor_1"])) for r in pos), ", "))
+end
+
+# The loss `dW` is positive for every `m > 0`, but only the step from `m = 0` to the first
+# positive wedge is clearly resolved. Between the larger wedges the increments are tiny, and this
+# page does NOT claim a mechanism (such as a saturation beyond the last kink of a piecewise-linear
+# device response): the sweep never tests one, and the last increment is compared below with the
+# ADMM slack. The ratio below is computed from the table above, not typed.
 
 let ws = sort(wedge; by = r -> num(r["wedge"]))
     ok = filter(r -> r["verdict"] == "ok" && num(r["wedge"]) > 0, ws)
@@ -78,6 +100,11 @@ let ws = sort(wedge; by = r -> num(r["wedge"]))
         @printf(
             "dW(largest m) / dW(smallest positive m) = %.3f\n",
             num(ok[end]["dW_abs"]) / num(ok[1]["dW_abs"])
+        )
+        @printf(
+            "dW(second largest m) -> dW(largest m) increment: %.3e (the ADMM-vs-centralized welfare gap measured at m = 0 is %.3e)\n",
+            num(ok[end]["dW_abs"]) - num(ok[end - 1]["dW_abs"]),
+            abs(num(ws[1]["welfare"]) - num(ws[1]["cent_welfare"])),
         )
     end
 end
@@ -137,9 +164,22 @@ for r in sort(behav; by = r -> (-num(r["xi"]), num(r["opt_out"]), r["r"], num(r[
 end
 
 # The next figures are derived from the table. `spread` is the largest welfare change relative to
-# the anchor, expressed against `|W_ref|`; whether it is distinguishable from solver noise is the
-# reader's call, and the repeated `xi = 0` rows give the cleanest noise reference: they describe
-# the same population (everything opted out), so their welfare must coincide.
+# the anchor, expressed against `|W_ref|`.
+#
+# **Null result at this fixture scale.** The devices of this fixture are small against the
+# network, so every behaviour point lands within solver noise of the anchor: the welfare spread
+# over the whole grid is a few 1e-9 relative (3.4e-9 in the committed artifact), the mean DADP
+# moves by under 1e-5 (7.9e-6), and the DSO price maximum is 8.9999 on every row. The signs of `dW` are MIXED, and
+# some rows have a negative `dW` (a welfare GAIN over the unwrapped population, e.g. when a
+# rebound constraint is added), which is impossible for a true added constraint. These tiny
+# signed differences are therefore ADMM slack, not behaviour effects, and the sweep shows no
+# resolvable ACTOR-04 effect on this fixture. Resolving one would need devices scaled to the
+# feeder.
+#
+# **Noise reference.** The repeated `xi = 0` rows are bitwise identical because the solve is
+# deterministic (everything is opted out, so the same population is solved again): their spread is
+# exactly zero and says nothing about solver noise. The honest noise floor is the size of the
+# sign-mixed `dW` of the non-trivial rows, printed as `noise floor` below.
 
 let ok = filter(r -> r["verdict"] == "ok", behav)
     ref = only(filter(r -> num(r["xi"]) == 1 && num(r["opt_out"]) == 0 && r["r"] == "none", ok))
@@ -147,7 +187,11 @@ let ok = filter(r -> r["verdict"] == "ok", behav)
     spread = maximum(abs(num(r["welfare"]) - Wref) for r in ok) / abs(Wref)
     @printf("largest |W - W_ref| / |W_ref| over the grid: %.3e\n", spread)
     xi0 = [num(r["welfare"]) for r in ok if num(r["xi"]) == 0]
-    @printf("xi = 0 rows: %d, max pairwise welfare difference %.3e\n", length(xi0), maximum(xi0) - minimum(xi0))
+    @printf("xi = 0 rows: %d, max pairwise welfare difference %.3e (bitwise repeats, not a noise measure)\n", length(xi0), maximum(xi0) - minimum(xi0))
+    nontrivial = [r for r in ok if num(r["xi"]) != 0 && !(num(r["xi"]) == 1 && num(r["opt_out"]) == 0 && r["r"] == "none")]
+    dws = [num(r["dW_abs"]) for r in nontrivial]
+    @printf("noise floor: max |dW| over %d non-trivial rows = %.3e absolute; %d positive, %d negative dW\n",
+        length(dws), maximum(abs, dws), count(>(0), dws), count(<(0), dws))
     dm = maximum(abs(num(r["dadp_mean"]) - num(ref["dadp_mean"])) for r in ok)
     @printf("largest change of the mean DADP versus the anchor: %.3e\n", dm)
 end
