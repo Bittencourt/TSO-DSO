@@ -1,8 +1,8 @@
 ---
 phase: 44-aggregator-as-actor
 verified: 2026-11-03T10:37:29Z
-status: human_needed
-score: 4/4 roadmap success criteria verified; 37/37 plan must-have truths verified; 4/4 ACTOR requirements satisfied
+status: passed
+score: 4/4 roadmap success criteria verified; 37/37 plan must-have truths verified; 4/4 ACTOR requirements satisfied (researcher decisions recorded 2026-11-03)
 overrides_applied: 0
 human_verification:
   - test: "IEEE-123 behaviour sweep is a null result"
@@ -181,6 +181,23 @@ There are no blocking gaps. Every roadmap success criterion and every ACTOR requ
 - The sweep artifact and the literate page exist and are registered.
 
 The nine items above are judgement calls on tolerances, modelling assumptions, effect size and contract wording. The developer should accept them or turn them into follow-up work. They are not missing implementation.
+
+## Human Verification Outcome (2026-11-03)
+
+The researcher accepted all nine human-verification items and closed the phase:
+- **Items 1–7** are accepted as documented judgement calls:
+  - the IEEE-123 null behaviour result;
+  - negative actor profit from the symmetric wedge on IEEE-13;
+  - the JET baseline growing from 12 to 20 entries, all pre-existing;
+  - the `SLOT_LAMBDA_AGREE_TOL` 1e-12 floor;
+  - slow convergence (about 180 iterations) for a FourQuadBESS in its own slot;
+  - centralized `ProfitObjective(0)` matching within 9.3e-11;
+  - the exact digest fence being gated to Julia 1.12.5.
+- **Item 8:** MPC, stochastic and FIT reject `actors` with a `MethodError` instead of an `ArgumentError`.
+  This was a deliberate plan-checker decision and is accepted as a deviation from 44-CONTEXT.
+- **Item 9:** ΔW is not a solve-result field; it comes from `actor_efficiency` or the sweep CSV. This is
+  accepted as a deviation. The opt-in in-result ΔW is tracked as backlog todo
+  `.planning/todos/pending/2026-11-03-actor-delta-w-in-result.md`.
 
 ---
 
