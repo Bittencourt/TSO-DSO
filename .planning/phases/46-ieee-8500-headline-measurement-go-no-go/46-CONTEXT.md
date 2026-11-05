@@ -128,3 +128,38 @@ The phase is additive. Every default path, golden and the knife-edge canary (56 
 - An SCS/first-order diagnostic at the headline point (still untested there).
 
 </deferred>
+
+## Post-Research Corrections (2026-11-05)
+
+Research (`46-RESEARCH.md`) corrected several numbers. The corrected values below supersede the
+figures quoted above. The NO-GO verdict is unchanged.
+
+- **T = 24 peak memory:** VmHWM was 11,753,716 kB, which is **11.209 GiB** in binary units.
+  "11.75 GiB" came from dividing kB by 10^6. The Phase-35 MaxRSS was 12,079,316 kB, which is
+  **11.520 GiB**. Both are above the ~10 GiB threshold. All GiB values are binary (kB / 1024²).
+- **T = 24 attribution components:** 122 AgrOpt builds are **4.569 GiB** and the DSO build is
+  **0.851 GiB**. The earlier 4.024 / 0.922 figures came from a build-only run that the
+  2026-10-27 run superseded.
+- **Feeder sizes:** `:ieee8500` measures **4,866 buses / 4,865 branches**, and `:ieee8500_mv`
+  measures 2,512 buses. The "4,875" figure is stale docs prose, so do not re-quote it.
+- **What NO-GO means:** the threshold was not met. NO-GO does **not** mean "cannot run". The point
+  completed on this host twice, by using swap and evicting page cache. The record states:
+  - B1, a measured lower bound;
+  - B2, an estimate that depends on the host's earlyoom configuration, labelled as an estimate.
+- **Density:** density is expressed with a new population selector, **`:default_10pct`**, valid
+  only on the two 8500 feeders. It reproduces the harness sampling rule by building the full
+  population and then filtering, and it leaves the `:default` branch untouched. There is no new
+  `Scenario` field, because `fieldnames`, `==`, `hash` and `savename` are pinned.
+- **Guards:** `ArgumentError` on `:default_10pct` with a non-8500 feeder, and on `:case_a_784` with
+  an 8500 feeder. The research also recommends guards for `:ac` pf and for MPC/Stochastic
+  strategies on 8500, so that combinations which were never measured fail loudly. These are
+  accepted at Claude's discretion and documented as guards.
+- **Path difference:** the `Scenario` path seeds the population with `sub_seed(seed, :population)`,
+  not the harness literal, among the 14 divergences listed in the research. **T = 10 numbers are
+  not comparable 1:1 with the Phase-35/39 harness numbers** and must be labelled.
+- **Measurement script:** a dedicated `scripts/ieee8500_scenario_point.jl`. It materializes through
+  `Scenario`, times the ADMM build, iterate and certify phases separately, and is pinned to
+  `run_scenario` by an IEEE-13 parity test. It writes `results/ieee8500_benchmark/scenario_table.csv`
+  with keyed upsert. A `--record-nogo` mode derives the T = 24 row from the committed CSVs.
+- **Planning-ID guard:** new `src`, `test`, `scripts` and `docs/literate` text must add no
+  planning-ID hits. The baseline is 355.
