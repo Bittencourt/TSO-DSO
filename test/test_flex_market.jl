@@ -15,6 +15,9 @@
 #     K in (1, 4))
 #   bids: repair_max (coupled, T = 24, K = 4)              2.72e-6        8.18e-6
 #   bids: repair_max (interruptible anchor)                0.0            == (exact)
+#   stage 2: |bus_nets - (b + Δ)| (tight 2-bus, K = 4)     2.22e-16       6.67e-16
+#   stage 2: max_wash min(Σu, Σw) (tight and no-limit)     7.02e-9        2.11e-8
+#   stage 2: Δ with all-zero bid widths                    0.0            == (exact)
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -148,6 +151,50 @@
     end
     expected_solves(fb) =
         1 + 2 * size(fb.up_q, 1) + size(fb.up_q, 2) * offered_directions(fb)
+
+    # ---- stage-2 fixtures ----
+    const TOL_BUSNET = 6.67e-16
+    const TOL_WASH = 2.11e-8
+
+    # One Interruptible at bus 2 (φ = 1.0, so the stage-2 reactive draw is zero) whose seeded
+    # interior baseline peaks in hour 2: p₀ = SHAPE + 0.1·demand, priced at π₀ = a − b·p₀.
+    # `smax` puts the head branch 0.4·p₀[2] below the hour-2 consumption and well above the
+    # other hours', so exactly hour 2 binds. `pdc_add` raises the inelastic demand (with
+    # Pmin = 0 no bid can then bring the flow under a small smax).
+    const SHAPE = (0.4, 1.6, 0.5)
+    function tight_agg(seed; pdc_add = 0.0, T = T_INT)
+        prof = generate_profiles(seed = seed + 2, T = T)
+        a = 6.0 + 2.0 * prof.demand[1]
+        bc = 0.5 + prof.demand[2]
+        p0 = Float64[SHAPE[t] + 0.1 * prof.demand[t] for t in 1:T]
+        π0 = Float64[a - bc * p0[t] for t in 1:T]
+        Pdc = Float64[0.1 * prof.demand[t] + pdc_add for t in 1:T]
+        agg = Aggregator(2, 1.0, AbstractDevice[Interruptible(2, 0.0, 2.0, a, bc)], Pdc)
+        base = Float64[-p0[t] - Pdc[t] for t in 1:T]
+        smax = (p0[2] + Pdc[2]) - 0.4 * p0[2]
+        return (; agg, a, bc, p0, π0, Pdc, base, smax)
+    end
+
+    # Stage 2 on the tight fixture with K blocks over `feeder2(smax)`.
+    function stage2(f, smax; K = 4, bids = nothing)
+        fb = bids === nothing ? TSODSO.flex_bids(f.agg, f.base; T = T_INT, n_blocks = K) : bids
+        s2 = TSODSO._stage2_aggregators([f.agg], [f.base], [fb]; T = T_INT)
+        r = TSODSO._redispatch(feeder2(smax), ConvexBranchFlow(), s2; T = T_INT, λ₀ = f.π0)
+        return (; fb, s2, r)
+    end
+
+    # An all-zero bid of K blocks over T hours.
+    zero_bids(T, K) = TSODSO.FlexBids(
+        zeros(T, K),
+        zeros(T, K),
+        zeros(T, K),
+        zeros(T, K),
+        0.0,
+        0.0,
+        Inf,
+        0,
+        0,
+    )
 
     # Largest deviation of the secant prices from the analytic anchor
     # m_k = π₀ + b(δ_{k−1}+δ_k)/2 (up) and g_k = π₀ − b(δ_{k−1}+δ_k)/2 (down).
@@ -440,4 +487,203 @@ end
         range_floor = -1.0,
     )
     @test TSODSO.FLEX_RANGE_FLOOR == 1e-6
+end
+
+@testitem "flex market: stage-2 pseudo-device validates its bids" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    using TSODSO: FlexBidDevice
+    M = FlexMarketFixtures
+
+    g = [1.0, 2.0, 3.0]
+    q = fill(0.5, 3, 2)
+    p = fill(4.0, 3, 2)
+    d = FlexBidDevice(g, q, p, q, p)
+    @test d isa AbstractDevice
+    @test d.gross == g && d.up_q == q && d.dn_g == p
+    @test !TSODSO.is_flexible_load(d)
+    @test TSODSO.storage_kind(d) === :none
+    # sizes, finiteness, widths and the gross length are all guarded
+    @test_throws ArgumentError FlexBidDevice(g, q, fill(4.0, 3, 3), q, p)
+    @test_throws ArgumentError FlexBidDevice(g, q, p, fill(0.5, 2, 2), p)
+    @test_throws ArgumentError FlexBidDevice([1.0, 2.0], q, p, q, p)
+    @test_throws ArgumentError FlexBidDevice([1.0, NaN, 3.0], q, p, q, p)
+    pn = copy(p)
+    pn[2, 1] = Inf
+    @test_throws ArgumentError FlexBidDevice(g, q, pn, q, p)
+    qn = copy(q)
+    qn[3, 2] = -1e-3
+    @test_throws ArgumentError FlexBidDevice(g, q, p, qn, p)
+    # the FlexBids convenience constructor copies the four matrices
+    fb = M.zero_bids(3, 2)
+    @test FlexBidDevice(g, fb).up_q == zeros(3, 2)
+
+    # the pseudo-aggregators keep order, bus, φ and Pdc, and refuse what they cannot carry
+    f = M.tight_agg(M.SEEDS[1])
+    s2 = TSODSO._stage2_aggregators([f.agg], [f.base], [fb]; T = M.T_INT)
+    @test length(s2) == 1
+    @test s2[1].bus == f.agg.bus && s2[1].φ == f.agg.φ && s2[1].Pdc == f.agg.Pdc
+    @test only(s2[1].devices).gross ≈ f.base .+ f.Pdc
+    @test_throws ArgumentError TSODSO._stage2_aggregators(
+        [f.agg],
+        [f.base[1:2]],
+        [fb];
+        T = M.T_INT,
+    )
+    @test_throws ArgumentError TSODSO._stage2_aggregators(
+        [f.agg],
+        [f.base, f.base],
+        [fb];
+        T = M.T_INT,
+    )
+    cap = Aggregator(
+        2,
+        0.95,
+        AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), FixedCapacitor(2, 0.1)],
+        f.Pdc,
+    )
+    @test_throws ArgumentError TSODSO._stage2_aggregators(
+        [cap],
+        [f.base],
+        [fb];
+        T = M.T_INT,
+    )
+    a3 = Aggregator(3, 1.0, AbstractDevice[Interruptible(3, 0.0, 2.0, 6.0, 1.0)], f.Pdc)
+    @test_throws ArgumentError TSODSO._stage2_aggregators(
+        [a3, f.agg],
+        [f.base, f.base],
+        [fb, fb];
+        T = M.T_INT,
+    )
+end
+
+@testitem "flex market: stage-2 redispatch clears the tight fixture" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    function check(seed)
+        f = M.tight_agg(seed)
+        (; fb, r) = M.stage2(f, f.smax)
+        r.status == "ok" || return (; ok = false, status = r.status)
+        target = f.base .+ r.Δ[1]
+        ch = TSODSO._congested_hours(r.ctx2, f.π0; T = M.T_INT)
+        # the accepted quantities stay inside the offered widths
+        inside =
+            all(r.u[1] .>= -M.TOL_WASH) &&
+            all(r.u[1] .<= fb.up_q .+ M.TOL_WASH) &&
+            all(r.w[1] .>= -M.TOL_WASH) &&
+            all(r.w[1] .<= fb.dn_q .+ M.TOL_WASH)
+        return (;
+            ok = true,
+            r,
+            ch,
+            inside,
+            dnet = maximum(abs.(r.input2.bus_nets[2] .- target)),
+        )
+    end
+    for seed in M.SEEDS
+        c = check(seed)
+        @test c.ok
+        c.ok || continue
+        r = c.r
+        @test r.notes == ""
+        @test isfinite(r.maxgap) && r.maxgap >= 0
+        @test r.input2 isa TSODSO.SettlementInput
+        @test all(isfinite, r.input2.prices)
+        @test size(r.input2.prices) == (1, M.T_INT)
+        @test c.dnet <= M.TOL_BUSNET
+        @test c.inside
+        # the binding hour is relieved by accepted up-flex (less consumption)
+        @test r.Δ[1][2] > 0.1
+        @test r.max_wash <= M.TOL_WASH
+        # exactly the binding hour is congested, robustly so
+        @test c.ch.congested == [false, true, false]
+        @test c.ch.kappa_lo < TSODSO.FLEX_CONGESTION_KAPPA < c.ch.kappa_hi
+        @test length(c.ch.scores) == M.T_INT
+    end
+
+    # no thermal limit: nothing is congested and the upper end of the interval is open
+    function check_free(seed)
+        f = M.tight_agg(seed)
+        (; r) = M.stage2(f, TSODSO.SMAX_NO_LIMIT)
+        ch = r.status == "ok" ? TSODSO._congested_hours(r.ctx2, f.π0; T = M.T_INT) : nothing
+        return (; r, ch)
+    end
+    for seed in M.SEEDS
+        c = check_free(seed)
+        @test c.r.status == "ok"
+        c.r.status == "ok" || continue
+        @test c.ch.congested == falses(M.T_INT)
+        @test c.ch.kappa_hi == Inf
+        @test c.ch.kappa_lo < TSODSO.FLEX_CONGESTION_KAPPA
+        @test c.r.max_wash <= M.TOL_WASH
+    end
+
+    # an explicit optimizer reproduces the default call
+    f = M.tight_agg(M.SEEDS[1])
+    fb = TSODSO.flex_bids(f.agg, f.base; T = M.T_INT, n_blocks = 4)
+    s2 = TSODSO._stage2_aggregators([f.agg], [f.base], [fb]; T = M.T_INT)
+    r0 = TSODSO._redispatch(M.feeder2(f.smax), ConvexBranchFlow(), s2; T = M.T_INT, λ₀ = f.π0)
+    r1 = TSODSO._redispatch(
+        M.feeder2(f.smax),
+        ConvexBranchFlow(),
+        s2;
+        T = M.T_INT,
+        λ₀ = f.π0,
+        optimizer = TSODSO.select_optimizer(TSODSO.problem_class(ConvexBranchFlow())),
+    )
+    @test r1.status == "ok"
+    @test r1.Δ == r0.Δ
+    @test r1.input2.prices == r0.input2.prices
+    @test_throws ArgumentError TSODSO._congested_hours(r0.ctx2, f.π0[1:2]; T = M.T_INT)
+    @test_throws ArgumentError TSODSO._congested_hours(r0.ctx2, -f.π0; T = M.T_INT)
+end
+
+@testitem "flex market: stage-2 failures are statuses" setup = [FlexMarketFixtures] tags =
+    [:flex_market] begin
+    using TSODSO
+    using TSODSO: SolveFailedError, CertificateError, ConvergenceError
+    import JuMP
+    M = FlexMarketFixtures
+
+    # all-zero widths on a feasible network: nothing moves, exactly
+    f = M.tight_agg(M.SEEDS[1])
+    zb = M.zero_bids(M.T_INT, 4)
+    z = M.stage2(f, TSODSO.SMAX_NO_LIMIT; bids = zb).r
+    @test z.status == "ok"
+    @test z.Δ[1] == zeros(M.T_INT)
+    @test z.u[1] == zeros(M.T_INT, 4) && z.w[1] == zeros(M.T_INT, 4)
+    @test z.max_wash == 0.0
+    # ... and on the tight network the unrelieved baseline is infeasible
+    zt = M.stage2(f, f.smax; bids = zb).r
+    @test zt.status == "infeasible_redispatch"
+
+    # an offer that cannot restore the limit: inelastic demand alone exceeds smax
+    function infeasible(seed)
+        g = M.tight_agg(seed; pdc_add = 2.0)
+        return M.stage2(g, 1.0).r
+    end
+    for seed in M.SEEDS
+        r = infeasible(seed)
+        @test r.status == "infeasible_redispatch"
+        @test !isempty(r.notes) && length(r.notes) <= 400
+        @test r.ctx2 === nothing && r.input2 === nothing && r.Δ === nothing
+    end
+
+    # the mapping itself
+    MOI = JuMP.MOI
+    sfe(ts) = SolveFailedError("x", ts, MOI.NO_SOLUTION, MOI.NO_SOLUTION, "")
+    @test TSODSO._redispatch_status(sfe(MOI.INFEASIBLE))[1] == "infeasible_redispatch"
+    @test TSODSO._redispatch_status(sfe(MOI.INFEASIBLE_OR_UNBOUNDED))[1] ==
+          "infeasible_redispatch"
+    @test TSODSO._redispatch_status(sfe(MOI.NUMERICAL_ERROR))[1] == "error:SolveFailedError"
+    @test TSODSO._redispatch_status(CertificateError("gap"; kind = :socp_exact))[1] ==
+          "inexact_redispatch"
+    @test TSODSO._redispatch_status(CertificateError("batt"; kind = :battery))[1] ==
+          "error:CertificateError"
+    @test TSODSO._redispatch_status(ConvergenceError("admm"))[1] == "error:ConvergenceError"
+    @test TSODSO._redispatch_status(ArgumentError("bad input")) === nothing
+    long = TSODSO._redispatch_status(CertificateError(repeat("a", 900); kind = :socp_exact))
+    @test length(long[2]) == 400
 end
