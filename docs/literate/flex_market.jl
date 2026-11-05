@@ -655,7 +655,9 @@ end
 # ```
 #
 # The ieee13-ground flex path first checks that the in-run DADP row reproduces the committed one
-# bit for bit and writes nothing otherwise. Rows are upserted by provenance, so a re-run replaces
-# its own rows and keeps the others. The fast item "flex market: committed comparison CSV rows"
-# in `test/test_flex_market_ieee.jl` checks the committed rows' invariants (statuses, β changes
-# money only, the shortfall sums).
+# bit for bit and writes nothing otherwise. Rows are upserted by provenance, and a run first
+# deletes the rows of its own mode that it owns (every row of an IEEE-123 mode; the flex rows of
+# the ieee13-ground flex path), so a re-run replaces its own rows, leaves no stale ones beside
+# them, and keeps the others. The fast item "flex market: committed comparison CSV rows" in
+# `test/test_flex_market_ieee.jl` checks the committed rows' invariants (statuses, no run-level
+# row beside leg rows, β changes money only, the shortfall sums).

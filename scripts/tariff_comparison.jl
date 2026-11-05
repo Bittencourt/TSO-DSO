@@ -21,7 +21,10 @@
 #                     refused on case-a-784 (a houses run cannot carry flex legs).
 #   --record-timeout S  Writes the mode's "(run)" row with status "timeout", run_wall_s = S
 #                     and notes "stopped after S s wall", WITHOUT solving: the honest record
-#                     of a run that was stopped or killed before it finished.
+#                     of a run that was stopped or killed before it finished. The mode's
+#                     earlier rows of the same seed and horizon are deleted first. Refused
+#                     together with --flex-market on ieee13-ground (that path has no
+#                     run-level row).
 #
 # Modes (--mode):
 #
@@ -72,7 +75,13 @@
 #
 # CSV contract (the case_a_scaling idiom): rows are UPSERTED keyed on their provenance
 # identity (mode, tariff / unit_id / group, seed, t_horizon) with `cols = :union` —
-# re-runs replace their own rows and never drop others'. Every row stamps julia_version,
+# re-runs replace their own rows and never drop others'. A run OWNS its mode's rows of the
+# same (seed, t_horizon) and deletes them from all four tables before writing (purge_rows),
+# so no earlier "(run)" row, leg row or flex row survives beside the new outcome: the
+# IEEE-123 modes, case-a-784 and --record-timeout own every row of the mode; the default
+# ieee13-ground run owns the mode's non-flex rows on success (and its flex rows too when its
+# dadp row no longer reproduces the committed one, or when the run is refused); the
+# ieee13-ground --flex-market run owns only the mode's flex rows. Every row stamps julia_version,
 # threads, blas_threads, seed and t_horizon (the runner stamps the same provenance; the
 # script adds `seed` and `mode`). A kill mid-run leaves the rows already captured — a
 # kill is a MEASURED OUTCOME, not a missing run (honesty policy).
@@ -328,6 +337,38 @@ function upsert_row(path::String, row::NamedTuple; key::NTuple{N, Symbol} where 
     CSV.write(path, df)
     return nothing
 end
+
+"""
+    purge_rows(mode_name, seed, T_H; tariff = _ -> true) -> nothing
+
+Delete, from each committed table that exists (summary, bills, breakouts, rebound), the rows of
+`(mode, seed, t_horizon)` whose tariff satisfies the predicate `tariff` (called on the tariff
+as a `String`). A run of a mode owns its rows: called before the mode writes, this keeps a
+re-run from leaving rows of an earlier run beside the new ones, such as an old "(run)" status
+row beside fresh legs, old legs beside a fresh refusal, or the flex rows of an older run beside
+a base-only run. Rows of other modes, seeds and horizons are never touched, and a table with
+nothing to delete is not rewritten.
+"""
+function purge_rows(mode_name::String, seed::Int, T_H::Int; tariff = _ -> true)
+    for path in (SUMMARY_CSV, BILLS_CSV, BREAKOUTS_CSV, REBOUND_CSV)
+        isfile(path) || continue
+        old = CSV.read(path, DataFrame)
+        nrow(old) == 0 && continue
+        owned(r) =
+            isequal(r.mode, mode_name) &&
+            isequal(r.seed, seed) &&
+            isequal(r.t_horizon, T_H) &&
+            tariff(String(r.tariff))
+        n = count(owned, eachrow(old))
+        n == 0 && continue
+        CSV.write(path, filter(r -> !owned(r), old))
+        println("  purged $n stale row(s) of mode=$mode_name seed=$seed from $path")
+    end
+    flush(stdout)
+    return nothing
+end
+
+isflex_tariff(t::AbstractString) = startswith(t, "flex_")
 
 provenance_row(T_H::Int, seed::Int) = (
     julia_version = string(VERSION),
@@ -600,6 +641,8 @@ function ground_main(T_H::Int, seed::Int)
     end
     ensure_all_schemas()
     if !outcome.ok
+        # a refused run owns every row of the mode: no earlier leg (or flex) row survives it
+        purge_rows("ieee13-ground", seed, T_H)
         write_run_status_row(outcome, "ieee13-ground", "centralized", T_H, seed)
         println(
             "  → DADP run RECORDED as $(outcome.status) (a measured outcome, never a dropped " *
@@ -608,6 +651,19 @@ function ground_main(T_H::Int, seed::Int)
         flush(stdout)
         return nothing
     end
+    # The base run owns the mode's non-flex rows (its "(run)" row included). The flex rows were
+    # written against the committed dadp row; they are kept only while this run reproduces it.
+    stale_flex = !dadp_provenance(outcome, T_H, seed).ok
+    stale_flex && println(
+        "  the in-run dadp row does not reproduce the committed one: the mode's flex rows " *
+        "are purged with the base rows (re-run --flex-market to record them again)",
+    )
+    purge_rows(
+        "ieee13-ground",
+        seed,
+        T_H;
+        tariff = t -> stale_flex || !isflex_tariff(t),
+    )
     write_compare_results(outcome.res, "ieee13-ground", T_H, seed)
     for r in eachrow(outcome.res.summary)
         println(
@@ -637,7 +693,29 @@ explicit decision; this check is never bypassed with a tolerance.
 """
 function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
     head = "ieee13-ground --flex-market: provenance check FAILED (seed=$seed, t_horizon=$T_H); NOTHING WRITTEN."
-    isfile(SUMMARY_CSV) || error("$head No committed summary CSV at $SUMMARY_CSV.")
+    chk = dadp_provenance(outcome, T_H, seed)
+    chk.ok || error("$head $(chk.reason)")
+    c = chk.committed
+    println(
+        "  provenance check passed: in-run dadp row == committed (welfare=$(repr(c.welfare)), " *
+        "aggregators_total=$(repr(c.aggregators_total)), status=$(repr(c.status)))",
+    )
+    flush(stdout)
+    return nothing
+end
+
+"""
+    dadp_provenance(outcome, T_H, seed) -> (; ok, reason, committed)
+
+The comparison behind `assert_dadp_reproduces`, without throwing: `ok` is `true` when
+the in-run ieee13-ground dadp row reproduces the committed one of the same (seed, t_horizon)
+bit for bit (after a CSV round trip), `reason` says why not otherwise, and `committed` is the
+committed row (`nothing` when there is none). The default ieee13-ground path uses it to decide
+whether the committed flex rows still belong to the base rows it is about to write.
+"""
+function dadp_provenance(outcome, T_H::Int, seed::Int)
+    fail(reason, committed = nothing) = (; ok = false, reason, committed)
+    isfile(SUMMARY_CSV) || return fail("No committed summary CSV at $SUMMARY_CSV.")
     old = CSV.read(SUMMARY_CSV, DataFrame)
     committed = filter(
         r ->
@@ -648,15 +726,16 @@ function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
         old,
     )
     nrow(committed) == 1 ||
-        error("$head Expected exactly 1 committed dadp row, found $(nrow(committed)).")
+        return fail("Expected exactly 1 committed dadp row, found $(nrow(committed)).")
     c = committed[1, :]
-    outcome.ok || error(
-        "$head The in-run DADP solve was refused: status=$(repr(outcome.status)) vs " *
+    outcome.ok || return fail(
+        "The in-run DADP solve was refused: status=$(repr(outcome.status)) vs " *
         "committed status=$(repr(c.status)). Message: $(outcome.message)",
+        c,
     )
     inrun = filter(r -> r.tariff == "dadp", outcome.res.summary)
     nrow(inrun) == 1 ||
-        error("$head Expected exactly 1 in-run dadp row, found $(nrow(inrun)).")
+        return fail("Expected exactly 1 in-run dadp row, found $(nrow(inrun)).", c)
     cols = [:welfare, :aggregators_total, :status]
     io = IOBuffer()
     CSV.write(io, inrun[:, cols])
@@ -671,17 +750,13 @@ function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
             "$(repr(inrun[1, col])))",
         )
     end
-    isempty(diffs) || error(
-        "$head The in-run dadp row does not reproduce the committed one:\n  " *
+    isempty(diffs) || return fail(
+        "The in-run dadp row does not reproduce the committed one:\n  " *
         join(diffs, "\n  ") *
         "\nStop and investigate; re-recording the base rows is a separate, explicit decision.",
+        c,
     )
-    println(
-        "  provenance check passed: in-run dadp row == committed (welfare=$(repr(c.welfare)), " *
-        "aggregators_total=$(repr(c.aggregators_total)), status=$(repr(c.status)))",
-    )
-    flush(stdout)
-    return nothing
+    return (; ok = true, reason = "", committed = c)
 end
 
 # Print one line per summary row of a finished run.
@@ -730,6 +805,8 @@ function ground_flex_main(T_H::Int, seed::Int)
     end
     assert_dadp_reproduces(outcome, T_H, seed)
     ensure_all_schemas()
+    # this run owns the mode's flex rows; the base rows stay as recorded
+    purge_rows("ieee13-ground", seed, T_H; tariff = isflex_tariff)
     write_compare_results(
         outcome.res,
         "ieee13-ground",
@@ -876,7 +953,9 @@ function ieee123_population(seed::Int, T::Int)
 end
 
 # Record one IEEE-123 mode's outcome: a "(run)" status row on a refusal, otherwise every row
-# (summary, bills, breakouts, rebound), with run_wall_s on every summary row either way.
+# (summary, bills, breakouts, rebound), with run_wall_s on every summary row either way. The
+# mode's earlier rows of the same (seed, t_horizon) are purged first, so the tables hold this
+# run's outcome only.
 function write_mode_outcome(
     outcome,
     mode_name::String,
@@ -885,6 +964,8 @@ function write_mode_outcome(
     wall_s::Float64,
 )
     ensure_all_schemas()
+    # a run of an IEEE-123 mode owns all of that mode's rows, whatever its outcome
+    purge_rows(mode_name, seed, T_H)
     if !outcome.ok
         write_run_status_row(
             outcome,
@@ -992,6 +1073,8 @@ end
 # --record-timeout: the honest record of a run that was stopped before it finished. No solve.
 function record_timeout_main(mode::String, T_H::Int, seed::Int, S::Float64)
     ensure_all_schemas()
+    # the stopped run owns the mode's rows: no earlier certified row survives beside it
+    purge_rows(mode, seed, T_H)
     outcome = (; status = "timeout", message = "stopped after $S s wall", iters = missing)
     engine = mode == "case-a-784" ? "admm" : "centralized"
     write_run_status_row(outcome, mode, engine, T_H, seed; run_wall_s = S)
@@ -1080,6 +1163,8 @@ function caseA_main(T_H::Int, seed::Int, time_limit_s::Real)
         )
     end
     ensure_all_schemas()
+    # the run owns every row of the mode, whatever its outcome
+    purge_rows("case-a-784", seed, T_H)
     if !outcome.ok
         write_run_status_row(outcome, "case-a-784", "admm", T_H, seed)
         println(
@@ -1113,6 +1198,17 @@ function comparison_main(args)
         ArgumentError(
             "--flex-market is not available on case-a-784: a houses run cannot " *
             "carry flex legs (compare_tariffs refuses houses with flex_market)",
+        ),
+    )
+    (
+        parsed.record_timeout !== nothing &&
+        parsed.mode == "ieee13-ground" &&
+        parsed.flex_market
+    ) && throw(
+        ArgumentError(
+            "--record-timeout with --flex-market is not available on ieee13-ground: that " *
+            "path writes only flex rows beside the recorded base rows, so it has no run-level " *
+            "row to record (a timeout row would purge the base rows it never re-ran)",
         ),
     )
     seed = mode_seed(parsed.mode, parsed.seed)

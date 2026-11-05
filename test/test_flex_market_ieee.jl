@@ -89,7 +89,8 @@ end
         "flex_pab_tou",
     ])
 
-    # ieee123: the base legs plus the 6 flex legs, or a run-level status row.
+    # ieee123: the base legs plus the 6 flex legs, or ONLY a run-level status row (a run owns
+    # its mode's rows, so the two outcomes never mix).
     t123 = Set(String.(rows(summ, "ieee123").tariff))
     @test (
         t123 == Set([
@@ -104,8 +105,31 @@ end
             "flex_pab_beta0.05",
             "flex_pab_beta0.1",
         ])
-    ) || ("(run)" in t123)
+    ) || (t123 == Set(["(run)"]))
     @test nrow(rows(summ, "ieee123-default")) >= 1
+
+    # No stale rows: within one (mode, seed, t_horizon), a "(run)" row is the only summary row
+    # and has no bill, breakout or rebound rows beside it; a mode with flex rows also has the
+    # dadp row they were cleared against.
+    brk = DataFrame(CSV.File(joinpath(dir, "equity_breakouts.csv")))
+    function no_stale_rows(summ, others)
+        ok = true
+        n_run = 0
+        for k in unique((r.mode, r.seed, r.t_horizon) for r in eachrow(summ))
+            own(df) = filter(r -> (r.mode, r.seed, r.t_horizon) == k, df)
+            ts = String.(own(summ).tariff)
+            if "(run)" in ts
+                n_run += 1
+                ok &= ts == ["(run)"]
+                ok &= all(nrow(own(df)) == 0 for df in others)
+            end
+            any(startswith(t, "flex_") for t in ts) && (ok &= "dadp" in ts)
+        end
+        return ok, n_run
+    end
+    stale_ok, n_run = no_stale_rows(summ, (bills, brk, reb))
+    @test stale_ok
+    @test n_run >= 1   # the committed ieee123-default refusal row is checked, not skipped
 
     # Statuses of every flex row are in the documented sets; ok rows have a finite welfare.
     flex = filter(isflex, summ)
