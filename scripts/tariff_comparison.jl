@@ -70,6 +70,10 @@
 #                  precision floor (test/test_ieee123_admm.jl). The gates themselves (tau,
 #                  epsilon, the hybrid floor) are untouched. All rows of this mode are
 #                  written, and its rebound rows too. Several minutes of wall time.
+#                  The committed ieee123 artifact is recorded WITH --flex-market: a run owns
+#                  every row of the mode, so a base-only run deletes the committed flex rows,
+#                  and the committed-CSV test (test/test_flex_market_ieee.jl) rejects a
+#                  table that holds only the base legs.
 #   ieee123-default  The same feeder with the DEFAULT generated population,
 #                  build_population(:default, ..., :ieee123, ...) at seed 20260718, the :mem
 #                  prices and the default SOCP optimizer, engine :centralized. Its DADP
@@ -669,10 +673,12 @@ function ground_main(T_H::Int, seed::Int)
     end
     # The base run owns the mode's non-flex rows (its "(run)" row included). The flex rows were
     # written against the committed dadp row; they are kept only while this run reproduces it.
-    stale_flex = !dadp_provenance(outcome, T_H, seed).ok
+    chk = dadp_provenance(outcome, T_H, seed)
+    stale_flex = !chk.ok
     stale_flex && println(
-        "  the in-run dadp row does not reproduce the committed one: the mode's flex rows " *
-        "are purged with the base rows (re-run --flex-market to record them again)",
+        "  the mode's flex rows, if any, are purged with the base rows (re-run " *
+        "--flex-market to record them again), because the committed dadp row they were " *
+        "cleared against is not reproduced: $(chk.reason)",
     )
     purge_rows("ieee13-ground", seed, T_H; tariff = t -> stale_flex || !isflex_tariff(t))
     write_compare_results(outcome.res, "ieee13-ground", T_H, seed)
@@ -705,7 +711,7 @@ explicit decision; this check is never bypassed with a tolerance.
 function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
     head = "ieee13-ground --flex-market: provenance check FAILED (seed=$seed, t_horizon=$T_H); NOTHING WRITTEN."
     chk = dadp_provenance(outcome, T_H, seed)
-    chk.ok || error("$head $(chk.reason)")
+    chk.ok || error("$head $(chk.reason)$(chk.advice)")
     c = chk.committed
     println(
         "  provenance check passed: in-run dadp row == committed (welfare=$(repr(c.welfare)), " *
@@ -716,16 +722,18 @@ function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
 end
 
 """
-    dadp_provenance(outcome, T_H, seed) -> (; ok, reason, committed)
+    dadp_provenance(outcome, T_H, seed) -> (; ok, reason, advice, committed)
 
 The comparison behind `assert_dadp_reproduces`, without throwing: `ok` is `true` when
 the in-run ieee13-ground dadp row reproduces the committed one of the same (seed, t_horizon)
-bit for bit (after a CSV round trip), `reason` says why not otherwise, and `committed` is the
+bit for bit (after a CSV round trip), `reason` says why not otherwise, `advice` is the
+flex path's instruction on a value mismatch (empty otherwise; `assert_dadp_reproduces` appends
+it, the default path does not), and `committed` is the
 committed row (`nothing` when there is none). The default ieee13-ground path uses it to decide
 whether the committed flex rows still belong to the base rows it is about to write.
 """
 function dadp_provenance(outcome, T_H::Int, seed::Int)
-    fail(reason, committed = nothing) = (; ok = false, reason, committed)
+    fail(reason, committed = nothing; advice = "") = (; ok = false, reason, advice, committed)
     isfile(SUMMARY_CSV) || return fail("No committed summary CSV at $SUMMARY_CSV.")
     old = CSV.read(SUMMARY_CSV, DataFrame)
     committed = filter(
@@ -762,12 +770,11 @@ function dadp_provenance(outcome, T_H::Int, seed::Int)
         )
     end
     isempty(diffs) || return fail(
-        "The in-run dadp row does not reproduce the committed one:\n  " *
-        join(diffs, "\n  ") *
-        "\nStop and investigate; re-recording the base rows is a separate, explicit decision.",
-        c,
+        "The in-run dadp row does not reproduce the committed one:\n  " * join(diffs, "\n  "),
+        c;
+        advice = "\nStop and investigate; re-recording the base rows is a separate, explicit decision.",
     )
-    return (; ok = true, reason = "", committed = c)
+    return (; ok = true, reason = "", advice = "", committed = c)
 end
 
 # Print one line per summary row of a finished run.
