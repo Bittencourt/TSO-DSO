@@ -733,7 +733,8 @@ committed row (`nothing` when there is none). The default ieee13-ground path use
 whether the committed flex rows still belong to the base rows it is about to write.
 """
 function dadp_provenance(outcome, T_H::Int, seed::Int)
-    fail(reason, committed = nothing; advice = "") = (; ok = false, reason, advice, committed)
+    fail(reason, committed = nothing; advice = "") =
+        (; ok = false, reason, advice, committed)
     isfile(SUMMARY_CSV) || return fail("No committed summary CSV at $SUMMARY_CSV.")
     old = CSV.read(SUMMARY_CSV, DataFrame)
     committed = filter(
@@ -770,7 +771,8 @@ function dadp_provenance(outcome, T_H::Int, seed::Int)
         )
     end
     isempty(diffs) || return fail(
-        "The in-run dadp row does not reproduce the committed one:\n  " * join(diffs, "\n  "),
+        "The in-run dadp row does not reproduce the committed one:\n  " *
+        join(diffs, "\n  "),
         c;
         advice = "\nStop and investigate; re-recording the base rows is a separate, explicit decision.",
     )
