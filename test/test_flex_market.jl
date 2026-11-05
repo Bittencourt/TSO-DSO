@@ -27,9 +27,11 @@
 #   market: Σ row price*quantity vs payments + overpay    0.0            == (exact)
 #   market: tariff_on_activation vs independent sum       0.0            == (exact)
 #   market: overpayment(0.10) - 2*overpayment(0.05)       0.0            == (exact)
-#   market: pay-as-bid |Σ row quantity_t - Δ_t|           2.78e-17       8.33e-17
-#     (peaked market fixture, K = 4, per hour)
-#   market: pay-as-bid payments vs Σ m·u - Σ g·w          0.0            == (exact)
+#   market: pay-as-bid |Σ row quantity_t - Δ_t| /        2.11e-16       6.33e-16
+#     Σ |row quantity_t| (peaked market fixture, K = 4,
+#     per hour; the absolute maximum is 2.78e-17)
+#   market: pay-as-bid payments vs Σ m·u - Σ g·w,         0.0            == (exact, by
+#     summed in booking order                                            construction)
 #   market: PAB minus uniform aggregator total            -7.1e-3        < 0 (strict; no
 #     (largest value; held with no violation)                            slack)
 #   liveness: Σ shortfall, K in (1, 2, 4, 8, 16)          9.03e-11       2.71e-10
@@ -347,16 +349,31 @@
         return out
     end
 
-    # Largest |Σ_{rows of hour t} quantity − Δ[t]| over the hours.
-    function pab_quantity_gap(rows, Δ)
+    # Largest relative |Σ_{rows of hour t} quantity − Δ[t]| over the hours, scaled by
+    # Σ_{rows of hour t} |quantity| (the magnitude a floating-point sum's rounding error grows
+    # with, so the bound does not depend on the size of the activation); an hour whose gap is
+    # exactly 0 contributes 0, and a non-zero gap with no rows is Inf.
+    function pab_quantity_relgap(rows, Δ)
         g = 0.0
         for t in eachindex(Δ)
             q = sum(r.quantity for r in rows if r.t == t; init = 0.0)
-            g = max(g, abs(q - Δ[t]))
+            gap = abs(q - Δ[t])
+            gap == 0 && continue
+            g = max(g, gap / sum(abs(r.quantity) for r in rows if r.t == t; init = 0.0))
         end
         return g
     end
-    const TOL_PAB_Q = 8.33e-17
+    const TOL_PAB_QREL = 6.33e-16
+
+    # Σ price·quantity over (bus, t, price, quantity) tuples, accumulated one row at a time in
+    # their order, which is the order the settlement books and sums the payment rows.
+    function tuple_money(rows)
+        s = 0.0
+        for (_, _, price, quantity) in rows
+            s += price * quantity
+        end
+        return s
+    end
 
     # Independent Σ_k Σ_t p_t·Δ_{k,t}.
     function activation_value(p, Δ)
@@ -1327,10 +1344,13 @@ end
             ((r, e),) -> (r.bus, r.t, r.price, r.quantity) == e,
             zip(p.payment_rows, expect_rows),
         )
-        # the row quantities of each hour add up to its activated deviation Δ
-        @test M.pab_quantity_gap(p.payment_rows, p.physics.Δ[1]) <= M.TOL_PAB_Q
-        # the money is Σ_k m_k·u_k − Σ_k g_k·w_k over the accepted blocks
-        @test p.flex_payments_total == sum(fb.up_m .* pu) - sum(fb.dn_g .* pw)
+        # the row quantities of each hour add up to its activated deviation Δ, up to the
+        # rounding of two different summation orders, relative to the summed magnitude
+        @test M.pab_quantity_relgap(p.payment_rows, p.physics.Δ[1]) <= M.TOL_PAB_QREL
+        # the money is Σ_k m_k·u_k − Σ_k g_k·w_k over the accepted blocks, accumulated in the
+        # order the rows are booked (hour by hour, up blocks then down blocks), the order the
+        # settlement sums them, so the equality is exact by construction
+        @test p.flex_payments_total == M.tuple_money(expect_rows)
         # pay-as-bid moves money from aggregators to the DSO (held strictly on every seed)
         agg_total(r) = r.ledger.balances[(:aggregator, 2)]
         @test agg_total(p) < agg_total(u)
