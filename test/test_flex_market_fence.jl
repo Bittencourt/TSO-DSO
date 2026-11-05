@@ -240,3 +240,137 @@ end
     @test l2.merchandising_surplus == l0.merchandising_surplus
     @test l2.wholesale_payment == l0.wholesale_payment
 end
+
+@testitem "flex market: comparison keywords default unchanged" setup = [FlexFenceFixtures] tags =
+    [:settlement, :flex_market, :fence] begin
+    using TSODSO
+    F = FlexFenceFixtures
+
+    f = F.two_bus()
+    compare(; kw...) = compare_tariffs(
+        f.feeder,
+        ConvexBranchFlow(),
+        f.aggs;
+        T = F.T,
+        λ₀ = f.λ₀,
+        engine = :centralized,
+        bins = F.BINS,
+        kw...,
+    )
+    r0 = compare()
+    r_fm = compare(; flex_market = nothing)
+    r_wo = compare(; welfare_optimizer = nothing)
+    r_both = compare(; flex_market = nothing, welfare_optimizer = nothing)
+    for r in (r_fm, r_wo, r_both)
+        @test names(r.summary) == F.SUMMARY_COLUMNS
+        @test isequal(r.summary, r0.summary)
+        @test isequal(r.household_bills, r0.household_bills)
+        @test isequal(r.equity_breakouts, r0.equity_breakouts)
+        @test isequal(r.rebound, r0.rebound)
+    end
+end
+
+@testitem "flex market: welfare_optimizer contract and guards" setup =
+    [FlexFenceFixtures, FlexMarketFixtures] tags = [:settlement, :flex_market, :fence] begin
+    using TSODSO
+    using JuMP
+    F = FlexFenceFixtures
+    M = FlexMarketFixtures
+
+    # A factory that counts how many optimizers it built (one per model solve).
+    function counting()
+        n = Ref(0)
+        factory = function ()
+            n[] += 1
+            return JuMP.MOI.instantiate(TSODSO.select_optimizer(TSODSO.SOCP()))
+        end
+        return (; n, factory)
+    end
+
+    # an explicit factory equal to the default reproduces the default DADP row
+    f = F.two_bus()
+    compare(; kw...) = compare_tariffs(
+        f.feeder,
+        ConvexBranchFlow(),
+        f.aggs;
+        T = F.T,
+        λ₀ = f.λ₀,
+        bins = F.BINS,
+        kw...,
+    )
+    r0 = compare()
+    r1 = compare(; welfare_optimizer = TSODSO.select_optimizer(TSODSO.SOCP()))
+    @test r1.summary.status[1] == "ok"
+    @test r1.summary.tariff[1] == "dadp"
+    @test r1.summary.welfare[1] == r0.summary.welfare[1]
+
+    # reach: the factory conditions the DADP solve and the one redispatch solve
+    t = M.tight_agg(M.SEEDS[1])
+    tight(aggs; kw...) = compare_tariffs(
+        M.feeder2(t.smax),
+        ConvexBranchFlow(),
+        aggs;
+        T = M.T_INT,
+        λ₀ = t.π0,
+        bins = F.BINS,
+        kw...,
+    )
+    c = counting()
+    rt = tight([t.agg]; welfare_optimizer = c.factory)
+    @test c.n[] == 1
+    @test rt.summary.tariff == ["dadp", "flat", "tou", "fit"]
+
+    # every guard fires before any solve: the counting factory is never called
+    err(g) = M.caught(g)
+    function refused(g)
+        c0 = counting()
+        e = err(() -> g(c0.factory))
+        return (; e, n = c0.n[])
+    end
+    cap = Aggregator(
+        2,
+        1.0,
+        AbstractDevice[Interruptible(2, 0.0, 2.0, t.a, t.bc), FixedCapacitor(2, 0.1)],
+        t.Pdc,
+    )
+    cases = [
+        ("admm", g -> tight([t.agg]; engine = :admm, welfare_optimizer = g)),
+        (
+            "houses",
+            g -> tight(
+                [t.agg];
+                houses = [t.agg],
+                map_rows = [(; pv_group = :none)],
+                flex_market = FlexMarket(),
+                welfare_optimizer = g,
+            ),
+        ),
+        (
+            "duplicate",
+            g -> tight(
+                [t.agg];
+                flex_market = [FlexMarket(), FlexMarket()],
+                welfare_optimizer = g,
+            ),
+        ),
+        ("scalar", g -> tight([t.agg]; flex_market = 3, welfare_optimizer = g)),
+        (
+            "mixed",
+            g -> tight([t.agg]; flex_market = [FlexMarket(), 3], welfare_optimizer = g),
+        ),
+        ("empty", g -> tight([t.agg]; flex_market = FlexMarket[], welfare_optimizer = g)),
+        ("capacitor", g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)),
+    ]
+    for (label, g) in cases
+        rr = refused(g)
+        @test rr.e isa ArgumentError
+        @test rr.n == 0
+        rr.e isa ArgumentError && @test occursin("compare_tariffs", rr.e.msg)
+    end
+    # the admm refusal names its reason
+    e_admm = refused(g -> tight([t.agg]; engine = :admm, welfare_optimizer = g)).e
+    @test e_admm isa ArgumentError && occursin("solve_admm takes no optimizer", e_admm.msg)
+    # the capacitor refusal comes from the comparison guard, not from the physics
+    e_cap = refused(g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)).e
+    @test e_cap isa ArgumentError && occursin("FixedCapacitor", e_cap.msg)
+end

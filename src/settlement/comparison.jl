@@ -56,6 +56,26 @@
 #     amount is exactly `0.0` and its ratio `NaN` by construction; the fit leg carries
 #     `missing` (the plan pins rebound to the flat/tou vs dadp pair).
 #
+# FLEX-MARKET LEGS (opt-in, `flex_market` keyword; the default path never enters them):
+#   - Each `FlexMarket` row settles the DELIVERED dispatch at its baseline tariff (the flat or
+#     TOU derivation of the same DADP run) and books the flexibility payments on the
+#     activated deviation as conserving ledger rows, so the row's actor totals come from one
+#     ledger with residual exactly 0.0.
+#   - The tariff is also paid on metered energy, so an up-activated unit earns the tariff it
+#     no longer pays plus the clearing price; `tariff_on_activation` reports that overlap and
+#     never changes the dispatch.
+#   - `welfare` is the delivered dispatch's utilities minus λ₀ on the LOSSLESS import (the
+#     flat/tou convention). The dadp row keeps its loss-inclusive import, so the two are not
+#     like for like; `welfare_dadp_lossless` and `welfare_gap_vs_dadp_lossless` put the DADP
+#     dispatch on the same lossless footing for the comparison.
+#   - The redispatch holds each bus's reactive draw at the inelastic `−Pdc·tanφ` (the
+#     flexibility product is active power only).
+#   - A redispatch that fails is a status row (`infeasible_redispatch`, `inexact_redispatch`
+#     or `error:<Type>`) with the same field set and the uncomputed values `missing`; it adds
+#     no bill or rebound rows. Flex rows are appended after the four tariff rows through a
+#     separate table and `vcat(...; cols = :union)`, so the base rows and columns are never
+#     touched.
+#
 # GOLDEN POLICY: `fit_baseline` is consumed via its documented `optimizer` /
 # `on_inexact` kwargs ONLY (the `fit_optimizer` passthrough is the documented tightening
 # seam — Pitfall 2) — never modified. `src/pricing/`, `src/admm/`, `src/models/` are
@@ -185,13 +205,53 @@ function _summary_row(;
     )
 end
 
+# Internal: the `flex_market` keyword normalised to a `Vector{FlexMarket}` (`nothing` stays
+# `nothing`, the default path). Every refusal is an `ArgumentError` raised before any solve.
+function _flex_market_list(flex_market)
+    flex_market === nothing && return nothing
+    fms = if flex_market isa FlexMarket
+        FlexMarket[flex_market]
+    elseif flex_market isa AbstractVector
+        for (k, x) in enumerate(flex_market)
+            x isa FlexMarket || throw(
+                ArgumentError(
+                    "compare_tariffs: flex_market[$k] is a $(typeof(x)), not a FlexMarket.",
+                ),
+            )
+        end
+        FlexMarket[x for x in flex_market]
+    else
+        throw(
+            ArgumentError(
+                "compare_tariffs: flex_market must be nothing, a FlexMarket or a vector of " *
+                "them; got a $(typeof(flex_market)).",
+            ),
+        )
+    end
+    isempty(fms) && throw(
+        ArgumentError(
+            "compare_tariffs: flex_market is an empty vector; pass nothing for the default " *
+            "four-leg comparison.",
+        ),
+    )
+    row_names = String[_flex_row_name(fm) for fm in fms]
+    length(unique(row_names)) == length(row_names) || throw(
+        ArgumentError(
+            "compare_tariffs: flex_market has duplicate row names $(row_names); every " *
+            "FlexMarket must differ in payment rule, baseline tariff, n_blocks or β.",
+        ),
+    )
+    return fms
+end
+
 """
     compare_tariffs(feeder::AbstractFeeder, pf::AbstractPowerFlow,
                     aggs::AbstractVector{<:Aggregator};
                     T::Int, λ₀, engine::Symbol = :centralized, ρ::Real = ADMM().ρ,
                     τ_batt::Real = 1e-3, bins::Vector{Vector{Int}} = default_tou_bins(T),
                     houses = nothing, map_rows = nothing, fit_optimizer = nothing,
-                    time_limit_s::Union{Nothing, Real} = nothing) ->
+                    time_limit_s::Union{Nothing, Real} = nothing, agr_optimizer = nothing,
+                    flex_market = nothing, welfare_optimizer = nothing) ->
         (; summary, household_bills, equity_breakouts, rebound)
 
 The SETL-02/05 comparison runner: settle ONE solved DADP run into a per-actor ledger and
@@ -245,6 +305,31 @@ ladder's mechanism): a caller-supplied AGR-OPT optimizer factory forwarded verba
 the `engine = :admm` solve. The default `nothing` resolves to the plain
 `select_optimizer(QP())` factory, byte-identical. The exactness gate, battery τ, and ρ
 are not exposed here and remain untouched.
+
+`welfare_optimizer` is a conditioning seam for the centralized SOCP solves: a
+caller-supplied optimizer factory forwarded to the DADP solve under
+`engine = :centralized` and to every flexibility-market redispatch. The default `nothing`
+makes exactly the default calls. With `engine = :admm` a non-`nothing` `welfare_optimizer`
+throws `ArgumentError` before any solve, because `solve_admm` takes no optimizer (use
+`agr_optimizer` for ADMM conditioning). A flexibility market is still allowed under
+`:admm`; its redispatch then runs at the default SOCP optimizer. To condition that solve
+after an ADMM run, call [`clear_flex_market`](@ref) directly with its `optimizer`.
+
+`flex_market` (default `nothing`, the four-leg table above) takes one
+[`FlexMarket`](@ref) or a vector of them. Each one appends a row named by its payment
+rule and options (`flex_uniform`, `flex_pab`, `flex_uniform_beta0.05`, ...) after the
+`fit` row, with the 37 base columns plus the additive flexibility columns of
+`FLEX_EXTRA_COLUMNS`. The physics of a clear (baseline, bids, redispatch, delivery and the
+AC check) runs once per pair of baseline tariff and block count, and the payment rule and β
+change money only. `household_bills` gains bus-granularity rows per flex row and
+`rebound` gains per-hour rows, both with an additive `delivery_shortfall` column (summed
+over hours per bus, and over buses per hour); the column is `missing` on the base rows.
+`equity_breakouts` is unchanged. A redispatch that fails becomes a status row
+(`infeasible_redispatch`, `inexact_redispatch` or `error:<Type>`) with no bill or rebound
+rows. With `flex_market`, these throw `ArgumentError` before any solve: `houses` (household
+attribution of flexibility payments is not modelled), an empty vector, an entry that is
+not a `FlexMarket`, two entries with the same row name, and any aggregator holding a
+`FixedCapacitor` (its constant reactive injection has no stage-2 representation).
 """
 function compare_tariffs(
     feeder::AbstractFeeder,
@@ -261,6 +346,8 @@ function compare_tariffs(
     fit_optimizer = nothing,
     time_limit_s::Union{Nothing, Real} = nothing,
     agr_optimizer = nothing,
+    flex_market = nothing,
+    welfare_optimizer = nothing,
 )
     # ---- boundary guards (T-41-19) — BEFORE any solving ---------------------------------
     engine in (:centralized, :admm) || throw(
@@ -305,13 +392,50 @@ function compare_tariffs(
             )
         end
     end
+    (engine === :admm && welfare_optimizer !== nothing) && throw(
+        ArgumentError(
+            "compare_tariffs: welfare_optimizer conditions the centralized SOCP solves (the " *
+            "DADP solve under engine = :centralized and each flexibility-market redispatch); " *
+            "solve_admm takes no optimizer (use agr_optimizer for ADMM conditioning).",
+        ),
+    )
+    flex_markets = _flex_market_list(flex_market)
+    if flex_markets !== nothing
+        houses === nothing || throw(
+            ArgumentError(
+                "compare_tariffs: houses cannot be combined with flex_market — household " *
+                "attribution of flexibility payments is not modelled; pass one or the other.",
+            ),
+        )
+        for (k, a) in enumerate(aggs)
+            any(d -> d isa FixedCapacitor, a.devices) && throw(
+                ArgumentError(
+                    "compare_tariffs: aggs[$k] (bus $(a.bus)) holds a FixedCapacitor; with " *
+                    "flex_market its constant reactive injection has no stage-2 representation " *
+                    "(the flexibility product is active power only).",
+                ),
+            )
+        end
+    end
     λ₀vec = Float64[float(λ₀[t]) for t in 1:T]
 
     # ---- the ONE DADP run ----------------------------------------------------------------
     local input
     if engine === :centralized
-        ctx, _obj, _dadp =
-            solve_welfare(feeder, pf, aggs; T = T, λ₀ = λ₀, allow_export = true)
+        if welfare_optimizer === nothing
+            ctx, _obj, _dadp =
+                solve_welfare(feeder, pf, aggs; T = T, λ₀ = λ₀, allow_export = true)
+        else
+            ctx, _obj, _dadp = solve_welfare(
+                feeder,
+                pf,
+                aggs;
+                T = T,
+                λ₀ = λ₀,
+                allow_export = true,
+                optimizer = welfare_optimizer,
+            )
+        end
         input = settlement_input(ctx; T = T, λ₀ = λ₀)
     else
         # Both conditioning kwargs forward UNCONDITIONALLY: each defaults to `nothing` and
