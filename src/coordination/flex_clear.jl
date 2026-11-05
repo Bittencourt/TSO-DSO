@@ -362,3 +362,325 @@ function _congested_hours(
     kappa_hi = minimum((scores[t] for t in 1:T if congested[t]); init = Inf)
     return (; congested, scores, kappa_lo, kappa_hi)
 end
+
+"""
+    _deliver(agg, price, target; T, weight, τ_batt = 1e-3)
+        -> (; net, utility, battery_certificate, battery_message, shortfall)
+
+The delivery re-solve of one aggregator: its own price-taker problem at the baseline tariff
+`price`, plus an L1 exact-penalty term that pulls its net injection toward the activated
+target `target = b + Δ`:
+
+    max  U(devices) + Σ_t price[t]·pag[t] − weight·Σ_t s[t]
+    s.t. s[t] ≥ pag[t] − target[t],  s[t] ≥ target[t] − pag[t],  s[t] ≥ 0.
+
+A fresh model per call, one solve, gated by `assert_solved!(model; dual = false)`. When
+`weight` exceeds the largest multiplier of `pag[t] == target[t]`, the penalty is exact: the
+target is met whenever the devices can jointly reach it. When they cannot (the bids were
+hour-separable, the devices are not), `shortfall[t] = |net[t] − target[t]|` is the part of
+the activation that was not delivered; it is returned, never hidden.
+
+The penalty is a MODELLING DEVICE, not money: it is never booked in a settlement ledger, and
+`utility` is the device utility of the delivered dispatch alone. `net`, `utility`,
+`battery_certificate` and `battery_message` have the meaning and names of
+[`price_taker_dispatch`](@ref); the battery complementarity certificate is reported
+(`:ok`, `:refused` or `:not_checked`), never thrown.
+
+Throws `ArgumentError` on a `price` or `target` of the wrong length or with a non-finite
+entry, or a `weight` that is not positive and finite.
+"""
+function _deliver(
+    agg::Aggregator,
+    price::AbstractVector{<:Real},
+    target::AbstractVector{<:Real};
+    T::Int,
+    weight::Real,
+    τ_batt::Real = 1e-3,
+)
+    T >= 1 || throw(ArgumentError("_deliver: T=$T must be at least 1."))
+    (length(price) == T && length(target) == T) || throw(
+        ArgumentError(
+            "_deliver: price has length $(length(price)) and target $(length(target)), " *
+            "expected T=$T.",
+        ),
+    )
+    (all(isfinite, price) && all(isfinite, target)) ||
+        throw(ArgumentError("_deliver: price and target must be finite."))
+    (isfinite(weight) && weight > 0) ||
+        throw(ArgumentError("_deliver: weight=$weight must be positive and finite."))
+
+    model = Model(select_optimizer(QP()))
+    ctx = ModelContext(model)
+    ctx.T = T
+    res = contribute!(agg, ctx; T = T)
+    pag = @variable(model, [1:T])
+    @constraint(model, [t = 1:T], pag[t] == res.p_inject[t] - agg.Pdc[t])
+    s = @variable(model, [1:T], lower_bound = 0.0)
+    @constraint(model, [t = 1:T], s[t] >= pag[t] - target[t])
+    @constraint(model, [t = 1:T], s[t] >= target[t] - pag[t])
+    @objective(
+        model,
+        Max,
+        ctx.objective + sum(price[t] * pag[t] for t in 1:T) - weight * sum(s)
+    )
+
+    assert_solved!(model; dual = false)
+
+    net = Float64[value(pag[t]) for t in 1:T]
+    utility = value(ctx.objective)
+    shortfall = Float64[abs(net[t] - target[t]) for t in 1:T]
+
+    # Battery complementarity as a recorded status (the price-taker report semantics).
+    has_battery = any(
+        haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q) for
+        varlist in values(ctx.agg_device_vars) for v in varlist
+    )
+    battery_certificate = :not_checked
+    battery_message = ""
+    if has_battery
+        battery_certificate = :ok
+        try
+            assert_battery_complementarity!(ctx; τ = τ_batt, T = T, on_violation = :error)
+        catch err
+            err isa CertificateError || rethrow()
+            battery_certificate = :refused
+            battery_message = err.msg
+        end
+    end
+
+    return (; net, utility, battery_certificate, battery_message, shortfall)
+end
+
+# Internal: a stage-1 or delivery solver outcome → `(status, notes)` with the stage prefix;
+# `nothing` for anything that is not a solver outcome (the caller rethrows).
+function _physics_error_status(err, prefix::AbstractString)
+    (err isa SolveFailedError || err isa CertificateError || err isa ConvergenceError) ||
+        return nothing
+    return "error:" * string(nameof(typeof(err))), first(prefix * string(err.msg), 400)
+end
+
+# Internal: per-aggregator dispatch results folded into one record with certificate counts.
+function _dispatch_record(ds)
+    certs = Symbol[d.battery_certificate for d in ds]
+    return (;
+        net = Vector{Float64}[d.net for d in ds],
+        utility = Float64[d.utility for d in ds],
+        battery_certificate = certs,
+        battery_message = String[d.battery_message for d in ds],
+        n_battery_ok = count(==(:ok), certs),
+        n_battery_refused = count(==(:refused), certs),
+        n_battery_not_checked = count(==(:not_checked), certs),
+    )
+end
+
+# Internal: the physics record, every field present; unknown fields are `nothing`.
+function _physics_record(;
+    status,
+    notes = "",
+    price,
+    baseline = nothing,
+    bids = nothing,
+    u = nothing,
+    w = nothing,
+    Δ = nothing,
+    π = nothing,
+    congested = nothing,
+    congestion_scores = nothing,
+    kappa_lo = nothing,
+    kappa_hi = nothing,
+    targets = nothing,
+    delivered = nothing,
+    shortfall = nothing,
+    shortfall_total = nothing,
+    shortfall_10w_total = nothing,
+    weight = nothing,
+    maxgap = nothing,
+    p_import_stage2 = nothing,
+    max_wash = nothing,
+    n_probe_solves = 0,
+    n_probe_failed = 0,
+    bid_repair_max = nothing,
+    min_bid_ask_gap = nothing,
+    t_start,
+)
+    wall_s = (time_ns() - t_start) / 1e9
+    return (;
+        status,
+        notes,
+        price,
+        baseline,
+        bids,
+        u,
+        w,
+        Δ,
+        π,
+        congested,
+        congestion_scores,
+        kappa_lo,
+        kappa_hi,
+        targets,
+        delivered,
+        shortfall,
+        shortfall_total,
+        shortfall_10w_total,
+        weight,
+        maxgap,
+        p_import_stage2,
+        max_wash,
+        n_probe_solves,
+        n_probe_failed,
+        bid_repair_max,
+        min_bid_ask_gap,
+        wall_s,
+    )
+end
+
+"""
+    _flex_physics(feeder, pf, aggs, price; T, λ₀, n_blocks, optimizer = nothing,
+                  τ_batt = 1e-3) -> NamedTuple
+
+The physics of one flexibility-market clear, for one (baseline price, `n_blocks`) pair. The
+payment rules consume this record and never re-solve, so the dispatch is identical between
+them by construction.
+
+ 1. **Stage 1.** `price_taker_dispatches(aggs, price; T, τ_batt)` gives each aggregator's
+    baseline `b`, its utility and its battery certificate (`baseline`).
+ 2. **Bids.** [`flex_bids`](@ref) around each baseline (`bids`; the probe counts, the largest
+    monotone repair and the smallest bid–ask gap are summed or reduced over aggregators).
+ 3. **Stage 2.** [`_redispatch`](@ref) over [`_stage2_aggregators`](@ref): the accepted
+    blocks `u`, `w`, the deviations `Δ`, the clearing prices `π` (one length-`T` vector per
+    aggregator, read through `settlement_input`), the SOCP `maxgap`, `max_wash` and the
+    stage-2 import `p_import_stage2`; then [`_congested_hours`](@ref) (`congested`,
+    `congestion_scores`, `kappa_lo`, `kappa_hi`).
+ 4. **Delivery.** `targets = b + Δ`, and [`_deliver`](@ref) per aggregator at the baseline
+    tariff with `weight = 10·max(max|π|, maximum(λ₀), max|price|)`: ten times the largest
+    price in play, so the L1 penalty exceeds every tracking multiplier. The rule is fixed and
+    documented, not tuned; its sensitivity is reported by a second delivery at `10·weight`
+    whose only output is `shortfall_10w_total`. `delivered` holds the nets, utilities and
+    battery certificates (with counts), `shortfall` the per-(aggregator, hour) shortfall and
+    `shortfall_total` its sum.
+
+`wall_s` is the wall time of the whole clear. Every solver outcome is a status: a stage-2
+outcome as in [`_redispatch`](@ref), and a stage-1 or delivery `SolveFailedError`,
+`CertificateError` or `ConvergenceError` as `"error:<Type>"` with `notes` prefixed
+`"baseline: "` or `"delivery: "`. On any status other than `"ok"` the fields that were not
+computed are `nothing` (the probe counts stay those already known). Anything else throws.
+
+Throws `ArgumentError` before any solve on an empty population, a `price` or `λ₀` of the
+wrong length or with a non-finite entry, `n_blocks < 1`, or a `FixedCapacitor` in the
+population.
+"""
+function _flex_physics(
+    feeder::AbstractFeeder,
+    pf::AbstractPowerFlow,
+    aggs::AbstractVector{<:Aggregator},
+    price::AbstractVector{<:Real};
+    T::Int,
+    λ₀,
+    n_blocks::Int,
+    optimizer = nothing,
+    τ_batt::Real = 1e-3,
+)
+    t_start = time_ns()
+    isempty(aggs) && throw(ArgumentError("_flex_physics: empty aggregator vector."))
+    length(price) == T || throw(
+        ArgumentError("_flex_physics: price has length $(length(price)), expected T=$T."),
+    )
+    all(isfinite, price) ||
+        throw(ArgumentError("_flex_physics: price has a non-finite entry."))
+    (length(λ₀) == T && all(isfinite, λ₀)) || throw(
+        ArgumentError("_flex_physics: λ₀ must have length T=$T with finite entries."),
+    )
+    n_blocks >= 1 ||
+        throw(ArgumentError("_flex_physics: n_blocks=$n_blocks must be at least 1."))
+    _refuse_fixed_capacitor(aggs, "_flex_physics")
+    p = Float64[price[t] for t in 1:T]
+    λ = Float64[λ₀[t] for t in 1:T]
+
+    # 1. stage 1: the baseline at the given tariff
+    local stage1
+    try
+        stage1 = price_taker_dispatches(aggs, p; T = T, τ_batt = τ_batt)
+    catch err
+        mapped = _physics_error_status(err, "baseline: ")
+        mapped === nothing && rethrow()
+        return _physics_record(;
+            status = mapped[1],
+            notes = mapped[2],
+            price = p,
+            t_start,
+        )
+    end
+    baseline = _dispatch_record(stage1)
+    b = baseline.net
+
+    # 2. truthful bids around each baseline (status-gated inside; never throws on a solve)
+    bids = FlexBids[flex_bids(a, b[k]; T = T, n_blocks = n_blocks) for (k, a) in enumerate(aggs)]
+    n_probe_solves = sum(fb.n_solves for fb in bids)
+    n_probe_failed = sum(fb.n_failed for fb in bids)
+    bid_repair_max = maximum(fb.repair_max for fb in bids)
+    min_bid_ask_gap = minimum(fb.min_bid_ask_gap for fb in bids)
+    known = (; price = p, baseline, bids, n_probe_solves, n_probe_failed, bid_repair_max,
+        min_bid_ask_gap, t_start)
+
+    # 3. stage 2: the DSO redispatch over the bid pseudo-devices
+    s2 = _stage2_aggregators(aggs, b, bids; T = T)
+    rd = _redispatch(feeder, pf, s2; T = T, λ₀ = λ, optimizer = optimizer)
+    rd.status == "ok" || return _physics_record(; status = rd.status, notes = rd.notes, known...)
+    row = Dict(j => i for (i, j) in enumerate(rd.input2.buses))
+    π = Vector{Float64}[Float64[rd.input2.prices[row[a.bus], t] for t in 1:T] for a in aggs]
+    ch = _congested_hours(rd.ctx2, λ; T = T)
+    stage2 = (;
+        u = rd.u,
+        w = rd.w,
+        Δ = rd.Δ,
+        π,
+        congested = ch.congested,
+        congestion_scores = ch.scores,
+        kappa_lo = ch.kappa_lo,
+        kappa_hi = ch.kappa_hi,
+        maxgap = rd.maxgap,
+        p_import_stage2 = copy(rd.input2.p_import),
+        max_wash = rd.max_wash,
+    )
+
+    # 4. delivery: each aggregator follows its activated target
+    targets = Vector{Float64}[b[k] .+ rd.Δ[k] for k in eachindex(aggs)]
+    weight =
+        10 * max(maximum(x -> maximum(abs, x), π), maximum(λ), maximum(abs, p))
+    local delivered_raw, shortfall_10w_total
+    try
+        delivered_raw = [
+            _deliver(a, p, targets[k]; T = T, weight = weight, τ_batt = τ_batt) for
+            (k, a) in enumerate(aggs)
+        ]
+        shortfall_10w_total = sum(
+            sum(_deliver(a, p, targets[k]; T = T, weight = 10 * weight, τ_batt = τ_batt).shortfall)
+            for (k, a) in enumerate(aggs)
+        )
+    catch err
+        mapped = _physics_error_status(err, "delivery: ")
+        mapped === nothing && rethrow()
+        return _physics_record(;
+            status = mapped[1],
+            notes = mapped[2],
+            known...,
+            stage2...,
+            targets,
+            weight,
+        )
+    end
+    delivered = _dispatch_record(delivered_raw)
+    shortfall = Vector{Float64}[d.shortfall for d in delivered_raw]
+    return _physics_record(;
+        status = "ok",
+        known...,
+        stage2...,
+        targets,
+        delivered,
+        shortfall,
+        shortfall_total = sum(sum, shortfall),
+        shortfall_10w_total,
+        weight,
+    )
+end
