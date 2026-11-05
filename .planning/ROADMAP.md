@@ -64,7 +64,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 - [x] **Phase 42: Thesis Case A Magnitude** - Pre-registered protocol, honest DADP-vs-FIT gain on 784 houses, and gap ablation (completed 2026-10-26)
 - [x] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized (completed 2026-11-02)
 - [x] **Phase 44: Aggregator as Actor** - Welfare vs profit (wedge) objectives, multi-bus portfolios, exogenous compliance/opt-out/rebound (completed 2026-11-03)
-- [ ] **Phase 45: Flexibility Market vs Price Coordination** - DSO flexibility market with explicit baseline/payment rule and the cross-scheme comparison table
+- [x] **Phase 45: Flexibility Market vs Price Coordination** - DSO flexibility market with explicit baseline/payment rule and the cross-scheme comparison table (completed 2026-11-05)
 - [ ] **Phase 46: IEEE-8500 Headline Measurement (go/no-go)** - Recorded go/no-go and a measured 8500 table through `Scenario`
 
 ## Phase Details
@@ -260,7 +260,7 @@ Plans:
 - [x] 45-04-PLAN.md — Uniform / pay-as-bid / β payment rows, exported `clear_flex_market`, conservation tests + liveness vs the centralized social-welfare optimum — SETL-07
 - [x] 45-05-PLAN.md — `compare_tariffs` `flex_market` + `welfare_optimizer` keywords (`:admm` refusal, FixedCapacitor guard), additive flex rows/columns incl. lossless welfare gap, JET — SETL-08
 - [x] 45-06-PLAN.md — Script `--flex-market`, `ieee123` / `ieee123-default` modes, committed CSV rows (run_wall_s, shortfall in bills/rebound), slow IEEE-13/IEEE-123 tests — SETL-07/08
-- [ ] 45-07-PLAN.md — Literate page with the honest framings, docs/scripts registration, api.md checkdocs gap closure, formatter/JET/guard gates, requirement closure — SETL-07/08
+- [x] 45-07-PLAN.md — Literate page with the honest framings, docs/scripts registration, api.md checkdocs gap closure, formatter/JET/guard gates, requirement closure — SETL-07/08
 
 ### Phase 46: IEEE-8500 Headline Measurement (go/no-go)
 
@@ -292,7 +292,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 42. Thesis Case A Magnitude | 6/6 | Complete    | 2026-10-26 |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 5/5 | Complete    | 2026-11-02 |
 | 44. Aggregator as Actor | 7/7 | Complete    | 2026-11-03 |
-| 45. Flexibility Market vs Price Coordination | 6/7 | In Progress|  |
+| 45. Flexibility Market vs Price Coordination | 7/7 | Complete   | 2026-11-05 |
 | 46. IEEE-8500 Headline Measurement (go/no-go) | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes

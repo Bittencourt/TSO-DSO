@@ -47,8 +47,8 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 - [x] **SETL-04**: A researcher can compute equity metrics (Gini, Theil, Atkinson, Palma) on per-household bills/surplus, sign-safe for negative values, with known-value tests.
 - [x] **SETL-05**: Equity results are reported by proxy group (PV owners vs non-owners, electrical location, load level), and the writeup states that no income data is used.
 - [x] **SETL-06**: A rebound metric reports load shifted into later hours after price-driven reductions.
-- [ ] **SETL-07**: A researcher can run a DSO flexibility market (explicit baseline and payment rule — uniform or pay-as-bid) as an alternative coordination scheme, producing the same settlement record as price-based coordination.
-- [ ] **SETL-08**: A comparison table reports welfare, per-actor surplus, network feasibility and equity across FIT, TOU, flat, DADP and the flexibility market.
+- [x] **SETL-07**: A researcher can run a DSO flexibility market (explicit baseline and payment rule — uniform or pay-as-bid) as an alternative coordination scheme, producing the same settlement record as price-based coordination.
+- [x] **SETL-08**: A comparison table reports welfare, per-actor surplus, network feasibility and equity across FIT, TOU, flat, DADP and the flexibility market.
 
 ### Thesis Case A magnitude (REPRO)
 
@@ -135,8 +135,8 @@ Deferred; tracked but not in this roadmap.
 | ACTOR-02 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
 | ACTOR-03 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
 | ACTOR-04 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
-| SETL-07 | Phase 45 | Pending |
-| SETL-08 | Phase 45 | Pending |
+| SETL-07 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv) |
+| SETL-08 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv) |
 | SCALE-07 | Phase 46 | Pending |
 | SCALE-08 | Phase 46 | Pending |
 
