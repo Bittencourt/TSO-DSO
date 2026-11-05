@@ -171,9 +171,10 @@ end
     _stage2_aggregators(aggs, b, bids; T) -> Vector{Aggregator}
 
 One pseudo-aggregator per real aggregator, in the SAME order (ascending buses, as
-`settlement_input` requires): `Aggregator(a.bus, a.φ, [FlexBidDevice(b[k] + Pdc, bids[k])],
-a.Pdc)`. Its net injection is therefore `b[k] + Δ`. Throws `ArgumentError` on length
-mismatches, a non-ascending bus order, or a `FixedCapacitor` in the population.
+`settlement_input` requires). Pseudo-aggregator `k` keeps the bus, `φ` and `Pdc` of
+`aggs[k]` and holds the single device `FlexBidDevice(b[k] + Pdc, bids[k])`, so its net
+injection is `b[k] + Δ`. Throws `ArgumentError` on length mismatches, a non-ascending
+bus order, or a `FixedCapacitor` in the population.
 """
 function _stage2_aggregators(
     aggs::AbstractVector{<:Aggregator},
