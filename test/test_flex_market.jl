@@ -18,6 +18,10 @@
 #   stage 2: |bus_nets - (b + Δ)| (tight 2-bus, K = 4)     2.22e-16       6.67e-16
 #   stage 2: max_wash min(Σu, Σw) (tight and no-limit)     7.02e-9        2.11e-8
 #   stage 2: Δ with all-zero bid widths                    0.0            == (exact)
+#   delivery: Σ shortfall, separable (tight, K = 4)        3.06e-12       9.17e-12
+#   delivery: over-reach |shortfall[2] - R↑[2]|            6.97e-10       2.09e-9
+#   delivery: over-reach, other hours' shortfall           3.18e-9        9.53e-9
+#   delivery: |net(w) - net(10w)| (over-reach, coupled)    1.26e-10       3.79e-10
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -195,6 +199,35 @@
         0,
         0,
     )
+
+    # ---- delivery fixtures ----
+    const TOL_SEP = 9.17e-12
+    const TOL_OVER = 2.09e-9
+    const TOL_OVER_OTHER = 9.53e-9
+    const TOL_WSENS = 3.79e-10
+
+    # The physics pipeline on the tight fixture (baseline priced at π₀, λ₀ = π₀).
+    tight_physics(f, smax; K = 4) = TSODSO._flex_physics(
+        feeder2(smax),
+        ConvexBranchFlow(),
+        [f.agg],
+        f.π0;
+        T = T_INT,
+        λ₀ = f.π0,
+        n_blocks = K,
+    )
+
+    # Every number reachable from `x` is finite (records, vectors, bids).
+    allfinite(x::Number) = isfinite(x)
+    allfinite(x::Union{Symbol, AbstractString, Bool}) = true
+    allfinite(x::AbstractArray) = all(allfinite, x)
+    allfinite(x::NamedTuple) = all(allfinite, values(x))
+    allfinite(x::TSODSO.FlexBids) =
+        all(isfinite, x.up_q) &&
+        all(isfinite, x.up_m) &&
+        all(isfinite, x.dn_q) &&
+        all(isfinite, x.dn_g) &&
+        isfinite(x.V0)
 
     # Largest deviation of the secant prices from the analytic anchor
     # m_k = π₀ + b(δ_{k−1}+δ_k)/2 (up) and g_k = π₀ − b(δ_{k−1}+δ_k)/2 (down).
@@ -686,4 +719,216 @@ end
     @test TSODSO._redispatch_status(ArgumentError("bad input")) === nothing
     long = TSODSO._redispatch_status(CertificateError(repeat("a", 900); kind = :socp_exact))
     @test length(long[2]) == 400
+end
+
+@testitem "flex market: delivery tracks targets and reports shortfall" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    function check(seed)
+        f = M.tight_agg(seed)
+        ph = M.tight_physics(f, f.smax)
+        ph.status == "ok" || return (; ok = false)
+        fb = ph.bids[1]
+        # over-reach: ask hour 2 for twice its whole up range
+        R = sum(fb.up_q[2, :])
+        tgt = copy(ph.baseline.net[1])
+        tgt[2] += 2R
+        d1 = TSODSO._deliver(f.agg, f.π0, tgt; T = M.T_INT, weight = ph.weight)
+        d10 = TSODSO._deliver(f.agg, f.π0, tgt; T = M.T_INT, weight = 10 * ph.weight)
+        return (; ok = true, f, ph, R, d1, d10)
+    end
+    for seed in M.SEEDS
+        c = check(seed)
+        @test c.ok
+        c.ok || continue
+        # separable targets are met
+        @test c.ph.shortfall_total <= M.TOL_SEP
+        @test sum(c.ph.shortfall[1]) == c.ph.shortfall_total
+        @test isfinite(c.ph.shortfall_10w_total) && c.ph.shortfall_10w_total >= 0
+        # an unreachable target: the shortfall is exactly the part beyond the range
+        @test c.R > 0.5
+        @test abs(c.d1.shortfall[2] - c.R) <= M.TOL_OVER
+        @test c.d1.shortfall[1] <= M.TOL_OVER_OTHER && c.d1.shortfall[3] <= M.TOL_OVER_OTHER
+        @test maximum(abs.(c.d1.net .- c.d10.net)) <= M.TOL_WSENS
+        # the delivery result speaks the price-taker vocabulary
+        @test keys(c.d1) ==
+              (:net, :utility, :battery_certificate, :battery_message, :shortfall)
+        @test c.d1.battery_certificate === :not_checked
+        @test c.d1.shortfall == abs.(c.d1.net .- (c.ph.baseline.net[1] .+ [0, 2c.R, 0]))
+    end
+
+    # guards
+    f = M.tight_agg(M.SEEDS[1])
+    p = f.π0
+    @test_throws ArgumentError TSODSO._deliver(f.agg, p[1:2], f.base; T = M.T_INT, weight = 1.0)
+    @test_throws ArgumentError TSODSO._deliver(f.agg, p, f.base[1:2]; T = M.T_INT, weight = 1.0)
+    @test_throws ArgumentError TSODSO._deliver(
+        f.agg,
+        p,
+        [NaN, 0.0, 0.0];
+        T = M.T_INT,
+        weight = 1.0,
+    )
+    @test_throws ArgumentError TSODSO._deliver(f.agg, p, f.base; T = M.T_INT, weight = 0.0)
+    @test_throws ArgumentError TSODSO._deliver(f.agg, p, f.base; T = M.T_INT, weight = Inf)
+end
+
+@testitem "flex market: delivery on a coupled aggregator" setup = [FlexMarketFixtures] tags =
+    [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    function check(seed)
+        c = M.coupled_agg(seed)
+        pt = price_taker_dispatch(c.agg, c.price; T = M.T_CPL)
+        smax = 0.9 * maximum(-pt.net)
+        ph = TSODSO._flex_physics(
+            M.feeder2(smax),
+            ConvexBranchFlow(),
+            [c.agg],
+            c.price;
+            T = M.T_CPL,
+            λ₀ = c.price,
+            n_blocks = 4,
+        )
+        ph.status == "ok" || return (; ph, wsens = NaN)
+        d1 = TSODSO._deliver(c.agg, c.price, ph.targets[1]; T = M.T_CPL, weight = ph.weight)
+        d10 = TSODSO._deliver(
+            c.agg,
+            c.price,
+            ph.targets[1];
+            T = M.T_CPL,
+            weight = 10 * ph.weight,
+        )
+        return (; ph, wsens = maximum(abs.(d1.net .- d10.net)))
+    end
+    for seed in M.SEEDS
+        r = check(seed)
+        @test r.ph.status == "ok"
+        r.ph.status == "ok" || continue
+        @test any(r.ph.congested)
+        @test r.ph.delivered.battery_certificate[1] in (:ok, :refused, :not_checked)
+        @test r.ph.baseline.battery_certificate[1] in (:ok, :refused, :not_checked)
+        @test r.ph.delivered.n_battery_ok +
+              r.ph.delivered.n_battery_refused +
+              r.ph.delivered.n_battery_not_checked == 1
+        @test isfinite(r.ph.shortfall_total) && isfinite(r.ph.shortfall_10w_total)
+        @test r.wsens <= M.TOL_WSENS
+        @test r.ph.n_probe_solves == r.ph.bids[1].n_solves
+    end
+end
+
+@testitem "flex market: physics pipeline statuses and fields" setup = [FlexMarketFixtures] tags =
+    [:flex_market] begin
+    using TSODSO
+    using TSODSO: SolveFailedError, CertificateError
+    M = FlexMarketFixtures
+
+    fields = (
+        :status,
+        :notes,
+        :price,
+        :baseline,
+        :bids,
+        :u,
+        :w,
+        :Δ,
+        :π,
+        :congested,
+        :congestion_scores,
+        :kappa_lo,
+        :kappa_hi,
+        :targets,
+        :delivered,
+        :shortfall,
+        :shortfall_total,
+        :shortfall_10w_total,
+        :weight,
+        :maxgap,
+        :p_import_stage2,
+        :max_wash,
+        :n_probe_solves,
+        :n_probe_failed,
+        :bid_repair_max,
+        :min_bid_ask_gap,
+        :wall_s,
+    )
+
+    function check(seed)
+        f = M.tight_agg(seed)
+        return (; f, ph = M.tight_physics(f, f.smax))
+    end
+    for seed in M.SEEDS
+        c = check(seed)
+        q = c.ph
+        @test q.status == "ok"
+        q.status == "ok" || continue
+        @test keys(q) == fields
+        @test all(k -> getfield(q, k) !== nothing, fields)
+        @test M.allfinite(q)
+        @test q.notes == ""
+        @test q.price == c.f.π0
+        @test q.n_probe_solves == sum(fb.n_solves for fb in q.bids)
+        @test q.n_probe_failed == 0
+        @test q.congested == [false, true, false]
+        @test q.kappa_lo < TSODSO.FLEX_CONGESTION_KAPPA < q.kappa_hi
+        @test q.targets[1] == q.baseline.net[1] .+ q.Δ[1]
+        @test length(q.π[1]) == M.T_INT && length(q.p_import_stage2) == M.T_INT
+        @test q.weight ==
+              10 * max(maximum(abs, q.π[1]), maximum(c.f.π0), maximum(abs, c.f.π0))
+        @test q.wall_s > 0
+        @test q.max_wash <= M.TOL_WASH
+    end
+
+    # an offer that cannot restore the limit: a status, the bids known, no delivery
+    function infeasible(seed)
+        g = M.tight_agg(seed; pdc_add = 2.0)
+        return M.tight_physics(g, 1.0)
+    end
+    for seed in M.SEEDS
+        ph = infeasible(seed)
+        @test ph.status == "infeasible_redispatch"
+        @test !isempty(ph.notes)
+        @test keys(ph) == fields
+        @test ph.delivered === nothing && ph.shortfall === nothing && ph.Δ === nothing
+        @test ph.π === nothing && ph.congested === nothing
+        @test ph.baseline !== nothing && ph.bids !== nothing
+        @test ph.n_probe_solves == sum(fb.n_solves for fb in ph.bids)
+    end
+
+    # guards, all before any solve
+    f = M.tight_agg(M.SEEDS[1])
+    fd = M.feeder2(f.smax)
+    pf = ConvexBranchFlow()
+    phys(aggs, p; kw...) = TSODSO._flex_physics(
+        fd,
+        pf,
+        aggs,
+        p;
+        T = M.T_INT,
+        λ₀ = f.π0,
+        n_blocks = 4,
+        kw...,
+    )
+    @test_throws ArgumentError phys([f.agg], f.π0[1:2])
+    @test_throws ArgumentError phys([f.agg], [f.π0[1], NaN, f.π0[3]])
+    @test_throws ArgumentError phys([f.agg], f.π0; n_blocks = 0)
+    @test_throws ArgumentError phys([f.agg], f.π0; λ₀ = f.π0[1:2])
+    @test_throws ArgumentError phys(Aggregator[], f.π0)
+    cap = Aggregator(
+        2,
+        0.95,
+        AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), FixedCapacitor(2, 0.1)],
+        f.Pdc,
+    )
+    @test_throws ArgumentError phys([cap], f.π0)
+
+    # stage-1 and delivery outcomes map to prefixed statuses; anything else is not mapped
+    s = TSODSO._physics_error_status(SolveFailedError("no point"), "baseline: ")
+    @test s == ("error:SolveFailedError", "baseline: no point")
+    s = TSODSO._physics_error_status(CertificateError("refused"; kind = :x), "delivery: ")
+    @test s == ("error:CertificateError", "delivery: refused")
+    @test TSODSO._physics_error_status(ArgumentError("bad"), "delivery: ") === nothing
 end
