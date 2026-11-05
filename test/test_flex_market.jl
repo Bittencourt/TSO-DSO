@@ -29,6 +29,15 @@
 #   market: overpayment(0.10) - 2*overpayment(0.05)       0.0            == (exact)
 #   market: PAB minus uniform aggregator total            -7.1e-3        < 0 (strict; no
 #     (largest value; held with no violation)                            slack)
+#   liveness: Σ shortfall, K in (1, 2, 4, 8, 16)          9.03e-11       2.71e-10
+#     (tight fixture, flat baseline; the K = 1 clear is
+#     the largest, K >= 2 stay below 4.8e-12)
+#   liveness: gap_16 = W* - welfare_socp_import           2.64e-4        7.92e-4
+#   liveness: gap_{K'} - gap_K for K' > K (monotone        -3.74e-4       < 0 (strict; no
+#     noise; largest value, held with no violation)                      slack)
+#   liveness: welfare_socp_import - W* (upper bound        -1.55e-4       <= 0 (no slack)
+#     noise; largest value, held with no violation)
+#   price band: |π - λ| at activated (bus, hour), K = 16  3.06e-2        9.18e-2
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -228,6 +237,12 @@
 
     # ---- market fixtures ----
     const TOL_MKT_BAL = 1.37e-14
+
+    # ---- liveness fixtures ----
+    const LIVE_K = (1, 2, 4, 8, 16)
+    const TOL_LIVE_SF = 2.71e-10
+    const TOL_GAP16 = 7.92e-4
+    const TOL_BAND = 9.18e-2
 
     # The market fixture: the tight Interruptible at bus 2 (φ = 1.0) with an inelastic peak of
     # `peak` pu in hour 2 and a head branch `head·p₀[2]` above that peak. Under the DADP run
@@ -1281,5 +1296,82 @@ end
             @test r.feasibility.max_overload_ratio == r0.feasibility.max_overload_ratio
             @test r.tariff_on_activation == r0.tariff_on_activation
         end
+    end
+end
+
+# The liveness fixture is the tight Interruptible (exactly hour-separable utility
+# Σ_t a·p − b/2·p², φ = 1.0 so no reactive draw), with the DADP run as the centralized welfare
+# solve at a tight solver tolerance and the flat baseline derived from it. Under the flat
+# baseline every hour is activated (hours 1 and 3 by the energy-value correction, hour 2, the
+# binding hour, by congestion relief), so the bid discretisation bites in every hour and the
+# gap falls at every refinement. (On the peaked market fixture the gap plateaus over
+# K = 1, 2, 4 because one hour only clears once its first block is narrow enough.)
+@testitem "flex market: liveness against the centralized optimum (hour-separable)" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    # The gap is the bid-discretisation gap: Interruptible is exactly hour-separable, so this
+    # fixture has no hour-separability gap, and the truthful piecewise-linear bids converge to
+    # the device's own value function as K grows. W* is SOCIAL WELFARE from utilities of the
+    # centralized run (Σ bus utilities − λ₀ᵀ p_import through settlement_input), the same
+    # convention as welfare_socp_import, never an objective value.
+    function sweep(seed)
+        f = M.tight_agg(seed)
+        inC = M.market_dadp(f).input
+        W = sum(values(inC.bus_utilities)) - sum(f.π0[t] * inC.p_import[t] for t in 1:M.T_INT)
+        rs = [
+            M.market_clear(f, inC, FlexMarket(; n_blocks = K); optimizer = M.cent_opt()) for
+            K in M.LIVE_K
+        ]
+        ok = all(r -> r.status == "ok", rs)
+        gaps = ok ? Float64[W - r.welfare_socp_import for r in rs] : Float64[]
+        shortfall = ok ? Float64[r.physics.shortfall_total for r in rs] : Float64[]
+        return (; W, rs, ok, gaps, shortfall)
+    end
+    for seed in M.SEEDS
+        c = sweep(seed)
+        @test c.ok
+        c.ok || continue
+        @test all(<=(M.TOL_LIVE_SF), c.shortfall)
+        # the centralized optimum bounds the market from above
+        @test all(>=(0.0), c.gaps)
+        @test all(r -> r.welfare_socp_import <= c.W, c.rs)
+        # the discretisation gap shrinks at every refinement and ends small
+        @test all(i -> c.gaps[i+1] < c.gaps[i], 1:(length(c.gaps)-1))
+        @test c.gaps[end] <= M.TOL_GAP16
+        # liveness: the market is not vacuous, refining the bids actually closes the gap
+        @test c.gaps[1] - c.gaps[end] > 0
+        @test all(r -> r.market.n_blocks == size(r.physics.u[1], 2), c.rs)
+    end
+end
+
+@testitem "flex market: clearing prices sit in a band around the DADP prices" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    # At K = 16 the uniform clearing price π of each activated (bus, hour) is compared with the
+    # DADP price λ of the same bus and hour. They are not the same object (π is the dual of the
+    # stage-2 balance over piecewise-linear bids; λ is the DADP price of the device model), so
+    # the check is a measured band, not an identity. Non-activated pairs are excluded: there π
+    # is not unique inside the bid–ask gap.
+    function band(seed)
+        f = M.tight_agg(seed)
+        inC = M.market_dadp(f).input
+        r = M.market_clear(f, inC, FlexMarket(; n_blocks = 16); optimizer = M.cent_opt())
+        r.status == "ok" || return (; ok = false)
+        Δ = r.physics.Δ[1]
+        act = [t for t in 1:M.T_INT if abs(Δ[t]) > TSODSO.FLEX_RANGE_FLOOR]
+        row = findfirst(==(2), inC.buses)
+        gap = isempty(act) ? NaN : maximum(abs(r.physics.π[1][t] - inC.prices[row, t]) for t in act)
+        return (; ok = true, act, gap)
+    end
+    for seed in M.SEEDS
+        c = band(seed)
+        @test c.ok
+        c.ok || continue
+        @test !isempty(c.act)
+        @test c.gap <= M.TOL_BAND
     end
 end
