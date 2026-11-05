@@ -103,8 +103,14 @@
     # The default DADP settlement input (same solve as the comparison's centralized leg).
     function default_input()
         f = two_bus()
-        ctx, _obj, _dadp =
-            solve_welfare(f.feeder, ConvexBranchFlow(), f.aggs; T = T, λ₀ = f.λ₀, allow_export = true)
+        ctx, _obj, _dadp = solve_welfare(
+            f.feeder,
+            ConvexBranchFlow(),
+            f.aggs;
+            T = T,
+            λ₀ = f.λ₀,
+            allow_export = true,
+        )
         return settlement_input(ctx; T = T, λ₀ = f.λ₀)
     end
 
@@ -164,8 +170,8 @@ end
     @test length(l1.transfers) == 2 * (length(input.buses) * F.T + F.T)
 end
 
-@testitem "flex market: default fence (digests)" setup = [ActorFenceDigest, FlexFenceFixtures] tags =
-    [:settlement, :flex_market, :fence] begin
+@testitem "flex market: default fence (digests)" setup =
+    [ActorFenceDigest, FlexFenceFixtures] tags = [:settlement, :flex_market, :fence] begin
     using TSODSO
     F = FlexFenceFixtures
     fold = ActorFenceDigest.fold
@@ -176,12 +182,30 @@ end
     d_breakouts = F.df_digest(fold, res.equity_breakouts)
     d_rebound = F.df_digest(fold, res.rebound)
     d_ledger = F.ledger_digest(fold, build_settlement_ledger(F.default_input()))
-    @info "flex market fence digests" repr((d_summary, d_bills, d_breakouts, d_rebound, d_ledger))
+    @info "flex market fence digests" repr((
+        d_summary,
+        d_bills,
+        d_breakouts,
+        d_rebound,
+        d_ledger,
+    ))
 
     # One digest assertion for the whole fence (single version-gate skip record).
     if VERSION == v"1.12.5"
-        @test (d_summary, d_bills, d_breakouts, d_rebound, d_ledger) == (0x51a1ed4c3c66413e, 0xf4e1569ddabc1b5f, 0x082f2207b4e88cc4, 0x5515555ce78f74e5, 0xe386f1abc04d04c8)
+        @test (d_summary, d_bills, d_breakouts, d_rebound, d_ledger) == (
+            0x51a1ed4c3c66413e,
+            0xf4e1569ddabc1b5f,
+            0x082f2207b4e88cc4,
+            0x5515555ce78f74e5,
+            0xe386f1abc04d04c8,
+        )
     else
-        @test_skip (d_summary, d_bills, d_breakouts, d_rebound, d_ledger) == (0x51a1ed4c3c66413e, 0xf4e1569ddabc1b5f, 0x082f2207b4e88cc4, 0x5515555ce78f74e5, 0xe386f1abc04d04c8)
+        @test_skip (d_summary, d_bills, d_breakouts, d_rebound, d_ledger) == (
+            0x51a1ed4c3c66413e,
+            0xf4e1569ddabc1b5f,
+            0x082f2207b4e88cc4,
+            0x5515555ce78f74e5,
+            0xe386f1abc04d04c8,
+        )
     end
 end

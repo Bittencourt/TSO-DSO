@@ -23,7 +23,8 @@
     @test fm.n_blocks === 4
     @test fm.baseline_inflation === 0.0
     @test FlexMarket(; baseline_inflation = 0).baseline_inflation === 0.0
-    @test FlexMarket(; baseline_tariff = :tou, payment_rule = :pay_as_bid).payment_rule === :pay_as_bid
+    @test FlexMarket(; baseline_tariff = :tou, payment_rule = :pay_as_bid).payment_rule ===
+          :pay_as_bid
     @test coordination_label(PriceBased()) == "price_based"
     @test coordination_label(fm) == "flex_market"
 
@@ -46,11 +47,17 @@
     # ---- injectivity over the full keyword grid ----
     function grid_names()
         out = String[]
-        for rule in (:uniform, :pay_as_bid), tariff in (:flat, :tou), k in (1, 4, 8),
+        for rule in (:uniform, :pay_as_bid),
+            tariff in (:flat, :tou),
+            k in (1, 4, 8),
             β in (0.0, 0.05, 0.10)
 
-            m = FlexMarket(; baseline_tariff = tariff, payment_rule = rule, n_blocks = k,
-                baseline_inflation = β)
+            m = FlexMarket(;
+                baseline_tariff = tariff,
+                payment_rule = rule,
+                n_blocks = k,
+                baseline_inflation = β,
+            )
             push!(out, _flex_row_name(m))
         end
         return out
