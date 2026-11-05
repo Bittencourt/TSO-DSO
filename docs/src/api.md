@@ -119,6 +119,7 @@ Pages = [
     "coordination/coordination.jl",
     "coordination/flex_bids.jl",
     "coordination/flex_clear.jl",
+    "coordination/flex_settle.jl",
 ]
 Order = [:type, :constant, :function]
 ```

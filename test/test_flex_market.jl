@@ -22,6 +22,13 @@
 #   delivery: over-reach |shortfall[2] - R↑[2]|            6.97e-10       2.09e-9
 #   delivery: over-reach, other hours' shortfall           3.18e-9        9.53e-9
 #   delivery: |net(w) - net(10w)| (over-reach, coupled)    1.26e-10       3.79e-10
+#   market: |Σ ledger balances| (both rules, β in         4.55e-15       1.37e-14
+#     (0, 0.05, 0.10), peaked market fixture, K = 4)
+#   market: Σ row price*quantity vs payments + overpay    0.0            == (exact)
+#   market: tariff_on_activation vs independent sum       0.0            == (exact)
+#   market: overpayment(0.10) - 2*overpayment(0.05)       0.0            == (exact)
+#   market: PAB minus uniform aggregator total            -7.1e-3        < 0 (strict; no
+#     (largest value; held with no violation)                            slack)
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -220,11 +227,7 @@
     )
 
     # ---- market fixtures ----
-    const TOL_MKT_BAL = 0.0
-    const TOL_MKT_ROWS = 0.0
-    const TOL_MKT_TOA = 0.0
-    const TOL_MKT_BETA = 0.0
-    const TOL_MKT_PAB = 0.0
+    const TOL_MKT_BAL = 1.37e-14
 
     # The market fixture: the tight Interruptible at bus 2 (φ = 1.0) with an inelastic peak of
     # `peak` pu in hour 2 and a head branch `head·p₀[2]` above that peak. Under the DADP run
@@ -1079,9 +1082,7 @@ end
         @test abs(sum(values(led.balances))) <= M.TOL_MKT_BAL
         @test led.metadata.source === :flex_market
         # every payment row is a ledger flow: Σ price·quantity = payments + overpayment
-        @test abs(
-            M.row_total(r.payment_rows) - (r.flex_payments_total + r.baseline_overpayment),
-        ) <= M.TOL_MKT_ROWS
+        @test M.row_total(r.payment_rows) == r.flex_payments_total + r.baseline_overpayment
         # the ledger books the delivered nets at the baseline tariff and the lossless import
         n = r.physics.delivered.net[1]
         @test r.p_import_lossless == Float64[-n[t] for t in 1:M.T_INT]
@@ -1097,9 +1098,7 @@ end
         @test r.welfare_socp_import ==
               U - sum(c.input.λ₀[t] * r.physics.p_import_stage2[t] for t in 1:M.T_INT)
         # the tariff-on-activation overlap is reported, independently recomputed
-        @test abs(
-            r.tariff_on_activation - M.activation_value(r.baseline_price, r.physics.Δ),
-        ) <= M.TOL_MKT_TOA
+        @test r.tariff_on_activation == M.activation_value(r.baseline_price, r.physics.Δ)
         # the AC check is recorded, never a gate
         @test r.feasibility isa FeasibilityStatus
         @test r.feasibility.status in (:feasible, :infeasible, :solve_failed)
@@ -1143,19 +1142,21 @@ end
               [(2, t) for t in 1:M.T_INT if Δ[t] != 0]
         @test all(r -> r.price == u.physics.π[1][r.t], u.payment_rows)
         @test all(r -> r.quantity == Δ[r.t], u.payment_rows)
-        # pay-as-bid: each accepted block at its own price, up positive and down negative
+        # pay-as-bid: every block with a non-zero accepted quantity at its own price (rejected
+        # blocks carry interior-point noise of either sign, so the sign of a row does not tell
+        # its direction; the quantities still sum to Δ)
         fb = p.physics.bids[1]
         @test all(r -> r.bus == 2, p.payment_rows)
         @test all(
-            r -> r.quantity > 0 ? r.price in fb.up_m[r.t, :] : r.price in fb.dn_g[r.t, :],
+            r -> r.price in fb.up_m[r.t, :] || r.price in fb.dn_g[r.t, :],
             p.payment_rows,
         )
         @test length(p.payment_rows) ==
               count(!=(0.0), p.physics.u[1]) + count(!=(0.0), p.physics.w[1])
-        # pay-as-bid moves money from aggregators to the DSO, never the other way
+        # pay-as-bid moves money from aggregators to the DSO (held strictly on every seed)
         agg_total(r) = r.ledger.balances[(:aggregator, 2)]
-        @test agg_total(p) <= agg_total(u) + M.TOL_MKT_PAB
-        @test p.flex_payments_total <= u.flex_payments_total + M.TOL_MKT_PAB
+        @test agg_total(p) < agg_total(u)
+        @test p.flex_payments_total < u.flex_payments_total
         @test ledger_residual(p.ledger) == 0.0 && ledger_residual(u.ledger) == 0.0
     end
 
@@ -1254,7 +1255,7 @@ end
         # truthful: no phantom; inflated: a positive overpayment, linear in β
         @test r0.baseline_overpayment == 0.0
         @test r5.baseline_overpayment > 0
-        @test abs(r10.baseline_overpayment - 2 * r5.baseline_overpayment) <= M.TOL_MKT_BETA
+        @test r10.baseline_overpayment == 2 * r5.baseline_overpayment
         # the phantom rows are real ledger rows: one per congested up-activated hour
         @test length(r5.payment_rows) == length(r0.payment_rows) + 1
         @test r5.payment_rows[1:length(r0.payment_rows)] == r0.payment_rows
