@@ -587,8 +587,8 @@ stage 2 (its sum-to-price reconstruction check) is `"error:dlmp_split"` with `no
 Throws `ArgumentError` before any solve on an empty population, a `price` or `λ₀` of the
 wrong length or with a non-finite entry, a `λ₀` with a non-positive entry (it normalises the
 congestion score), `n_blocks < 1`, a power-flow formulation other than `ConvexBranchFlow`
-(the congested-hour split reads its constraint duals), or a `FixedCapacitor` in the
-population.
+(the congested-hour split reads its constraint duals), aggregator buses that are not
+ascending, or a `FixedCapacitor` in the population.
 """
 function _flex_physics(
     feeder::AbstractFeeder,
@@ -623,6 +623,12 @@ function _flex_physics(
             "_flex_physics: the flexibility market needs ConvexBranchFlow (the congested-" *
             "hour split reads its cone, voltage-drop, exactness-copy and thermal-limit " *
             "duals); got $(typeof(pf)).",
+        ),
+    )
+    issorted([a.bus for a in aggs]) || throw(
+        ArgumentError(
+            "_flex_physics: aggregator buses $([a.bus for a in aggs]) are not ascending; " *
+            "the stage-2 settlement folds in bus order.",
         ),
     )
     _refuse_fixed_capacitor(aggs, "_flex_physics")

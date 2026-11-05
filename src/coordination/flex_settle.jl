@@ -296,10 +296,11 @@ throws: `ledger`, `feasibility`, `payment_rows`, `p_import_lossless`, `bills` an
 `nothing`, and the money and welfare numbers are `missing`.
 
 Throws `ArgumentError` before any solve when `input.T != T`, when the aggregator buses are not
-exactly `input.buses` (one aggregator per bus), or when the default TOU bins do not exist for
-`T`; the physics guards of the clear apply too, also before any solve (among them, `pf`
-must be a `ConvexBranchFlow` and every `λ₀[t]` must be positive). A failure of the
-congested-hour price split after the redispatch is the status `"error:dlmp_split"`.
+exactly `input.buses` (one aggregator per bus, in ascending bus order), or when the default
+TOU bins do not exist for `T`; the physics guards of the clear apply too, also before any
+solve (among them, `pf` must be a `ConvexBranchFlow` and every `λ₀[t]` must be positive). A
+failure of the congested-hour price split after the redispatch is the status
+`"error:dlmp_split"`.
 """
 function clear_flex_market(
     feeder::AbstractFeeder,
@@ -317,10 +318,11 @@ function clear_flex_market(
         ArgumentError("clear_flex_market: input.T = $(input.T) does not match T = $T."),
     )
     agg_buses = Int[a.bus for a in aggs]
-    sort(agg_buses) == input.buses || throw(
+    agg_buses == input.buses || throw(
         ArgumentError(
-            "clear_flex_market: the aggregator buses $(agg_buses) are not one aggregator " *
-            "per bus of the DADP input $(input.buses).",
+            "clear_flex_market: the aggregator buses $(agg_buses) must be exactly the DADP " *
+            "input buses $(input.buses): one aggregator per bus, in ascending bus order " *
+            "(the stage-2 settlement folds in bus order).",
         ),
     )
     baseline_price = _baseline_price(input, fm; bins = bins)

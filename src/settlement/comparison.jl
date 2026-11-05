@@ -332,8 +332,8 @@ rows; so does a failure of the congested-hour price split after the redispatch
 an entry that is not a `FlexMarket`, two entries with the same row name, a power-flow
 formulation other than `ConvexBranchFlow` (the congested-hour split reads its constraint
 duals), a `λ₀` with a non-finite or non-positive entry (it normalises the congestion
-score), and any aggregator holding a `FixedCapacitor` (its constant reactive injection has
-no stage-2 representation).
+score), aggregators that are not in ascending bus order, and any aggregator holding a
+`FixedCapacitor` (its constant reactive injection has no stage-2 representation).
 """
 function compare_tariffs(
     feeder::AbstractFeeder,
@@ -423,6 +423,13 @@ function compare_tariffs(
                 "compare_tariffs: with flex_market, λ₀ must be finite and positive in every " *
                 "hour (it normalises the congestion score of the clearing prices); got " *
                 "$(collect(λ₀)).",
+            ),
+        )
+        issorted([a.bus for a in aggs]) || throw(
+            ArgumentError(
+                "compare_tariffs: with flex_market, the aggregators must be in ascending bus " *
+                "order (the stage-2 settlement folds in bus order); got buses " *
+                "$([a.bus for a in aggs]).",
             ),
         )
         for (k, a) in enumerate(aggs)

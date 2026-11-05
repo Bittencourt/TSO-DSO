@@ -1270,6 +1270,45 @@ end
         T = M.T_INT,
         λ₀ = f.π0,
     )
+    # every bus present but in descending order: refused by the entry guard, which names the
+    # order (the stage-2 builder's own check would only fire after stage 1 and the probes)
+    lo = Aggregator(1, 1.0, AbstractDevice[Interruptible(1, 0.0, 2.0, 6.0, 1.0)], f.Pdc)
+    two = merge(
+        input,
+        (;
+            buses = [1, 2],
+            prices = vcat(input.prices, input.prices),
+            bus_nets = Dict(1 => input.bus_nets[2], 2 => input.bus_nets[2]),
+            bus_utilities = Dict(1 => input.bus_utilities[2], 2 => input.bus_utilities[2]),
+        ),
+    )
+    e_ord = M.caught(
+        () -> clear_flex_market(
+            M.feeder2(f.smax),
+            ConvexBranchFlow(),
+            [f.agg, lo],
+            two,
+            FlexMarket();
+            T = M.T_INT,
+            λ₀ = f.π0,
+        ),
+    )
+    @test e_ord isa ArgumentError
+    @test e_ord isa ArgumentError && startswith(e_ord.msg, "clear_flex_market:")
+    @test e_ord isa ArgumentError && occursin("ascending bus order", e_ord.msg)
+    e_phys = M.caught(
+        () -> TSODSO._flex_physics(
+            M.feeder2(f.smax),
+            ConvexBranchFlow(),
+            [f.agg, lo],
+            f.π0;
+            T = M.T_INT,
+            λ₀ = f.π0,
+            n_blocks = 4,
+        ),
+    )
+    @test e_phys isa ArgumentError && startswith(e_phys.msg, "_flex_physics:")
+    @test e_phys isa ArgumentError && occursin("not ascending", e_phys.msg)
 end
 
 @testitem "flex market: baseline inflation changes money only" setup = [FlexMarketFixtures] tags =
