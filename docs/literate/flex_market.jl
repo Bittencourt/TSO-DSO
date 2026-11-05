@@ -201,6 +201,15 @@ let
     end
 end
 
+# Read this number against the two-bus band before using a clearing price for anything. The
+# test above measures the band at `|π − λ_dadp| ≤ 9.18e-2` (`n_blocks = 16`, the tolerance
+# recorded in the header of `test/test_flex_market.jl`). On both IEEE feeders the difference is
+# more than forty times that, the same order as the prices themselves. **On these feeders the
+# uniform clearing price is not an estimate of the DADP price**, and the framing above holds
+# for welfare totals only, not for prices. A likely reason is that the dual of a stage-2
+# balance over piecewise-linear bids sits at a block price, which can jump between blocks
+# while the welfare barely moves; this is not separately measured here.
+
 # ## 3. Welfare convention: lossless vs lossy
 #
 # Every welfare number is **social welfare recomputed from utilities**, never an objective
@@ -468,6 +477,25 @@ end
 # flex row. And "does not increase" holds only up to solver tolerance, which is the size of the
 # committed `10w` changes printed below.
 #
+# The **baseline** is a different matter. The stage-1 flat-price dispatch that every offer is
+# measured from carries its own battery certificates, and on both IEEE feeders some of them
+# are refused: the relaxed battery model is not exact at that baseline. The baseline is used
+# as computed and the refusals are counted, not repaired. Per feeder, baseline refusals next
+# to the delivered ones:
+
+let
+    for mode in FLEX_MODES
+        r = find_row(mode, "flex_uniform")
+        r === nothing && continue
+        @printf(
+            "%-14s baseline battery certificates refused: %s   delivered refused: %s\n",
+            mode,
+            cell(r["baseline_batt_refused"]),
+            cell(r["batt_refused"])
+        )
+    end
+end
+
 # The `_10w` column measures how much the weight matters: it re-solves the delivery at ten
 # times the weight. The change and the relative change are printed below; when the relative
 # change is small, the shortfall is insensitive to the weight over a tenfold range.
@@ -648,6 +676,11 @@ end
 #   in play, not a proven bound on the tracking multiplier, so the reported total shortfall is
 #   an upper bound on the hour-separability loss (totals only, relative to the relaxed battery
 #   model, up to solver tolerance); the `10w` column measures its sensitivity (section 8).
+# - **Refused baseline battery certificates.** The flat-price baseline that offers are measured
+#   from is not battery-exact on either IEEE feeder; the refusals are counted, not repaired
+#   (section 8).
+# - **Clearing prices are not DLMP estimates** on the IEEE feeders: the gap to the DADP price
+#   is far outside the two-bus band (section 2).
 # - **Inelastic reactive power in stage 2** (section 1).
 # - **Lossless flex welfare** against loss-inclusive DADP welfare; use the like-for-like column
 #   (section 3).

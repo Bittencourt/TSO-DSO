@@ -1,7 +1,7 @@
 ---
 phase: 45-flexibility-market-vs-price-coordination
 verified: 2026-11-05T08:03:17Z
-status: human_needed
+status: passed
 score: 12/12 must-haves verified
 overrides_applied: 0
 human_verification:
@@ -167,3 +167,26 @@ There are no gaps. Both roadmap success criteria and all 12 must-have truths are
 
 _Verified: 2026-11-05T08:03:17Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Human Verification Outcome (2026-11-05)
+
+The researcher reviewed all 12 human-verification items and chose **"Accept + doc touch-up"**.
+Every item is accepted as a measured, documented limitation. None is a gap.
+
+The doc touch-up in `docs/literate/flex_market.jl` changed three things:
+
+- **Section 2:** the `price_gap_vs_dadp_max` print is now read against the two-bus band (9.18e-2).
+  The IEEE gaps of 4.6357 and 3.8205 are more than 40× that band. The page now says plainly that the
+  uniform clearing price is not a DADP-price estimate on these feeders, and that the
+  first-welfare-theorem framing holds for welfare totals only.
+- **Section 8:** a new computed print shows refused baseline battery certificates per feeder:
+  10 on IEEE-13 and 29 on IEEE-123, with 0 delivered refusals on both. This fills the missing
+  IEEE-13 count.
+- **Section 12:** two new limitation bullets, one on the refused baseline battery certificates and one
+  saying clearing prices are not DLMP estimates.
+
+The page was re-run standalone (`julia --project=. docs/literate/flex_market.jl`): exit 0, and the
+printed numbers match the CSVs. The full `docs/make.jl` build is still pending (item 12).
+
+Out-of-scope changes: the researcher chose **"Keep both"**, the `src/pricing/dlmp.jl` message
+constant and the `docs/src/api.md` fill for 8 pre-existing files.
