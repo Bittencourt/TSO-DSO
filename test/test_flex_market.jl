@@ -15,6 +15,7 @@
 
 @testmodule FlexMarketFixtures begin
     using TSODSO
+    using TSODSO: Bus, Branch, Feeder
 
     const SEEDS = (20260719, 20260720, 20260721)
 
@@ -42,6 +43,97 @@
             s += r.price * r.quantity
         end
         return s
+    end
+
+    # ---- bid fixtures ----
+    const TOL_V0 = NaN
+    const TOL_ANCHOR = NaN
+    const TOL_REPAIR = NaN
+
+    const T_INT = 3
+    const T_CPL = 24
+
+    function feeder2(smax)
+        return Feeder(
+            [Bus(1, 0.95, 1.05, true), Bus(2, 0.95, 1.05, false)],
+            [Branch(1, 2, 1e-3, 1e-3, smax)],
+            1,
+        )
+    end
+
+    # One Interruptible at bus 2, φ = 1.0, with a seeded interior baseline: the tariff price
+    # π₀[t] = a − b·p₀[t] makes p₀[t] the price-taker consumption, strictly inside [Pmin, Pmax].
+    # `base` is the analytic baseline net injection −p₀ − Pdc.
+    function interruptible_agg(seed; Pmin = 0.0, Pmax = 2.0, T = T_INT)
+        prof = generate_profiles(seed = seed + 2, T = T)
+        a = 6.0 + 2.0 * prof.demand[1]
+        bc = 0.5 + prof.demand[2]
+        p0 = Pmin == Pmax ? fill(Pmin, T) : Float64[0.4 + prof.demand[t] for t in 1:T]
+        π0 = Float64[a - bc * p0[t] for t in 1:T]
+        Pdc = Float64[0.1 * prof.demand[t] for t in 1:T]
+        agg = Aggregator(2, 1.0, AbstractDevice[Interruptible(2, Pmin, Pmax, a, bc)], Pdc)
+        base = Float64[-p0[t] - Pdc[t] for t in 1:T]
+        return (; agg, a, bc, p0, π0, Pdc, base, Pmin, Pmax)
+    end
+
+    temp() = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30, 31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
+
+    # Coupled aggregator (Thermostatic + Deferrable + PVBattery, T = 24) and a seeded tariff.
+    function coupled_agg(seed; bus = 2, ls = 0.01, ps = 0.0025)
+        prof = generate_profiles(seed = seed + bus, T = T_CPL)
+        Ppv = Float64[ps * p for p in prof.pv]
+        Pdc = Float64[ls * d for d in prof.demand]
+        devs = AbstractDevice[
+            Thermostatic(bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, temp()),
+            Deferrable(bus, 8, 16, 1.0, 0.5, 0.5),
+            PVBattery(bus, 0.95, 1.0, 0.05, 0.0, 0.1, 0.05, 3.8, 6.2, 8.9, Ppv),
+        ]
+        agg = Aggregator(bus, 0.90, devs, Pdc)
+        price = Float64[3.0 + 2.0 * prof.demand[t] for t in 1:T_CPL]
+        return (; agg, price)
+    end
+
+    # The marginal curve of hour t in increasing injection order, offered blocks only.
+    function marginal_curve(fb, t)
+        K = size(fb.up_q, 2)
+        c = Float64[]
+        for k in K:-1:1
+            fb.dn_q[t, k] > 0 && push!(c, fb.dn_g[t, k])
+        end
+        for k in 1:K
+            fb.up_q[t, k] > 0 && push!(c, fb.up_m[t, k])
+        end
+        return c
+    end
+    curve_sorted(fb) = all(t -> issorted(marginal_curve(fb, t)), axes(fb.up_q, 1))
+
+    # Hour-directions with at least one offered block.
+    function offered_directions(fb)
+        n = 0
+        for t in axes(fb.up_q, 1)
+            any(>(0), fb.up_q[t, :]) && (n += 1)
+            any(>(0), fb.dn_q[t, :]) && (n += 1)
+        end
+        return n
+    end
+    expected_solves(fb) =
+        1 + 2 * size(fb.up_q, 1) + size(fb.up_q, 2) * offered_directions(fb)
+
+    # Largest deviation of the secant prices from the analytic anchor
+    # m_k = π₀ + b(δ_{k−1}+δ_k)/2 (up) and g_k = π₀ − b(δ_{k−1}+δ_k)/2 (down).
+    function anchor_error(f, fb)
+        T, K = size(fb.up_q)
+        e = 0.0
+        for t in 1:T
+            δu = (f.p0[t] - f.Pmin) / K
+            δd = (f.Pmax - f.p0[t]) / K
+            for k in 1:K
+                mu = f.π0[t] + f.bc * ((k - 1) * δu + k * δu) / 2
+                gd = f.π0[t] - f.bc * ((k - 1) * δd + k * δd) / 2
+                e = max(e, abs(fb.up_m[t, k] - mu), abs(fb.dn_g[t, k] - gd))
+            end
+        end
+        return e
     end
 end
 
@@ -194,4 +286,112 @@ end
     # an empty row list adds nothing
     l0 = build([])
     @test l0.transfers == base.transfers && l0.balances == base.balances
+end
+
+@testitem "flex market: bids match the interruptible anchor" setup = [FlexMarketFixtures] tags =
+    [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    function check(seed, K)
+        f = M.interruptible_agg(seed)
+        fb = TSODSO.flex_bids(f.agg, f.base; T = M.T_INT, n_blocks = K)
+        return (; f, fb, err = M.anchor_error(f, fb))
+    end
+    for seed in M.SEEDS, K in (1, 4)
+        r = check(seed, K)
+        @test r.fb isa TSODSO.FlexBids
+        @test size(r.fb.up_q) == (M.T_INT, K)
+        @test r.fb.n_failed == 0
+        # every hour-direction is interior, so every block is offered
+        @test all(>(0), r.fb.up_q) && all(>(0), r.fb.dn_q)
+        @test r.fb.n_solves == 1 + 2 * M.T_INT + K * 2 * M.T_INT
+        @test r.fb.n_solves == M.expected_solves(r.fb)
+        @test r.err <= M.TOL_ANCHOR
+        @test M.curve_sorted(r.fb)
+        @test r.fb.min_bid_ask_gap > 0
+        @test isfinite(r.fb.V0)
+    end
+end
+
+@testitem "flex market: bids reproduce the baseline value on a coupled aggregator" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    function check(seed)
+        f = M.coupled_agg(seed)
+        pt = price_taker_dispatch(f.agg, f.price; T = M.T_CPL)
+        fb = TSODSO.flex_bids(f.agg, pt.net; T = M.T_CPL, n_blocks = 4)
+        return (; pt, fb)
+    end
+    for seed in M.SEEDS
+        r = check(seed)
+        @test abs(r.fb.V0 - r.pt.utility) <= M.TOL_V0
+        @test r.fb.n_failed == 0
+        @test r.fb.n_solves == M.expected_solves(r.fb)
+        @test r.fb.repair_max <= M.TOL_REPAIR
+        @test M.curve_sorted(r.fb)
+        @test r.fb.min_bid_ask_gap > 0
+        # no offered block narrower than the floor's step, and absent blocks carry no price
+        @test all(q -> q == 0.0 || q >= TSODSO.FLEX_RANGE_FLOOR / 4, r.fb.up_q)
+        @test all(q -> q == 0.0 || q >= TSODSO.FLEX_RANGE_FLOOR / 4, r.fb.dn_q)
+        @test all(r.fb.up_m[r.fb.up_q .== 0.0] .== 0.0)
+        @test all(r.fb.dn_g[r.fb.dn_q .== 0.0] .== 0.0)
+    end
+end
+
+@testitem "flex market: bids on a zero range offer nothing" setup = [FlexMarketFixtures] tags =
+    [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    f = M.interruptible_agg(M.SEEDS[1]; Pmin = 1.0, Pmax = 1.0)
+    for K in (1, 4)
+        fb = TSODSO.flex_bids(f.agg, f.base; T = M.T_INT, n_blocks = K)
+        @test all(==(0.0), fb.up_q) && all(==(0.0), fb.dn_q)
+        @test all(==(0.0), fb.up_m) && all(==(0.0), fb.dn_g)
+        @test fb.n_solves == 1 + 2 * M.T_INT
+        @test fb.n_failed == 0
+        @test fb.repair_max == 0.0
+        @test fb.min_bid_ask_gap == Inf
+        @test isfinite(fb.V0)
+    end
+end
+
+@testitem "flex market: bids guards and monotone repair" setup = [FlexMarketFixtures] tags =
+    [:flex_market] begin
+    using TSODSO
+    using TSODSO: _pav_nondecreasing
+    M = FlexMarketFixtures
+
+    # ---- weighted pool-adjacent-violators ----
+    @test _pav_nondecreasing([1.0, 2.0, 3.0], [1.0, 1.0, 1.0]) == [1.0, 2.0, 3.0]
+    @test _pav_nondecreasing([1.0, 3.0, 2.0], [1.0, 1.0, 1.0]) == [1.0, 2.5, 2.5]
+    @test _pav_nondecreasing([3.0, 1.0], [1.0, 3.0]) == [1.5, 1.5]
+    @test _pav_nondecreasing([4.0, 3.0, 2.0, 1.0], [1.0, 1.0, 1.0, 1.0]) == fill(2.5, 4)
+    @test _pav_nondecreasing(Float64[], Float64[]) == Float64[]
+    @test issorted(_pav_nondecreasing([0.5, 2.0, -1.0, 3.0, 2.9], [0.1, 1.0, 2.0, 0.5, 0.5]))
+    @test_throws ArgumentError _pav_nondecreasing([1.0, 2.0], [1.0])
+    @test_throws ArgumentError _pav_nondecreasing([1.0, 2.0], [1.0, 0.0])
+    @test_throws ArgumentError _pav_nondecreasing([1.0, NaN], [1.0, 1.0])
+
+    # ---- argument guards ----
+    f = M.interruptible_agg(M.SEEDS[1])
+    @test_throws ArgumentError TSODSO.flex_bids(f.agg, f.base[1:2]; T = M.T_INT, n_blocks = 4)
+    @test_throws ArgumentError TSODSO.flex_bids(
+        f.agg,
+        [f.base[1], NaN, f.base[3]];
+        T = M.T_INT,
+        n_blocks = 4,
+    )
+    @test_throws ArgumentError TSODSO.flex_bids(f.agg, f.base; T = M.T_INT, n_blocks = 0)
+    @test_throws ArgumentError TSODSO.flex_bids(
+        f.agg,
+        f.base;
+        T = M.T_INT,
+        n_blocks = 4,
+        range_floor = -1.0,
+    )
+    @test TSODSO.FLEX_RANGE_FLOOR == 1e-6
 end
