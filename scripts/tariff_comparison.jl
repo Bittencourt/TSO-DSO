@@ -22,9 +22,17 @@
 #   --record-timeout S  Writes the mode's "(run)" row with status "timeout", run_wall_s = S
 #                     and notes "stopped after S s wall", WITHOUT solving: the honest record
 #                     of a run that was stopped or killed before it finished. The mode's
-#                     earlier rows of the same seed and horizon are deleted first. Refused
-#                     together with --flex-market on ieee13-ground (that path has no
-#                     run-level row).
+#                     earlier rows of the same seed and horizon are deleted first.
+#                     On ieee13-ground the two runs are recorded separately:
+#                       --record-timeout S               a stopped BASE run: every row of the
+#                                                        mode is deleted, flex rows included.
+#                       --record-timeout S --flex-market a stopped FLEX run: only the mode's
+#                                                        flex rows are deleted and the status
+#                                                        row is "flex_(run)"; the committed
+#                                                        base rows (dadp, flat, tou, fit and
+#                                                        their bill and breakout rows) stay.
+#                                                        Refused when there is no committed
+#                                                        dadp row to clear against.
 #
 # Modes (--mode):
 #
@@ -78,10 +86,12 @@
 # re-runs replace their own rows and never drop others'. A run OWNS its mode's rows of the
 # same (seed, t_horizon) and deletes them from all four tables before writing (purge_rows),
 # so no earlier "(run)" row, leg row or flex row survives beside the new outcome: the
-# IEEE-123 modes, case-a-784 and --record-timeout own every row of the mode; the default
+# IEEE-123 modes, case-a-784 and --record-timeout (without --flex-market on ieee13-ground)
+# own every row of the mode; the default
 # ieee13-ground run owns the mode's non-flex rows on success (and its flex rows too when its
 # dadp row no longer reproduces the committed one, or when the run is refused); the
-# ieee13-ground --flex-market run owns only the mode's flex rows. Every row stamps julia_version,
+# ieee13-ground --flex-market run, and its --record-timeout, own only the mode's flex rows
+# ("flex_(run)" included). Every row stamps julia_version,
 # threads, blas_threads, seed and t_horizon (the runner stamps the same provenance; the
 # script adds `seed` and `mode`). A kill mid-run leaves the rows already captured — a
 # kill is a MEASURED OUTCOME, not a missing run (honesty policy).
@@ -370,6 +380,10 @@ end
 
 isflex_tariff(t::AbstractString) = startswith(t, "flex_")
 
+# The tariff of the status row of a stopped ieee13-ground --flex-market run. It is a flex row
+# (`isflex_tariff`), so every path that owns the mode's flex rows also owns it.
+const FLEX_RUN_TARIFF = "flex_(run)"
+
 provenance_row(T_H::Int, seed::Int) = (
     julia_version = string(VERSION),
     threads = Threads.nthreads(),
@@ -567,11 +581,12 @@ function write_compare_results(
 end
 
 """
-    write_run_status_row(outcome, mode_name, engine, T_H, seed) -> nothing
+    write_run_status_row(outcome, mode_name, engine, T_H, seed; run_wall_s, tariff) -> nothing
 
 The DADP-run-level honest status row (tariff = "(run)"): certified values missing, the
 error type in `status`, the message truncated into `notes`, iterations carried when the
-error has them.
+error has them. `tariff = FLEX_RUN_TARIFF` scopes the row to the flex legs of a mode instead
+(the stopped ieee13-ground --flex-market run, whose base rows are the committed ones).
 """
 function write_run_status_row(
     outcome,
@@ -580,12 +595,13 @@ function write_run_status_row(
     T_H::Int,
     seed::Int;
     run_wall_s::Union{Nothing, Float64} = nothing,
+    tariff::String = "(run)",
 )
     wall = run_wall_s === nothing ? (;) : (run_wall_s = run_wall_s,)
     row = merge(
         (
             mode = mode_name,
-            tariff = "(run)",
+            tariff = tariff,
             engine = engine,
             status = outcome.status,
             notes = flatten_note(outcome.message),
@@ -1077,6 +1093,51 @@ function record_timeout_main(mode::String, T_H::Int, seed::Int, S::Float64)
     return nothing
 end
 
+# --record-timeout --flex-market on ieee13-ground: the honest record of a stopped flex run. That
+# run writes only flex rows beside the committed base rows, so its timeout owns only the mode's
+# flex rows: they are deleted (an earlier flex status row included) and one FLEX_RUN_TARIFF
+# status row is written. The base rows and their bill, breakout and rebound rows are never
+# touched. The flex rows are cleared against the committed dadp row, so a flex timeout without
+# one is refused before any write. No solve.
+function record_flex_timeout_main(T_H::Int, seed::Int, S::Float64)
+    committed_dadp(r) =
+        isequal(r.mode, "ieee13-ground") &&
+        isequal(r.tariff, "dadp") &&
+        isequal(r.seed, seed) &&
+        isequal(r.t_horizon, T_H)
+    n_dadp =
+        isfile(SUMMARY_CSV) ?
+        count(committed_dadp, eachrow(CSV.read(SUMMARY_CSV, DataFrame))) : 0
+    n_dadp == 1 || throw(
+        ArgumentError(
+            "--record-timeout --flex-market on ieee13-ground needs exactly 1 committed dadp " *
+            "row of seed=$seed, t_horizon=$T_H (found $n_dadp): the flex legs are cleared " *
+            "against it. Record the base run first (--mode ieee13-ground).",
+        ),
+    )
+    ensure_all_schemas()
+    purge_rows("ieee13-ground", seed, T_H; tariff = isflex_tariff)
+    outcome = (;
+        status = "timeout",
+        message = "flex legs stopped after $S s wall (the base rows are the committed ones)",
+        iters = missing,
+    )
+    write_run_status_row(
+        outcome,
+        "ieee13-ground",
+        "centralized",
+        T_H,
+        seed;
+        run_wall_s = S,
+        tariff = FLEX_RUN_TARIFF,
+    )
+    println(
+        "  → ieee13-ground --flex-market RECORDED as timeout (run_wall_s = $S, tariff " *
+        "$FLEX_RUN_TARIFF; base rows kept) → $SUMMARY_CSV",
+    )
+    return nothing
+end
+
 # ---- case-a-784 mode -------------------------------------------------------------------------
 
 """
@@ -1195,17 +1256,6 @@ function comparison_main(args)
             "carry flex legs (compare_tariffs refuses houses with flex_market)",
         ),
     )
-    (
-        parsed.record_timeout !== nothing &&
-        parsed.mode == "ieee13-ground" &&
-        parsed.flex_market
-    ) && throw(
-        ArgumentError(
-            "--record-timeout with --flex-market is not available on ieee13-ground: that " *
-            "path writes only flex rows beside the recorded base rows, so it has no run-level " *
-            "row to record (a timeout row would purge the base rows it never re-ran)",
-        ),
-    )
     seed = mode_seed(parsed.mode, parsed.seed)
     println(
         "tariff_comparison: mode=$(parsed.mode) t_horizon=$(parsed.T_H) seed=$seed " *
@@ -1214,7 +1264,12 @@ function comparison_main(args)
         "blas=$(BLAS.get_num_threads()) (pinning BLAS to 1)",
     )
     if parsed.record_timeout !== nothing
-        record_timeout_main(parsed.mode, parsed.T_H, seed, parsed.record_timeout)
+        if parsed.mode == "ieee13-ground" && parsed.flex_market
+            # the stopped flex run owns only the flex rows; the base rows stay as recorded
+            record_flex_timeout_main(parsed.T_H, seed, parsed.record_timeout)
+        else
+            record_timeout_main(parsed.mode, parsed.T_H, seed, parsed.record_timeout)
+        end
     elseif parsed.mode == "ieee13-ground"
         parsed.flex_market ? ground_flex_main(parsed.T_H, seed) :
         ground_main(parsed.T_H, seed)

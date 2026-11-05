@@ -76,9 +76,11 @@ end
     rows(df, mode) = filter(r -> isequal(r.mode, mode), df)
     isflex(r) = startswith(String(r.tariff), "flex_")
 
-    # The ieee13-ground flex rows: all 8 legs are present.
+    # The ieee13-ground flex rows: all 8 legs, or ONLY the flex-scoped status row "flex_(run)"
+    # of a stopped flex run (`--record-timeout S --flex-market`), never a mix.
     g = rows(summ, "ieee13-ground")
-    @test Set(String(t) for t in g.tariff if startswith(String(t), "flex_")) == Set([
+    g13flex = Set(String(t) for t in g.tariff if startswith(String(t), "flex_"))
+    g13legs = Set([
         "flex_uniform",
         "flex_uniform_beta0.05",
         "flex_uniform_beta0.1",
@@ -88,6 +90,7 @@ end
         "flex_uniform_tou",
         "flex_pab_tou",
     ])
+    @test g13flex == g13legs || g13flex == Set(["flex_(run)"])
 
     # ieee123: the base legs plus the 6 flex legs, or ONLY a run-level status row (a run owns
     # its mode's rows, so the two outcomes never mix).
@@ -109,12 +112,16 @@ end
     @test nrow(rows(summ, "ieee123-default")) >= 1
 
     # No stale rows: within one (mode, seed, t_horizon), a "(run)" row is the only summary row
-    # and has no bill, breakout or rebound rows beside it; a mode with flex rows also has the
-    # dadp row they were cleared against.
+    # and has no bill, breakout or rebound rows beside it; a "flex_(run)" row (a stopped flex
+    # run) excludes the flex rows only: no flex leg row and no flex bill, breakout or rebound
+    # row sits beside it, while the base rows stay; a mode with flex rows also has the dadp row
+    # they were cleared against.
     brk = DataFrame(CSV.File(joinpath(dir, "equity_breakouts.csv")))
     function no_stale_rows(summ, others)
         ok = true
         n_run = 0
+        n_flex_run = 0
+        isflex_t(t) = startswith(String(t), "flex_")
         for k in unique((r.mode, r.seed, r.t_horizon) for r in eachrow(summ))
             own(df) = filter(r -> (r.mode, r.seed, r.t_horizon) == k, df)
             ts = String.(own(summ).tariff)
@@ -123,16 +130,37 @@ end
                 ok &= ts == ["(run)"]
                 ok &= all(nrow(own(df)) == 0 for df in others)
             end
-            any(startswith(t, "flex_") for t in ts) && (ok &= "dadp" in ts)
+            if "flex_(run)" in ts
+                n_flex_run += 1
+                ok &= count(isflex_t, ts) == 1
+                ok &= all(!any(isflex_t, own(df).tariff) for df in others)
+            end
+            any(isflex_t, ts) && (ok &= "dadp" in ts)
         end
-        return ok, n_run
+        return ok, n_run, n_flex_run
     end
-    stale_ok, n_run = no_stale_rows(summ, (bills, brk, reb))
+    stale_ok, n_run, _ = no_stale_rows(summ, (bills, brk, reb))
     @test stale_ok
     @test n_run >= 1   # the committed ieee123-default refusal row is checked, not skipped
+    # the "flex_(run)" rule on synthetic tables (the committed tables need not hold one)
+    syn(ts) = DataFrame(
+        mode = fill("m", length(ts)),
+        seed = fill(1, length(ts)),
+        t_horizon = fill(24, length(ts)),
+        tariff = String[ts...],
+    )
+    base = ["dadp", "flat", "tou", "fit"]
+    @test no_stale_rows(syn(vcat(base, "flex_(run)")), (syn(base), syn(String[]))) ==
+          (true, 0, 1)
+    @test !first(no_stale_rows(syn(vcat(base, "flex_(run)", "flex_pab")), (syn(base),)))
+    @test !first(no_stale_rows(syn(vcat(base, "flex_(run)")), (syn(["dadp", "flex_pab"]),)))
+    @test !first(no_stale_rows(syn(["flex_(run)"]), (syn(String[]),)))
 
-    # Statuses of every flex row are in the documented sets; ok rows have a finite welfare.
-    flex = filter(isflex, summ)
+    # Statuses of every flex leg row are in the documented sets; ok rows have a finite
+    # welfare. A "flex_(run)" row is the timeout record of a stopped flex run.
+    flex = filter(r -> isflex(r) && String(r.tariff) != "flex_(run)", summ)
+    flex_run = filter(r -> String(r.tariff) == "flex_(run)", summ)
+    @test all(==("timeout"), flex_run.status)
     allowed_status(s) =
         s in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
         startswith(s, "error:")
@@ -174,7 +202,9 @@ end
     end
     beta_ok, n_groups = beta_groups_ok(flex)
     @test beta_ok
-    @test n_groups >= 4   # ieee13-ground flat/tou x 2 rules, ieee123 flat x 2 rules
+    # ieee13-ground flat/tou x 2 rules (unless its flex run is a recorded timeout), ieee123
+    # flat x 2 rules
+    @test n_groups >= (g13flex == g13legs ? 4 : 2)
 
     # Shortfall persistence: per-bus bill rows and per-hour rebound rows carry
     # delivery_shortfall, and both add up to the summary total of the same (mode, tariff).
