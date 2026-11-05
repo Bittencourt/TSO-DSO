@@ -7,6 +7,9 @@
 # observed max is 0.0):
 #
 #   quantity                                              observed max   pinned
+#   ledger: aggregator balance move vs independent        5.6e-15        1.67e-14
+#     sum of price*quantity (seeded rows, 2-bus T = 3)
+#   ledger: DSO balance move vs the negated sum           0.0            == (exact)
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -16,8 +19,7 @@
     const SEEDS = (20260719, 20260720, 20260721)
 
     # Measured tolerances (see the header table).
-    const TOL_FLEX_AGG = NaN
-    const TOL_FLEX_DSO = NaN
+    const TOL_FLEX_AGG = 1.67e-14
 
     # Seeded flexibility-payment rows on bus 2 for every hour of a T-hour horizon: price and
     # quantity derive from `generate_profiles(seed = seed + bus)`, signs alternate.
@@ -136,7 +138,7 @@ end
     paid = M.flex_total(rows)
     @test abs((led.balances[(:aggregator, 2)] - base.balances[(:aggregator, 2)]) - paid) <=
           M.TOL_FLEX_AGG
-    @test abs((led.balances[:dso] - base.balances[:dso]) + paid) <= M.TOL_FLEX_DSO
+    @test abs((led.balances[:dso] - base.balances[:dso]) + paid) == 0.0
 
     # ---- the SettlementInput overload forwards the keyword to the primitive ----
     led_p = build_settlement_ledger(
@@ -174,7 +176,7 @@ end
         @test r.prefix
         @test r.n == nb + 2 * F.T
         @test r.d_agg <= M.TOL_FLEX_AGG
-        @test r.d_dso <= M.TOL_FLEX_DSO
+        @test r.d_dso == 0.0
         @test r.wholesale
     end
 

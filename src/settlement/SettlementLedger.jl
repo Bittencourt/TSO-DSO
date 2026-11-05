@@ -145,7 +145,8 @@ end
 
 """
     build_settlement_ledger(prices, bus_nets, bus_utilities, p_import, λ₀, buses;
-                            T, source, households = nothing, actor_wedges = nothing) -> SettlementLedger
+                            T, source, households = nothing, actor_wedges = nothing,
+                            flex_payments = nothing) -> SettlementLedger
 
 Primitive double-entry constructor: settle ONE solved run into a per-actor
 [`SettlementLedger`](@ref). Arguments (all from the run's own published numbers — see
@@ -168,6 +169,13 @@ Primitive double-entry constructor: settle ONE solved run into a per-actor
     `(:actor, actor) <-> (:aggregator, bus)` of amount `m_t * load_t` (`load = -net`), so
     `balances[(:actor, id)] = Σ m·load` is the reported actor profit and the conservation
     residual stays exactly `0.0` (Phase 44, ACTOR-02).
+  - `flex_payments` — `nothing` (default: no row added, the default ledger is unchanged), or
+    a Vector of `(; bus, t, price, quantity)` flexibility-payment rows (`bus` one of `buses`,
+    `1 ≤ t ≤ T`, `price` and `quantity` finite reals; `quantity > 0` is up-flex, more
+    injection). Adds flow (e): one mirror pair `(:aggregator, bus) <-> :dso` of amount
+    `price * quantity` per row, so the aggregator EARNS on up-flex and PAYS on down-flex, the
+    DSO's balance (and hence `merchandising_surplus`) moves by the exact negation, and the
+    conservation residual stays exactly `0.0`.
 
 Flows, in construction order (each stored as an adjacent payer/receiver mirror pair so
 the conservation fold is EXACT):
@@ -179,7 +187,11 @@ the conservation fold is EXACT):
 `amount = λ₀[t] * p_import[t]`;
 (c) with households: the aggregator delivers house `h`'s net demand
 (`quantity = -net_h[t]`, the bill contribution — positive when the house
-imports) to the house, per `(h, t)`.
+imports) to the house, per `(h, t)`;
+(d) with `actor_wedges`: the site's customers pay the actor, per `(site, t)` (see above);
+(e) with `flex_payments`: the DSO pays (or receives) the flexibility payment for an
+activated deviation, one conserving mirror pair `(:aggregator, bus) <-> :dso` per row,
+appended after every other flow.
 
 Named lines: `wholesale_payment = Σ_t λ₀[t]·p_import[t]` (same sequential association
 as `welfare_accounting`'s `mem_cost`); `merchandising_surplus = balances[:dso]` — the
@@ -205,6 +217,7 @@ function build_settlement_ledger(
     source::Symbol,
     households = nothing,
     actor_wedges = nothing,
+    flex_payments = nothing,
 )
     # ---- boundary guards (fail-loud ArgumentError, welfare.jl:80-98 style) -----------
     T >= 1 || throw(
@@ -368,6 +381,42 @@ function build_settlement_ledger(
         end
     end
 
+    # ---- flexibility-payment rows: V5 validation, only when supplied -----------------
+    # Each row becomes money, so it is checked in full before any transfer is built.
+    if flex_payments !== nothing
+        for (k, f) in enumerate(flex_payments)
+            hasproperty(f, :bus) &&
+            hasproperty(f, :t) &&
+            hasproperty(f, :price) &&
+            hasproperty(f, :quantity) || throw(
+                ArgumentError(
+                    "build_settlement_ledger: flex_payments[$k] must be a NamedTuple " *
+                    "(; bus, t, price, quantity).",
+                ),
+            )
+            f.bus isa Integer && !(f.bus isa Bool) && Int(f.bus) in buses || throw(
+                ArgumentError(
+                    "build_settlement_ledger: flex_payments[$k].bus = $(repr(f.bus)) is " *
+                    "not one of the aggregator buses $buses.",
+                ),
+            )
+            f.t isa Integer && !(f.t isa Bool) && 1 <= f.t <= T || throw(
+                ArgumentError(
+                    "build_settlement_ledger: flex_payments[$k].t = $(repr(f.t)) must be " *
+                    "an integer hour in 1:$T.",
+                ),
+            )
+            f.price isa Real && f.quantity isa Real || throw(
+                ArgumentError(
+                    "build_settlement_ledger: flex_payments[$k] price and quantity must " *
+                    "be real numbers.",
+                ),
+            )
+            _finite_or_throw((f.price,), "flex_payments[$k].price")
+            _finite_or_throw((f.quantity,), "flex_payments[$k].quantity")
+        end
+    end
+
     # ---- flows, in construction order: (a) aggregator→DSO, (b) wholesale→DSO, -------
     # ---- (c) aggregator→house (each an adjacent mirror pair) ------------------------
     transfers = Transfer[]
@@ -438,6 +487,23 @@ function build_settlement_ledger(
                     -Float64(w.net[t]),
                 )
             end
+        end
+    end
+
+    # (e) flexibility payments: the DSO pays the aggregator `price * quantity` for an
+    # activated deviation (quantity > 0 is up-flex, so the aggregator earns; down-flex
+    # pays). A mirror pair per row, appended after every other flow. Absent (`nothing`)
+    # => no row, and the default ledger is unchanged.
+    if flex_payments !== nothing
+        for f in flex_payments
+            _push_transfer_pair!(
+                transfers,
+                (:aggregator, Int(f.bus)),
+                :dso,
+                Int(f.t),
+                Float64(f.price),
+                Float64(f.quantity),
+            )
         end
     end
 

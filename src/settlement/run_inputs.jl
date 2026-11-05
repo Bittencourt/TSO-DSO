@@ -511,19 +511,28 @@ callers pipe either a solved run or a packed input through the same seam).
 settlement_input(input::SettlementInput) = input
 
 """
-    build_settlement_ledger(input::SettlementInput; households = nothing) -> SettlementLedger
+    build_settlement_ledger(input::SettlementInput; households = nothing,
+                            actor_wedges = nothing, flex_payments = nothing) -> SettlementLedger
 
 Adapter overload: settle a packed [`SettlementInput`](@ref) via the primitive
 [`build_settlement_ledger`](@ref) constructor, preserving `input`'s bus order (the
 centralized adapter has already asserted the `ctx.meta[:agg_net]` stash is ascending,
 so entry order == bus order and the `welfare_accounting` cross-check's summation
-association is preserved). `households` is forwarded unchanged — a Vector of
-`(; house_id, bus, net, utility)` NamedTuples, or `nothing`.
+association is preserved). The keywords are forwarded unchanged:
+
+  - `households` — a Vector of `(; house_id, bus, net, utility)` NamedTuples, or `nothing`;
+  - `actor_wedges` — a Vector of `(; actor, bus, m, net)` per-site actor rows (flow (d)), or
+    `nothing`;
+  - `flex_payments` — a Vector of `(; bus, t, price, quantity)` flexibility-payment rows
+    (flow (e)), or `nothing`.
+
+With every keyword at its `nothing` default, the ledger is the default ledger.
 """
 function build_settlement_ledger(
     input::SettlementInput;
     households = nothing,
     actor_wedges = nothing,
+    flex_payments = nothing,
 )
     return build_settlement_ledger(
         input.prices,
@@ -536,5 +545,6 @@ function build_settlement_ledger(
         source = input.source,
         households = households,
         actor_wedges = actor_wedges,
+        flex_payments = flex_payments,
     )
 end
