@@ -507,7 +507,7 @@ end
 # `(status, notes)` with the `"congestion: "` prefix. The DLMP split's sum-to-price check
 # raises an `ErrorException` whose message starts with `_DLMP_RECON_FAIL`, the prefix that
 # `decompose_dlmp` itself uses; it becomes `"error:dlmp_split"`. Other `decompose_dlmp`
-# errors (a malformed tree or a missing handle, both `ArgumentError`) are not matched. A
+# errors (a malformed tree, a missing handle) lack that prefix and are not matched. A
 # solver-outcome type maps as in `_physics_error_status`. `nothing` for anything else (the
 # caller rethrows).
 function _congestion_status(err)

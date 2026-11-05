@@ -201,11 +201,9 @@ function _path_branches(feeder, j::Int)
     path = Int[]
     cur = j
     while cur != feeder.root
-        haskey(child_branch, cur) || throw(
-            ArgumentError(
-                "decompose_dlmp: bus $cur has no parent branch — feeder is not the expected " *
-                "radial tree",
-            ),
+        haskey(child_branch, cur) || error(
+            "decompose_dlmp: bus $cur has no parent branch — feeder is not the expected " *
+            "radial tree",
         )
         b = child_branch[cur]
         push!(path, b)

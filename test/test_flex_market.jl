@@ -1198,11 +1198,11 @@ end
     s = TSODSO._congestion_status(e_split)
     @test s !== nothing && s[1] == "error:dlmp_split"
     @test s !== nothing && startswith(s[2], "congestion: " * TSODSO._DLMP_RECON_FAIL)
-    # a malformed tree is misuse: an ArgumentError from the split's own path walk, never mapped
+    # a malformed tree raises the split's own path-walk error, which is never mapped
     e_tree = M.caught(
         () -> TSODSO._path_branches((root = 1, branches = [(from = 1, to = 2)]), 3),
     )
-    @test e_tree isa ArgumentError && occursin("no parent branch", e_tree.msg)
+    @test e_tree isa ErrorException && occursin("no parent branch", e_tree.msg)
     @test TSODSO._congestion_status(e_tree) === nothing
     @test TSODSO._congestion_status(SolveFailedError("no point")) ==
           ("error:SolveFailedError", "congestion: no point")
