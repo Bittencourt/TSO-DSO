@@ -27,6 +27,9 @@
 #   market: Σ row price*quantity vs payments + overpay    0.0            == (exact)
 #   market: tariff_on_activation vs independent sum       0.0            == (exact)
 #   market: overpayment(0.10) - 2*overpayment(0.05)       0.0            == (exact)
+#   market: pay-as-bid |Σ row quantity_t - Δ_t|           2.78e-17       8.33e-17
+#     (peaked market fixture, K = 4, per hour)
+#   market: pay-as-bid payments vs Σ m·u - Σ g·w          0.0            == (exact)
 #   market: PAB minus uniform aggregator total            -7.1e-3        < 0 (strict; no
 #     (largest value; held with no violation)                            slack)
 #   liveness: Σ shortfall, K in (1, 2, 4, 8, 16)          9.03e-11       2.71e-10
@@ -301,6 +304,33 @@
         end
         return s
     end
+
+    # The pay-as-bid payment rows rebuilt from the accepted blocks, as (bus, t, price,
+    # quantity) tuples: per hour, the non-zero up blocks (m_k, +u_k) then the non-zero down
+    # blocks (g_k, −w_k).
+    function pab_rows(fb, u, w, bus)
+        out = Tuple{Int, Int, Float64, Float64}[]
+        for t in axes(u, 1)
+            for k in axes(u, 2)
+                u[t, k] != 0 && push!(out, (bus, t, fb.up_m[t, k], u[t, k]))
+            end
+            for k in axes(w, 2)
+                w[t, k] != 0 && push!(out, (bus, t, fb.dn_g[t, k], -w[t, k]))
+            end
+        end
+        return out
+    end
+
+    # Largest |Σ_{rows of hour t} quantity − Δ[t]| over the hours.
+    function pab_quantity_gap(rows, Δ)
+        g = 0.0
+        for t in eachindex(Δ)
+            q = sum(r.quantity for r in rows if r.t == t; init = 0.0)
+            g = max(g, abs(q - Δ[t]))
+        end
+        return g
+    end
+    const TOL_PAB_Q = 8.33e-17
 
     # Independent Σ_k Σ_t p_t·Δ_{k,t}.
     function activation_value(p, Δ)
@@ -1189,13 +1219,22 @@ end
         # blocks carry interior-point noise of either sign, so the sign of a row does not tell
         # its direction; the quantities still sum to Δ)
         fb = p.physics.bids[1]
+        pu, pw = p.physics.u[1], p.physics.w[1]
         @test all(r -> r.bus == 2, p.payment_rows)
+        @test length(p.payment_rows) == count(!=(0.0), pu) + count(!=(0.0), pw)
+        # each row is its own block at that block's price: up blocks (m_k, +u_k), then down
+        # blocks (g_k, −w_k), hour by hour, so a row priced at another block or at the other
+        # direction's price fails
+        expect_rows = M.pab_rows(fb, pu, pw, 2)
+        @test length(p.payment_rows) == length(expect_rows)
         @test all(
-            r -> r.price in fb.up_m[r.t, :] || r.price in fb.dn_g[r.t, :],
-            p.payment_rows,
+            ((r, e),) -> (r.bus, r.t, r.price, r.quantity) == e,
+            zip(p.payment_rows, expect_rows),
         )
-        @test length(p.payment_rows) ==
-              count(!=(0.0), p.physics.u[1]) + count(!=(0.0), p.physics.w[1])
+        # the row quantities of each hour add up to its activated deviation Δ
+        @test M.pab_quantity_gap(p.payment_rows, p.physics.Δ[1]) <= M.TOL_PAB_Q
+        # the money is Σ_k m_k·u_k − Σ_k g_k·w_k over the accepted blocks
+        @test p.flex_payments_total == sum(fb.up_m .* pu) - sum(fb.dn_g .* pw)
         # pay-as-bid moves money from aggregators to the DSO (held strictly on every seed)
         agg_total(r) = r.ledger.balances[(:aggregator, 2)]
         @test agg_total(p) < agg_total(u)
