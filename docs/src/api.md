@@ -115,7 +115,7 @@ coordination through the dynamic distribution price, and the opt-in DSO flexibil
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["coordination/coordination.jl"]
+Pages = ["coordination/coordination.jl", "coordination/flex_bids.jl"]
 Order = [:type, :constant, :function]
 ```
 

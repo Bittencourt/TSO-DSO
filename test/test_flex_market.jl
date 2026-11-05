@@ -10,6 +10,11 @@
 #   ledger: aggregator balance move vs independent        5.6e-15        1.67e-14
 #     sum of price*quantity (seeded rows, 2-bus T = 3)
 #   ledger: DSO balance move vs the negated sum           0.0            == (exact)
+#   bids: |V0 - price-taker utility| (coupled, T = 24)     1.23e-8        3.68e-8
+#   bids: secant vs analytic anchor (interruptible,        3.79e-10       1.14e-9
+#     K in (1, 4))
+#   bids: repair_max (coupled, T = 24, K = 4)              2.72e-6        8.18e-6
+#   bids: repair_max (interruptible anchor)                0.0            == (exact)
 #
 # SOFT-SCOPE RULE: accumulators live inside functions, never bare in a top-level `for`.
 
@@ -46,9 +51,9 @@
     end
 
     # ---- bid fixtures ----
-    const TOL_V0 = NaN
-    const TOL_ANCHOR = NaN
-    const TOL_REPAIR = NaN
+    const TOL_V0 = 3.68e-8
+    const TOL_ANCHOR = 1.14e-9
+    const TOL_REPAIR = 8.18e-6
 
     const T_INT = 3
     const T_CPL = 24
@@ -308,6 +313,7 @@ end
         @test r.fb.n_solves == 1 + 2 * M.T_INT + K * 2 * M.T_INT
         @test r.fb.n_solves == M.expected_solves(r.fb)
         @test r.err <= M.TOL_ANCHOR
+        @test r.fb.repair_max == 0.0
         @test M.curve_sorted(r.fb)
         @test r.fb.min_bid_ask_gap > 0
         @test isfinite(r.fb.V0)
