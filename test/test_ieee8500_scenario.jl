@@ -353,7 +353,10 @@ end
     @test d2.status[findfirst(==(24), d2.T)] == "memory_infeasible"
 
     # An added column is tolerated, and `note` stays last.
-    extra = merge(scenario_row(; key..., feeder = "ieee123", strategy = "ADMM"), (; extra_col = 7))
+    extra = merge(
+        scenario_row(; key..., feeder = "ieee123", strategy = "ADMM"),
+        (; extra_col = 7),
+    )
     upsert_rows!(path, [extra])
     d3 = CSV.read(path, DataFrame)
     @test nrow(d3) == 3
@@ -377,7 +380,13 @@ end
     # The script composes the solve_admm plumbing phase by phase; on the same Scenario it must give
     # what the library path gives. Both paths are deterministic and run the same calls, and the
     # observed differences are exactly 0, so the comparison is `==`.
-    s = Scenario(; name = "phase-parity", feeder = :ieee13, strategy = ADMM(), T = 10, seed = 3)
+    s = Scenario(;
+        name = "phase-parity",
+        feeder = :ieee13,
+        strategy = ADMM(),
+        T = 10,
+        seed = 3,
+    )
     # No wall-clock cap, as on the library path (solve_admm defaults to `nothing`).
     ph = scenario_admm_phases(s; time_limit_s = nothing, sample_mem = false)
     @test ph.status == "ok"
