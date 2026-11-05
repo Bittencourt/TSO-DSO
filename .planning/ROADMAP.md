@@ -251,7 +251,16 @@ Plans:
   1. A researcher runs a flexibility market with an explicit baseline and payment rule (uniform or pay-as-bid) and gets the same settlement record as price-based coordination.
   2. A comparison table reports welfare, per-actor surplus, network feasibility and equity across FIT, TOU, flat, DADP and the flexibility market on the same scenario.
 
-**Plans**: TBD
+**Plans**: 7 plans in 7 waves (sequential: the plans share test/test_flex_market.jl, src/TSODSO.jl and docs/src/api.md; the default-path fence lands before any src edit)
+
+Plans:
+- [ ] 45-01-PLAN.md — Default-path digest fence (captured with src unchanged) + coordination types `AbstractCoordination`/`PriceBased`/`FlexMarket`, injective row names, exports, api.md block — SETL-07/08
+- [ ] 45-02-PLAN.md — Ledger `flex_payments` mirror-pair flow (residual == 0.0) + bid probing on the aggregator's own fixed-net model (range floor, PAV repair) — SETL-07
+- [ ] 45-03-PLAN.md — Stage-2 redispatch via `solve_welfare` over bid pseudo-devices (status mapping, gated prices, congested hours) + L1 delivery tracking with reported shortfall — SETL-07
+- [ ] 45-04-PLAN.md — Uniform / pay-as-bid / β payment rows, exported `clear_flex_market`, conservation tests + liveness vs the centralized social-welfare optimum — SETL-07
+- [ ] 45-05-PLAN.md — `compare_tariffs` `flex_market` + `welfare_optimizer` keywords (`:admm` refusal, FixedCapacitor guard), additive flex rows/columns incl. lossless welfare gap, JET — SETL-08
+- [ ] 45-06-PLAN.md — Script `--flex-market`, `ieee123` / `ieee123-default` modes, committed CSV rows (run_wall_s, shortfall in bills/rebound), slow IEEE-13/IEEE-123 tests — SETL-07/08
+- [ ] 45-07-PLAN.md — Literate page with the honest framings, docs/scripts registration, api.md checkdocs gap closure, formatter/JET/guard gates, requirement closure — SETL-07/08
 
 ### Phase 46: IEEE-8500 Headline Measurement (go/no-go)
 

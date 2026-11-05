@@ -614,11 +614,14 @@ end
 | A4 | κ = 1e-2 for the congested-hour threshold transfers to IEEE-123 | Q8 | β rows mis-attributed; mitigated by reporting robustness over κ |
 | A5 | Paying activated (not delivered) quantity is the intended reading of "activated flexibility is paid" | Q5 / Open Q2 | Money split changes; physics is unaffected |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Tariff on the activated deviation: a consequence of the locked settlement, not a conflict.** Aggregators pay the baseline tariff on metered (delivered) energy *and* receive π·Δ on the deviation. So an up-activated unit earns p + π, while under DADP the marginal unit earns λ ≈ π. Truthful gross-utility bids then over-compensate aggregators by p·Δ relative to a "baseline-settled" design: tariff on b only, plus flex on Δ (equivalently, premium bids m − p paid (π − p)·Δ). This moves money only; dispatch and welfare are unaffected. On IEEE-13, with p = 0.153, it is about 0.153 × 236.9 ≈ 36 units. **Recommendation:** implement as locked, and add an informational column `tariff_on_activation = Σ p_t·Δ_j,t` plus a paragraph on the page. Raise it with the researcher if a baseline-settled variant is wanted (it would be an additive rule).
+   RESOLVED (user-approved 2026-11-04): keep the locked settlement (baseline tariff on all metered energy, flexibility payments on the activated deviation) and add the informational `tariff_on_activation = Σ p_t·Δ_j,t` column; state the overlap on the literate page. Money only; dispatch and welfare unaffected. Planned in 45-04 (computation) and 45-05/45-07 (column, page).
 2. **Pay activated or delivered quantities?** The locked text says "activated". Recommendation: pay activated Δ (plus the β phantom), report the shortfall, and do not book a non-delivery penalty. An optional informational column `flex_payment_on_delivered` would recompute payments on n − b.
+   RESOLVED: pay the activated Δ (plus the β phantom); report the delivery shortfall separately and book no non-delivery penalty. The informational `flex_payment_on_delivered` column (uniform rule) is added. Planned in 45-04.
 3. **IEEE-123 configuration choice:** recommended is the `fixtures_ieee123` population + `tol_gap = 3e-9` (certified, congested under flat). The `build_population(:default, :ieee123)` population is refused by the DADP gate at every documented rung. This needs one new default-`nothing` kwarg, `welfare_optimizer`, on `compare_tariffs`. That is additive and does not conflict with the locked decisions, but it is a public-signature change the planner should make explicit.
+   RESOLVED (user-approved 2026-11-04): the `ieee123` mode uses the certified `fixtures_ieee123` population at solver `tol_gap = 3e-9`, passed through the new default-`nothing` `welfare_optimizer` keyword on `compare_tariffs`; the `build_population(:default, :ieee123)` DADP refusal is recorded as a `(run)` status row under the `ieee123-default` mode, never re-tuned. Planned in 45-05 (keyword) and 45-06 (modes).
 
 ## Environment Availability
 
