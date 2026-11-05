@@ -264,15 +264,15 @@ function _redispatch(
     λ₀,
     optimizer = nothing,
 )
-    local ctx2
     status = "ok"
     notes = ""
-    try
+    # The solve is the value of the try expression (`nothing` on a mapped solver outcome),
+    # so `ctx2` is always bound.
+    ctx2 = try
         if optimizer === nothing
-            ctx2, _, _ =
-                solve_welfare(feeder, pf, stage2_aggs; T = T, λ₀ = λ₀, allow_export = true)
+            solve_welfare(feeder, pf, stage2_aggs; T = T, λ₀ = λ₀, allow_export = true)[1]
         else
-            ctx2, _, _ = solve_welfare(
+            solve_welfare(
                 feeder,
                 pf,
                 stage2_aggs;
@@ -280,14 +280,15 @@ function _redispatch(
                 λ₀ = λ₀,
                 allow_export = true,
                 optimizer = optimizer,
-            )
+            )[1]
         end
     catch err
         mapped = _redispatch_status(err)
         mapped === nothing && rethrow()
         status, notes = mapped
+        nothing
     end
-    if status != "ok"
+    if ctx2 === nothing
         return (;
             status,
             notes,
@@ -637,7 +638,7 @@ function _flex_physics(
         return _physics_record(; status = rd.status, notes = rd.notes, known...)
     row = Dict(j => i for (i, j) in enumerate(rd.input2.buses))
     π = Vector{Float64}[Float64[rd.input2.prices[row[a.bus], t] for t in 1:T] for a in aggs]
-    ch = _congested_hours(rd.ctx2, λ; T = T)
+    ch = _congested_hours(rd.ctx2::ModelContext, λ; T = T)  # ok status: the solve exists
     stage2 = (;
         u = rd.u,
         w = rd.w,
