@@ -605,7 +605,10 @@ them by construction.
     `10·weight` whose only output is `shortfall_10w_total`. A shortfall that is unchanged
     between `weight` and `10·weight` is insensitive to the weight over that tenfold range;
     it is not thereby proven to be the infinite-weight value, so it is reported as an upper
-    bound on the hour-separability loss, with the sensitivity beside it. That second delivery is a diagnostic: if one
+    bound on the hour-separability loss, with the sensitivity beside it. The bound holds for
+    the total shortfall only (overall or per aggregator, not per hour), relative to the
+    relaxed battery model (so it is physical only where the delivered battery certificates
+    are `:ok`) and up to solver tolerance. That second delivery is a diagnostic: if one
     of its solves ends in a solver outcome, `shortfall_10w_total` is `missing`, the reason
     goes to `notes`, and the clear stays `"ok"` with the primary delivery. `delivered` holds
     the nets, utilities and battery certificates (with counts), `shortfall` the

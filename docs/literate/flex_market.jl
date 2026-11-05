@@ -459,8 +459,14 @@ end
 # tracking constraint, and that multiplier is a device's marginal utility at its target minus
 # the tariff, bounded by the slope of the device's value function there rather than by any
 # price. A steep utility, or a coupled device near the edge of its reachable set, can push it
-# above `w`. What is guaranteed is weaker: the shortfall does not increase with the weight, so
-# the value at `w` is an **upper bound** on the loss that hour separability alone causes.
+# above `w`. What is guaranteed is weaker: the total shortfall does not increase with the
+# weight, so the total at `w` is an **upper bound** on the loss that hour separability alone
+# causes. That bound has three limits. It holds for totals only (over all aggregators, or for
+# one aggregator), not for the worst bus-hour or the per-hour shortfall, which can rise while
+# the total falls. It is relative to the relaxed battery model, so it bounds the physical loss
+# only where the delivered battery certificates are `:ok`, as they are on every committed `ok`
+# flex row. And "does not increase" holds only up to solver tolerance, which is the size of the
+# committed `10w` changes printed below.
 #
 # The `_10w` column measures how much the weight matters: it re-solves the delivery at ten
 # times the weight. The change and the relative change are printed below; when the relative
@@ -639,9 +645,9 @@ end
 # - **Hour-separable, divisible bids.** No indivisible or binary blocks, and no intertemporal
 #   coupling inside a bid; the delivery shortfall (section 8) measures the cost.
 # - **Heuristic tracking weight.** The delivery penalty weight is ten times the largest price
-#   in play, not a proven bound on the tracking multiplier, so the reported shortfall is an
-#   upper bound on the hour-separability loss; the `10w` column measures its sensitivity
-#   (section 8).
+#   in play, not a proven bound on the tracking multiplier, so the reported total shortfall is
+#   an upper bound on the hour-separability loss (totals only, relative to the relaxed battery
+#   model, up to solver tolerance); the `10w` column measures its sensitivity (section 8).
 # - **Inelastic reactive power in stage 2** (section 1).
 # - **Lossless flex welfare** against loss-inclusive DADP welfare; use the like-for-like column
 #   (section 3).
