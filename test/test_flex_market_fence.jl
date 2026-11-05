@@ -209,3 +209,34 @@ end
         )
     end
 end
+
+@testitem "flex market: ledger default unchanged" setup = [FlexFenceFixtures] tags =
+    [:settlement, :flex_market, :fence] begin
+    using TSODSO
+    F = FlexFenceFixtures
+
+    input = F.default_input()
+    l0 = build_settlement_ledger(input)
+    l1 = build_settlement_ledger(input; flex_payments = nothing)
+    @test l1.transfers == l0.transfers
+    @test l1.balances == l0.balances
+    @test l1.merchandising_surplus == l0.merchandising_surplus
+    @test l1.wholesale_payment == l0.wholesale_payment
+    @test length(l1.transfers) == 2 * (length(input.buses) * F.T + F.T)
+    # the same through the primitive entry point
+    l2 = build_settlement_ledger(
+        input.prices,
+        input.bus_nets,
+        input.bus_utilities,
+        input.p_import,
+        input.λ₀,
+        input.buses;
+        T = input.T,
+        source = input.source,
+        flex_payments = nothing,
+    )
+    @test l2.transfers == l0.transfers
+    @test l2.balances == l0.balances
+    @test l2.merchandising_surplus == l0.merchandising_surplus
+    @test l2.wholesale_payment == l0.wholesale_payment
+end
