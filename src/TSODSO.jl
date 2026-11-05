@@ -314,6 +314,7 @@ include("settlement/feasibility.jl")    # AC-physics feasibility status (report,
 include("settlement/equity.jl")         # Gini/Theil/Atkinson/Palma + breakouts + rebound
 include("coordination/coordination.jl") # coordination schemes: PriceBased, FlexMarket
 include("coordination/flex_bids.jl")    # truthful bids probed from each aggregator's own model
+include("coordination/flex_clear.jl")   # stage-2 redispatch, congested hours and delivery
 include("settlement/comparison.jl")     # compare_tariffs — the SETL-02/05 comparison runner
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---
