@@ -59,6 +59,10 @@ Pages = [
     "devices/PVBattery.jl",
     "devices/FourQuadBESS.jl",
     "devices/FixedCapacitor.jl",
+    "devices/ElectricVehicle.jl",
+    "devices/HeatPump.jl",
+    "devices/SmartInverterPV.jl",
+    "devices/Behavioural.jl",
     "devices/Aggregator.jl",
 ]
 Order = [:type, :constant, :function]
@@ -76,7 +80,7 @@ Order = [:type, :constant, :function]
 
 ```@autodocs
 Modules = [TSODSO]
-Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl", "models/mesh_angle_certificate.jl", "models/restriction_exactness.jl", "models/ac_dual_fallback.jl", "models/complementarity_4q.jl"]
+Pages = ["models/toy_dc.jl", "models/linear_solve.jl", "models/welfare_solve.jl", "models/oracle.jl", "models/exactness.jl", "models/ac_oracle.jl", "models/mesh_angle_certificate.jl", "models/restriction_exactness.jl", "models/ac_dual_fallback.jl", "models/complementarity_4q.jl", "models/complementarity_ev.jl"]
 Order = [:type, :constant, :function]
 ```
 
@@ -105,6 +109,17 @@ Pages = [
     "settlement/comparison.jl",
     "settlement/equity.jl",
 ]
+Order = [:type, :constant, :function]
+```
+
+## Aggregator Actors
+
+Actor objectives, portfolios of site aggregators and the efficiency measurement of an actor's
+objective against the social-welfare optimum.
+
+```@autodocs
+Modules = [TSODSO]
+Pages = ["actors/actor_objective.jl", "actors/Portfolio.jl", "actors/efficiency.jl"]
 Order = [:type, :constant, :function]
 ```
 
