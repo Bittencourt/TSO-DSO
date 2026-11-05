@@ -4,13 +4,13 @@ milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
 stopped_at: Completed 45-03-PLAN.md
-last_updated: "2026-11-05T02:22:35.627Z"
+last_updated: "2026-11-05T02:52:47.014Z"
 last_activity: 2026-11-05
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 36
+  completed_plans: 37
   percent: 75
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 45 (flexibility-market-vs-price-coordination) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-11-05
-Progress: [█████████░] 90%
+Progress: [█████████░] 93%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -242,6 +242,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 45 P01 | 18min | 2 tasks | 7 files |
 | Phase 45 P02 | 24min | 2 tasks | 7 files |
 | Phase 45 P03 | 35min | 2 tasks | 4 files |
+| Phase 45 P04 | 27min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -359,6 +360,8 @@ Recent decisions affecting current work:
 - [Phase 45]: 45-03: FlexBidDevice creates JuMP variables only for offered blocks, so all-zero bids give Δ == 0 exactly — avoids degenerate [0,0] IPM bounds; the zero-width test asserts ==
 - [Phase 45]: 45-03: congested hour iff max_j(|congestion|+|drop|)/λ₀[t] > κ = 1e-2, robustness interval [kappa_lo, kappa_hi) reported — measured about [1e-9, 0.09) on the tight fixture; the β rows in 45-04 use it
 - [Phase 45]: 45-03: delivery weight w = 10·max(max|π|, max λ₀, max|price|) is fixed; a 10w re-delivery only reports shortfall_10w_total — an L1 exact penalty needs w above every tracking multiplier; w and 10w nets agree within 1.26e-10
+- [Phase 45]: clear_flex_market settles one physics record on the shared ledger; payment rule and β build rows only, so physics is == across them
+- [Phase 45]: β/money tests use a peaked market fixture (the flat baseline down-activates the tight fixture's congested hour, so the phantom would be 0); liveness keeps the tight fixture
 
 ### Roadmap Evolution
 
@@ -607,7 +610,7 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-11-05T02:22:29.589Z
+Last session: 2026-11-05T02:50:29.936Z
 Stopped at: Completed 45-03-PLAN.md
 Resume file: None
 
