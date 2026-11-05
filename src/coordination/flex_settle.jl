@@ -65,9 +65,9 @@ end
     _flex_payment_rows(phys, fm::FlexMarket, agg_buses::AbstractVector{Int}) -> NamedTuple
 
 The flexibility-payment rows of one clear, from its physics record `phys` (`status == "ok"`)
-and the bus of each aggregator in physics order. Internal (unexported). Returns
-`(; rows, flex_payments_total, baseline_overpayment, tariff_on_activation,
-flex_payment_on_delivered)`, where `rows` is a `Vector` of `(; bus, t, price, quantity)` rows
+and the bus of each aggregator in physics order. Internal (unexported). Returns a NamedTuple
+with the fields `rows`, `flex_payments_total`, `baseline_overpayment`, `tariff_on_activation`
+and `flex_payment_on_delivered`. `rows` is a `Vector` of `(; bus, t, price, quantity)` rows
 (`quantity > 0` is up-flex, more injection; the aggregator earns `price·quantity`):
 
   - `:uniform`: one row per aggregator and hour with `Δ ≠ 0`, `(bus, t, π_t, Δ_t)`, the
@@ -172,11 +172,12 @@ delivered nets and utilities per bus, and the lossless delivered import
 `p_import_lossless[t] = −Σ_j n_j[t]`, then calls the primitive `build_settlement_ledger` with
 `source = :flex_market` and the rows of [`_flex_payment_rows`](@ref) as `flex_payments`.
 
-Returns `(; ledger, payment_rows, flex_payments_total, baseline_overpayment,
-tariff_on_activation, flex_payment_on_delivered, p_import_lossless, bills, surplus,
-welfare_lossless, welfare_socp_import)` with
+Returns a NamedTuple with the fields `ledger`, `payment_rows`, the four money numbers of
+[`_flex_payment_rows`](@ref), `p_import_lossless`, `bills`, `surplus`, `welfare_lossless` and
+`welfare_socp_import`, where
 
-  - `bills[b] = −balances[(:aggregator, b)]` and `surplus[b] = U_b(n_b) + balances[(:aggregator, b)]`;
+  - `bills[b] = −balances[(:aggregator, b)]`;
+  - `surplus[b] = U_b(n_b) + balances[(:aggregator, b)]`;
   - `welfare_lossless = Σ_j U_j(n_j) − Σ_t λ₀[t]·p_import_lossless[t]`, the flat and TOU legs'
     convention;
   - `welfare_socp_import = Σ_j U_j(n_j) − Σ_t λ₀[t]·p_import_stage2[t]`, with the stage-2 SOCP
@@ -261,9 +262,9 @@ flexibility payments as conserving mirror pairs, so `ledger_residual(ledger) == 
 payment is on the activated deviation: `:uniform` pays `π_{j,t}·Δ_{j,t}` at the stage-2
 clearing price, `:pay_as_bid` pays each accepted block at its own bid price. Because the
 tariff is also paid on metered energy, an up-activated unit earns tariff plus clearing price
-(retail energy and the flexibility service are settled separately); `tariff_on_activation =
-Σ p_t·Δ_{j,t}` reports that overlap, money only. β adds phantom up-payments in congested hours
-(`baseline_overpayment`).
+(retail energy and the flexibility service are settled separately). The informational
+`tariff_on_activation`, equal to `Σ p_t·Δ_{j,t}`, reports that overlap, money only. β adds
+phantom up-payments in congested hours (`baseline_overpayment`).
 
 **Welfare.** `welfare_lossless = Σ_j U_j(n_j) − λ₀ᵀ(−Σ_j n_j)` is social welfare of the
 delivered dispatch with the lossless import, the convention of the flat and TOU legs (device
@@ -274,11 +275,11 @@ instead (losses included) and is exact only when the delivery shortfall is 0.
 flexibility product is active power only. The AC check runs on the delivered nets with the
 original aggregators (`ac_feasibility_status`) and reports, never gates.
 
-**Returns** `(; status, notes, market, baseline_price, physics, ledger, feasibility,
-payment_rows, flex_payments_total, baseline_overpayment, tariff_on_activation,
-flex_payment_on_delivered, p_import_lossless, bills, surplus, welfare_lossless,
-welfare_socp_import)`; `physics` is the full physics record, `bills` and `surplus` are
-per-bus `Dict`s. `status` is `"ok"`, `"infeasible_redispatch"` (the offered flexibility
+**Returns** a NamedTuple with the fields, in order, `status`, `notes`, `market`,
+`baseline_price`, `physics`, `ledger`, `feasibility`, `payment_rows`, `flex_payments_total`,
+`baseline_overpayment`, `tariff_on_activation`, `flex_payment_on_delivered`,
+`p_import_lossless`, `bills`, `surplus`, `welfare_lossless` and `welfare_socp_import`.
+`physics` is the full physics record; `bills` and `surplus` are per-bus `Dict`s. `status` is `"ok"`, `"infeasible_redispatch"` (the offered flexibility
 cannot restore network feasibility), `"inexact_redispatch"` (the stage-2 SOCP is not exact) or
 `"error:<Type>"` (another solver outcome, with `notes`). A status other than `"ok"` never
 throws: `ledger`, `feasibility`, `payment_rows`, `p_import_lossless`, `bills` and `surplus` are
