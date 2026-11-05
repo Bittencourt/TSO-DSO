@@ -463,6 +463,27 @@ function _physics_error_status(err, prefix::AbstractString)
     return "error:" * string(nameof(typeof(err))), first(prefix * string(err.msg), 400)
 end
 
+# Internal: the total delivery shortfall of every aggregator re-delivered at `weight`, the
+# sensitivity diagnostic of the tracking weight. Returns `(total, "")`, or `(missing, notes)`
+# on a solver outcome (a `SolveFailedError`, `CertificateError` or `ConvergenceError`), so a
+# failed diagnostic never fails the leg. Anything else rethrows.
+function _shortfall_diagnostic(aggs, p, targets; T::Int, weight::Real, τ_batt::Real)
+    try
+        total = 0.0
+        for (k, a) in enumerate(aggs)
+            total += sum(_deliver(a, p, targets[k]; T, weight, τ_batt).shortfall)
+        end
+        return total, ""
+    catch err
+        mapped = _physics_error_status(
+            err,
+            "delivery at 10w (sensitivity diagnostic only; the primary delivery is kept): ",
+        )
+        mapped === nothing && rethrow()
+        return missing, mapped[2]
+    end
+end
+
 # Internal: per-aggregator dispatch results folded into one record with certificate counts.
 function _dispatch_record(ds)
     certs = Symbol[d.battery_certificate for d in ds]
@@ -572,9 +593,11 @@ them by construction.
     tariff with `weight = 10·max(max|π|, maximum(λ₀), max|price|)`: ten times the largest
     price in play, so the L1 penalty exceeds every tracking multiplier. The rule is fixed and
     documented, not tuned; its sensitivity is reported by a second delivery at `10·weight`
-    whose only output is `shortfall_10w_total`. `delivered` holds the nets, utilities and
-    battery certificates (with counts), `shortfall` the per-(aggregator, hour) shortfall and
-    `shortfall_total` its sum.
+    whose only output is `shortfall_10w_total`. That second delivery is a diagnostic: if one
+    of its solves ends in a solver outcome, `shortfall_10w_total` is `missing`, the reason
+    goes to `notes`, and the clear stays `"ok"` with the primary delivery. `delivered` holds
+    the nets, utilities and battery certificates (with counts), `shortfall` the
+    per-(aggregator, hour) shortfall and `shortfall_total` its sum.
 
 `wall_s` is the wall time of the whole clear. Every solver outcome is a status: a stage-2
 outcome as in [`_redispatch`](@ref), and a stage-1 or delivery `SolveFailedError`,
@@ -699,17 +722,12 @@ function _flex_physics(
     # 4. delivery: each aggregator follows its activated target
     targets = Vector{Float64}[b[k] .+ rd.Δ[k] for k in eachindex(aggs)]
     weight = 10 * max(maximum(x -> maximum(abs, x), π), maximum(λ), maximum(abs, p))
-    local delivered_raw, shortfall_10w_total
+    local delivered_raw
     try
         delivered_raw = [
             _deliver(a, p, targets[k]; T = T, weight = weight, τ_batt = τ_batt) for
             (k, a) in enumerate(aggs)
         ]
-        shortfall_10w_total = sum(
-            sum(
-                _deliver(a, p, targets[k]; T = T, weight = 10 * weight, τ_batt = τ_batt).shortfall,
-            ) for (k, a) in enumerate(aggs)
-        )
     catch err
         mapped = _physics_error_status(err, "delivery: ")
         mapped === nothing && rethrow()
@@ -722,10 +740,15 @@ function _flex_physics(
             weight,
         )
     end
+    # the 10w re-delivery is a sensitivity diagnostic only: its own solver outcome never
+    # discards the valid primary delivery
+    shortfall_10w_total, notes_10w =
+        _shortfall_diagnostic(aggs, p, targets; T = T, weight = 10 * weight, τ_batt = τ_batt)
     delivered = _dispatch_record(delivered_raw)
     shortfall = Vector{Float64}[d.shortfall for d in delivered_raw]
     return _physics_record(;
         status = "ok",
+        notes = notes_10w,
         known...,
         stage2...,
         targets,

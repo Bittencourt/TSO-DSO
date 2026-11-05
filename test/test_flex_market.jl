@@ -1034,6 +1034,25 @@ end
         @test q.max_wash <= M.TOL_WASH
     end
 
+    # the 10w sensitivity diagnostic reproduces the record's total, and its own solver outcome
+    # is (missing, note), never a throw and never a failed leg (an absurd weight, far beyond
+    # any rule's value, forces the solver outcome); a malformed input still throws
+    f1 = M.tight_agg(M.SEEDS[1])
+    ph1 = M.tight_physics(f1, f1.smax)
+    redeliver(w, tg) = TSODSO._shortfall_diagnostic(
+        [f1.agg],
+        ph1.price,
+        tg;
+        T = M.T_INT,
+        weight = w,
+        τ_batt = 1e-3,
+    )
+    @test redeliver(10 * ph1.weight, ph1.targets) == (ph1.shortfall_10w_total, "")
+    bad = redeliver(1e300, ph1.targets)
+    @test bad[1] === missing
+    @test startswith(bad[2], "delivery at 10w (sensitivity diagnostic only")
+    @test_throws ArgumentError redeliver(10 * ph1.weight, [ph1.targets[1][1:2]])
+
     # an offer that cannot restore the limit: a status, the bids known, no delivery
     function infeasible(seed)
         g = M.tight_agg(seed; pdc_add = 2.0)
