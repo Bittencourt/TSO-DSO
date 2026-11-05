@@ -42,7 +42,8 @@
     row_of = Dict(r.tariff => r for r in eachrow(res.summary))
 
     allowed_status(s) =
-        s in ("ok", "infeasible_redispatch", "inexact_redispatch") || startswith(s, "error:")
+        s in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
+        startswith(s, "error:")
     allowed_feas = ("feasible", "infeasible", "solve_failed", "not_run")
     for name in ("flex_uniform", "flex_pab")
         fr = row_of[name]
@@ -109,7 +110,8 @@ end
     # Statuses of every flex row are in the documented sets; ok rows have a finite welfare.
     flex = filter(isflex, summ)
     allowed_status(s) =
-        s in ("ok", "infeasible_redispatch", "inexact_redispatch") || startswith(s, "error:")
+        s in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
+        startswith(s, "error:")
     @test all(allowed_status(String(s)) for s in flex.status)
     @test all(
         f in ("feasible", "infeasible", "solve_failed", "not_run") for
@@ -125,11 +127,7 @@ end
     @test all(ismissing(r.run_wall_s) for r in eachrow(g) if !isflex(r))
 
     # Every row written by the new paths carries a finite, non-negative run_wall_s.
-    new_rows = vcat(
-        filter(isflex, g),
-        rows(summ, "ieee123"),
-        rows(summ, "ieee123-default"),
-    )
+    new_rows = vcat(filter(isflex, g), rows(summ, "ieee123"), rows(summ, "ieee123-default"))
     @test nrow(new_rows) >= 9
     @test all(!ismissing(w) && isfinite(w) && w >= 0 for w in new_rows.run_wall_s)
 
@@ -163,11 +161,14 @@ end
         n = 0
         for r in eachrow(flex)
             r.status == "ok" || continue
-            sel(df) = filter(x -> isequal(x.mode, r.mode) && isequal(x.tariff, r.tariff), df)
+            sel(df) =
+                filter(x -> isequal(x.mode, r.mode) && isequal(x.tariff, r.tariff), df)
             b = sel(bills)
             h = sel(reb)
             ok &= nrow(b) > 0 && nrow(h) > 0
-            ok &= all(!ismissing, b.delivery_shortfall) && all(!ismissing, h.delivery_shortfall)
+            ok &=
+                all(!ismissing, b.delivery_shortfall) &&
+                all(!ismissing, h.delivery_shortfall)
             tot = r.delivery_shortfall_total
             ok &= sum(b.delivery_shortfall) == tot
             ok &= isapprox(sum(h.delivery_shortfall), tot; rtol = 6e-16)

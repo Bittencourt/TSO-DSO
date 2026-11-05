@@ -191,7 +191,9 @@ parse_args!(args) = (
         s === nothing ? nothing :
         let S = parse(Float64, s)
             (isfinite(S) && S >= 0) || throw(
-                ArgumentError("--record-timeout must be a finite number of seconds ≥ 0 (got $S)"),
+                ArgumentError(
+                    "--record-timeout must be a finite number of seconds ≥ 0 (got $S)",
+                ),
             )
             S
         end
@@ -241,10 +243,17 @@ function flex_markets_for(mode::String)
     ]
     mode == "ieee13-ground" && return vcat(
         flat,
-        [FlexMarket(; baseline_tariff = :tou, payment_rule = r) for r in (:uniform, :pay_as_bid)],
+        [
+            FlexMarket(; baseline_tariff = :tou, payment_rule = r) for
+            r in (:uniform, :pay_as_bid)
+        ],
     )
     mode in ("ieee123", "ieee123-default") && return flat
-    throw(ArgumentError("flex_markets_for: no flexibility-market legs for mode $(repr(mode))"))
+    throw(
+        ArgumentError(
+            "flex_markets_for: no flexibility-market legs for mode $(repr(mode))",
+        ),
+    )
 end
 
 # ---- provenance + CSV upsert (case_a_scaling.jl idiom) ---------------------------------------
@@ -633,9 +642,9 @@ function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
     committed = filter(
         r ->
             isequal(r.mode, "ieee13-ground") &&
-                isequal(r.tariff, "dadp") &&
-                isequal(r.seed, seed) &&
-                isequal(r.t_horizon, T_H),
+            isequal(r.tariff, "dadp") &&
+            isequal(r.seed, seed) &&
+            isequal(r.t_horizon, T_H),
         old,
     )
     nrow(committed) == 1 ||
@@ -646,7 +655,8 @@ function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
         "committed status=$(repr(c.status)). Message: $(outcome.message)",
     )
     inrun = filter(r -> r.tariff == "dadp", outcome.res.summary)
-    nrow(inrun) == 1 || error("$head Expected exactly 1 in-run dadp row, found $(nrow(inrun)).")
+    nrow(inrun) == 1 ||
+        error("$head Expected exactly 1 in-run dadp row, found $(nrow(inrun)).")
     cols = [:welfare, :aggregators_total, :status]
     io = IOBuffer()
     CSV.write(io, inrun[:, cols])
@@ -678,12 +688,15 @@ end
 function print_summary_rows(summary; only_flex::Bool = false)
     for r in eachrow(summary)
         (only_flex && !startswith(String(r.tariff), "flex_")) && continue
-        line = "  → $(r.tariff): welfare=$(r.welfare) payments=$(r.total_payments) " *
-               "feas=$(r.feasibility_status) status=$(r.status)"
-        if hasproperty(r, :welfare_gap_vs_dadp_lossless) && startswith(String(r.tariff), "flex_")
-            line *= " gap_lossless=$(r.welfare_gap_vs_dadp_lossless) " *
-                    "shortfall=$(r.delivery_shortfall_total) " *
-                    "overpay=$(r.baseline_overpayment) flex_wall_s=$(r.flex_wall_s)"
+        line =
+            "  → $(r.tariff): welfare=$(r.welfare) payments=$(r.total_payments) " *
+            "feas=$(r.feasibility_status) status=$(r.status)"
+        if hasproperty(r, :welfare_gap_vs_dadp_lossless) &&
+           startswith(String(r.tariff), "flex_")
+            line *=
+                " gap_lossless=$(r.welfare_gap_vs_dadp_lossless) " *
+                "shortfall=$(r.delivery_shortfall_total) " *
+                "overpay=$(r.baseline_overpayment) flex_wall_s=$(r.flex_wall_s)"
         end
         println(line)
     end
@@ -748,13 +761,57 @@ const PV_SCALE_IEEE123 = 0.12
 const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)
 
 temperature_profile() = Float64[
-    19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
-    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19,
+    19,
+    18,
+    17,
+    16,
+    16,
+    17,
+    19,
+    21,
+    23,
+    26,
+    28,
+    30,
+    31,
+    32,
+    32,
+    31,
+    29,
+    27,
+    25,
+    23,
+    22,
+    21,
+    20,
+    19,
 ]
 
 ieee123_lambda0() = Float64[
-    3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
-    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0,
+    3.8,
+    3.7,
+    3.6,
+    3.6,
+    3.7,
+    4.0,
+    4.8,
+    5.8,
+    6.5,
+    6.2,
+    5.9,
+    5.7,
+    5.6,
+    5.8,
+    6.0,
+    6.8,
+    8.2,
+    9.0,
+    8.6,
+    7.4,
+    6.2,
+    5.2,
+    4.4,
+    4.0,
 ]
 
 function house(
@@ -773,12 +830,30 @@ function house(
     Ppv = Float64[pv_scale * p for p in prof.pv]
     Pdc = Float64[load_scale * d for d in prof.demand]
     therm = Thermostatic(
-        bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, temperature_profile(),
+        bus,
+        0.2,
+        0.05,
+        15.0,
+        30.0,
+        22.0,
+        0.0,
+        1.0 * dev_scale,
+        0.5,
+        temperature_profile(),
     )
     defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
     batt = PVBattery(
-        bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
-        BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv,
+        bus,
+        0.95,
+        1.0,
+        batt_pmax,
+        0.0,
+        batt_emax,
+        batt_soc0,
+        BATT_λ_MIN,
+        BATT_λ_MED,
+        BATT_λ_MAX,
+        Ppv,
     )
     return Aggregator(bus, φ, [therm, defer, batt], Pdc)
 end
@@ -802,7 +877,13 @@ end
 
 # Record one IEEE-123 mode's outcome: a "(run)" status row on a refusal, otherwise every row
 # (summary, bills, breakouts, rebound), with run_wall_s on every summary row either way.
-function write_mode_outcome(outcome, mode_name::String, T_H::Int, seed::Int, wall_s::Float64)
+function write_mode_outcome(
+    outcome,
+    mode_name::String,
+    T_H::Int,
+    seed::Int,
+    wall_s::Float64,
+)
     ensure_all_schemas()
     if !outcome.ok
         write_run_status_row(
@@ -820,7 +901,14 @@ function write_mode_outcome(outcome, mode_name::String, T_H::Int, seed::Int, wal
         flush(stdout)
         return nothing
     end
-    write_compare_results(outcome.res, mode_name, T_H, seed; run_wall_s = wall_s, rebound = true)
+    write_compare_results(
+        outcome.res,
+        mode_name,
+        T_H,
+        seed;
+        run_wall_s = wall_s,
+        rebound = true,
+    )
     print_summary_rows(outcome.res.summary)
     println(
         "$mode_name complete in $(round(wall_s; digits = 2)) s → " *
@@ -877,7 +965,8 @@ function ieee123_default_main(T_H::Int, seed::Int, flex::Bool)
     feeder = ieee123_modified()
     profiles = generate_profiles(; seed = sub_seed(seed, :profiles), T = T_H)
     λ₀ = build_price(PRICE_SYM, T_H, nothing)
-    aggs = build_population(:default, feeder, :ieee123, profiles, sub_seed(seed, :population))
+    aggs =
+        build_population(:default, feeder, :ieee123, profiles, sub_seed(seed, :population))
     markets = flex ? flex_markets_for("ieee123-default") : nothing
     println(
         "tariff_comparison ieee123-default: T=$T_H, seed=$seed, engine=:centralized, " *
@@ -1036,7 +1125,8 @@ function comparison_main(args)
     if parsed.record_timeout !== nothing
         record_timeout_main(parsed.mode, parsed.T_H, seed, parsed.record_timeout)
     elseif parsed.mode == "ieee13-ground"
-        parsed.flex_market ? ground_flex_main(parsed.T_H, seed) : ground_main(parsed.T_H, seed)
+        parsed.flex_market ? ground_flex_main(parsed.T_H, seed) :
+        ground_main(parsed.T_H, seed)
     elseif parsed.mode == "ieee123"
         ieee123_main(parsed.T_H, seed, parsed.flex_market)
     elseif parsed.mode == "ieee123-default"
