@@ -140,6 +140,31 @@ Out of scope:
 - Exports go through the curated list in `src/TSODSO.jl`, mirrored in `test/test_exports.jl`. The JET
   ratchet must not grow from phase-45 code.
 
+### Post-Research Decisions (2026-11-04, user-approved)
+- **Tariff on activation:** keep the locked settlement. Households and aggregators pay the baseline
+  tariff on all metered energy, and flexibility payments are made on the activated deviation. An
+  up-activated unit therefore earns tariff + clearing price, which is standard LFM practice: retail
+  energy and the flexibility service are settled separately.
+  - Add an informational `tariff_on_activation` column that quantifies this overlap (about 36 units on
+    IEEE-13 in the research prototype).
+  - State it in the docs.
+  - This affects money only, never dispatch or welfare.
+- **IEEE-123 configuration:** add an additive `welfare_optimizer = nothing` keyword to `compare_tariffs`.
+  The default output stays byte-identical, under the same fence.
+  - The IEEE-123 measurement uses the already-certified `fixtures_ieee123` population at solver
+    `tol_gap = 3e-9`. Its flat baseline is congested, with the worst branch at 1.117 of its limit.
+  - The `build_population(:default, :ieee123)` population fails the DADP exactness gate (ratio 1.062).
+    It is recorded honestly as a refusal status row, never re-tuned.
+  - Bid probing takes about 230 s on IEEE-123.
+- **Research findings adopted as constraints** (see 45-RESEARCH.md):
+  - Stage-2 reactive power is held at the inelastic `−Pdc·tanφ`.
+  - Flex welfare is lossless and DADP welfare includes losses, so add a like-for-like gap column.
+  - Stage-2 targets sit on the head-branch limit, so tests accept any status in the allowed AC-status
+    set rather than asserting `feasible`.
+  - Uniform clearing prices are not DLMPs, so the price cross-check is a measured band.
+  - Capture the default-path fence BEFORE any `src/` edit.
+  - Append new rows with `vcat(...; cols = :union)`.
+
 ### Claude's Discretion
 - The file layout (for example `src/coordination/` or `src/settlement/flex_market.jl`) and the
   internal struct layout.
