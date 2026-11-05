@@ -120,7 +120,8 @@ function settlement_input(ctx::ModelContext; T::Int = _require_T(ctx), λ₀ = n
     # ArgumentError, never a raw BoundsError from the comprehension below (the old
     # post-build length check was DEAD CODE — λ0 is built with exactly T elements
     # whenever the indexing succeeded; the ADMM adapter below already had this order).
-    λ₀ === nothing || length(λ₀) >= T ||
+    λ₀ === nothing ||
+        length(λ₀) >= T ||
         throw(ArgumentError("settlement_input: λ₀ has length $(length(λ₀)) < T=$T"))
     λ0 =
         λ₀ === nothing ? Float64[λ[root, t] for t in 1:T] :
@@ -207,13 +208,11 @@ function _slot_bus_inputs(r, buses::Vector{Int}, slot_ids::Vector{Int}, T::Int)
     bus_utilities = Dict{Int, Float64}()
     for s in slot_ids
         for key in (:agr_dispatch, :agr_utility, :agr_prices)
-            haskey(getproperty(r, key), s) || throw(
-                ArgumentError("settlement_input: $key is missing slot $s."),
-            )
+            haskey(getproperty(r, key), s) ||
+                throw(ArgumentError("settlement_input: $key is missing slot $s."))
         end
-        haskey(r.slot_bus, s) || throw(
-            ArgumentError("settlement_input: slot_bus is missing slot $s."),
-        )
+        haskey(r.slot_bus, s) ||
+            throw(ArgumentError("settlement_input: slot_bus is missing slot $s."))
         length(r.agr_dispatch[s]) == T || throw(
             ArgumentError(
                 "settlement_input: agr_dispatch[$s] has length " *
@@ -423,7 +422,9 @@ horizon longer than the solved one.
 """
 function actor_wedge_rows(ctx::ModelContext, portfolios, aggregators; T::Int)
     haskey(ctx.meta, :agg_net) || throw(
-        ArgumentError("actor_wedge_rows: ctx.meta is missing :agg_net (not a solve_welfare ctx)."),
+        ArgumentError(
+            "actor_wedge_rows: ctx.meta is missing :agg_net (not a solve_welfare ctx).",
+        ),
     )
     entries = ctx.meta[:agg_net]
     length(entries) == length(aggregators) || throw(
@@ -464,7 +465,9 @@ end
 
 function actor_wedge_rows(r::NamedTuple, portfolios; T::Int)
     haskey(r, :agr_dispatch) || throw(
-        ArgumentError("actor_wedge_rows: result has no :agr_dispatch (not a solve_admm result)."),
+        ArgumentError(
+            "actor_wedge_rows: result has no :agr_dispatch (not a solve_admm result).",
+        ),
     )
     rows = NamedTuple[]
     pushrow!(a, bus, key) = begin
@@ -473,7 +476,9 @@ function actor_wedge_rows(r::NamedTuple, portfolios; T::Int)
         )
         net = r.agr_dispatch[key]
         length(net) >= T || throw(
-            ArgumentError("actor_wedge_rows: T=$T exceeds the solved horizon $(length(net))."),
+            ArgumentError(
+                "actor_wedge_rows: T=$T exceeds the solved horizon $(length(net)).",
+            ),
         )
         push!(
             rows,

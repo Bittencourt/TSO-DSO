@@ -81,7 +81,32 @@
         return (; agg, a, bc, p0, π0, Pdc, base, Pmin, Pmax)
     end
 
-    temp() = Float64[19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30, 31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19]
+    temp() = Float64[
+        19,
+        18,
+        17,
+        16,
+        16,
+        17,
+        19,
+        21,
+        23,
+        26,
+        28,
+        30,
+        31,
+        32,
+        32,
+        31,
+        29,
+        27,
+        25,
+        23,
+        22,
+        21,
+        20,
+        19,
+    ]
 
     # Coupled aggregator (Thermostatic + Deferrable + PVBattery, T = 24) and a seeded tariff.
     function coupled_agg(seed; bus = 2, ls = 0.01, ps = 0.0025)
@@ -227,8 +252,14 @@ end
         quantity = 0.5,
         amount = 1.5,
     )
-    @test led.transfers[nb + 2] ==
-          (from = :dso, to = (:aggregator, 2), t = 1, price = 3.0, quantity = -0.5, amount = -1.5)
+    @test led.transfers[nb + 2] == (
+        from = :dso,
+        to = (:aggregator, 2),
+        t = 1,
+        price = 3.0,
+        quantity = -0.5,
+        amount = -1.5,
+    )
     @test led.transfers[nb + 3].amount == -0.75 && led.transfers[nb + 4].amount == 0.75
     @test led.wholesale_payment == base.wholesale_payment
     @test led.merchandising_surplus == led.balances[:dso]
@@ -262,7 +293,9 @@ end
             residual = ledger_residual(l),
             prefix = l.transfers[1:nb] == base.transfers,
             n = length(l.transfers),
-            d_agg = abs((l.balances[(:aggregator, 2)] - base.balances[(:aggregator, 2)]) - tot),
+            d_agg = abs(
+                (l.balances[(:aggregator, 2)] - base.balances[(:aggregator, 2)]) - tot,
+            ),
             d_dso = abs((l.balances[:dso] - base.balances[:dso]) + tot),
             wholesale = l.wholesale_payment == base.wholesale_payment,
         )
@@ -377,14 +410,21 @@ end
     @test _pav_nondecreasing([3.0, 1.0], [1.0, 3.0]) == [1.5, 1.5]
     @test _pav_nondecreasing([4.0, 3.0, 2.0, 1.0], [1.0, 1.0, 1.0, 1.0]) == fill(2.5, 4)
     @test _pav_nondecreasing(Float64[], Float64[]) == Float64[]
-    @test issorted(_pav_nondecreasing([0.5, 2.0, -1.0, 3.0, 2.9], [0.1, 1.0, 2.0, 0.5, 0.5]))
+    @test issorted(
+        _pav_nondecreasing([0.5, 2.0, -1.0, 3.0, 2.9], [0.1, 1.0, 2.0, 0.5, 0.5]),
+    )
     @test_throws ArgumentError _pav_nondecreasing([1.0, 2.0], [1.0])
     @test_throws ArgumentError _pav_nondecreasing([1.0, 2.0], [1.0, 0.0])
     @test_throws ArgumentError _pav_nondecreasing([1.0, NaN], [1.0, 1.0])
 
     # ---- argument guards ----
     f = M.interruptible_agg(M.SEEDS[1])
-    @test_throws ArgumentError TSODSO.flex_bids(f.agg, f.base[1:2]; T = M.T_INT, n_blocks = 4)
+    @test_throws ArgumentError TSODSO.flex_bids(
+        f.agg,
+        f.base[1:2];
+        T = M.T_INT,
+        n_blocks = 4,
+    )
     @test_throws ArgumentError TSODSO.flex_bids(
         f.agg,
         [f.base[1], NaN, f.base[3]];

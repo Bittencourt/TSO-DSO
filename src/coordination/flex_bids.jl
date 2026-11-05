@@ -297,9 +297,8 @@ function flex_bids(
         ArgumentError("flex_bids: baseline b has length $(length(b)), expected T=$T."),
     )
     for t in 1:T
-        isfinite(b[t]) || throw(
-            ArgumentError("flex_bids: baseline b[$t] is non-finite ($(b[t]))."),
-        )
+        isfinite(b[t]) ||
+            throw(ArgumentError("flex_bids: baseline b[$t] is non-finite ($(b[t]))."))
     end
     n_blocks >= 1 ||
         throw(ArgumentError("flex_bids: n_blocks=$n_blocks must be at least 1."))
