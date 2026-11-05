@@ -26,9 +26,11 @@
 #
 # DELIVERY. Bids are hour-separable, but the devices behind them are not (state of charge,
 # deferrable energy, thermal state), so the activated targets b + Δ need not be jointly
-# reachable. Each aggregator re-solves its own price-taker problem with an L1 exact-penalty
-# tracking term; the delivered dispatch is what gets settled, and the per-hour shortfall
-# |n − (b + Δ)| is reported, never hidden. The penalty is a modelling device, not money.
+# reachable. Each aggregator re-solves its own price-taker problem with an L1 penalty
+# tracking term (exact only when its weight exceeds the tracking multiplier, which the weight
+# rule does not guarantee; see `_flex_physics`); the delivered dispatch is what gets settled,
+# and the per-hour shortfall |n − (b + Δ)| is reported, never hidden. The penalty is a
+# modelling device, not money.
 #
 # HONESTY: every solver outcome is a status value (`ok`, `infeasible_redispatch`,
 # `inexact_redispatch`, `error:<Type>`), never an exception; anything that is not a solver
@@ -380,9 +382,12 @@ target `target = b + Δ`:
 
 A fresh model per call, one solve, gated by `assert_solved!(model; dual = false)`. When
 `weight` exceeds the largest multiplier of `pag[t] == target[t]`, the penalty is exact: the
-target is met whenever the devices can jointly reach it. When they cannot (the bids were
-hour-separable, the devices are not), `shortfall[t] = |net[t] − target[t]|` is the part of
-the activation that was not delivered; it is returned, never hidden.
+target is met whenever the devices can jointly reach it. That multiplier is the device's
+marginal utility at the target minus the tariff, bounded by the slope of the device value
+function there and not by any price, so no price-based weight is guaranteed to exceed it.
+`shortfall[t] = |net[t] − target[t]|` is the part of the activation that was not delivered,
+either because the devices cannot reach the target (the bids were hour-separable, the
+devices are not) or because `weight` is below the multiplier; it is returned, never hidden.
 
 The penalty is a MODELLING DEVICE, not money: it is never booked in a settlement ledger, and
 `utility` is the device utility of the delivered dispatch alone. `net`, `utility`,
@@ -591,9 +596,14 @@ them by construction.
     `congestion_scores`, `kappa_lo`, `kappa_hi`).
  4. **Delivery.** `targets = b + Δ`, and [`_deliver`](@ref) per aggregator at the baseline
     tariff with `weight = 10·max(max|π|, maximum(λ₀), max|price|)`: ten times the largest
-    price in play, so the L1 penalty exceeds every tracking multiplier. The rule is fixed and
-    documented, not tuned; its sensitivity is reported by a second delivery at `10·weight`
-    whose only output is `shortfall_10w_total`. That second delivery is a diagnostic: if one
+    price in play. This is a documented heuristic, fixed and not tuned, and NOT a proof that
+    the penalty is exact: the tracking multiplier is a device marginal utility, which a steep
+    utility or a coupled device near the edge of its reachable set can push above any price
+    (see [`_deliver`](@ref)). Its adequacy is measured instead, by a second delivery at
+    `10·weight` whose only output is `shortfall_10w_total`. A shortfall that is unchanged
+    between `weight` and `10·weight` is insensitive to the weight over that tenfold range;
+    it is not thereby proven to be the infinite-weight value, so it is reported as an upper
+    bound on the hour-separability loss, with the sensitivity beside it. That second delivery is a diagnostic: if one
     of its solves ends in a solver outcome, `shortfall_10w_total` is `missing`, the reason
     goes to `notes`, and the clear stays `"ok"` with the primary delivery. `delivered` holds
     the nets, utilities and battery certificates (with counts), `shortfall` the

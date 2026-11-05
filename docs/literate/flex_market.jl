@@ -450,11 +450,25 @@ end
 #
 # The bids are hour-separable, but the devices are not: a battery that discharges more in one
 # hour has less energy for the next. The delivery re-solve tracks the targets `b + Δ` with a
-# fixed, documented penalty weight `w`, and whatever it cannot reach is the **delivery
+# fixed, documented L1 penalty weight `w`, and whatever it does not reach is the **delivery
 # shortfall**. It is reported, never hidden: total, worst single bus-hour, and ratio to
-# `Σ|Δ|`. The `_10w` column re-solves the delivery with ten times the weight. If the shortfall
-# were a weak-penalty artefact it would drop sharply at `10w`; it does not, so it is the
-# structural hour-separability loss.
+# `Σ|Δ|`.
+#
+# The weight rule, ten times the largest price in play, is a heuristic and **not a proof that
+# the penalty is exact**. The penalty is exact only when `w` exceeds the multiplier of the
+# tracking constraint, and that multiplier is a device's marginal utility at its target minus
+# the tariff, bounded by the slope of the device's value function there rather than by any
+# price. A steep utility, or a coupled device near the edge of its reachable set, can push it
+# above `w`. What is guaranteed is weaker: the shortfall does not increase with the weight, so
+# the value at `w` is an **upper bound** on the loss that hour separability alone causes.
+#
+# The `_10w` column measures how much the weight matters: it re-solves the delivery at ten
+# times the weight. The change and the relative change are printed below; when the relative
+# change is small, the shortfall is insensitive to the weight over a tenfold range.
+# That is consistent with a structural hour-separability loss, but it does not rule out a
+# tracking multiplier above `10w` (a near-vertical marginal-utility curve also gives an almost
+# unchanged shortfall). The numbers are therefore the shortfall at `w`, with the `10w`
+# sensitivity as the evidence for how far the weight can be trusted.
 
 let
     for mode in FLEX_MODES
@@ -463,14 +477,15 @@ let
         tot, tot10 =
             num(r["delivery_shortfall_total"]), num(r["delivery_shortfall_total_10w"])
         @printf(
-            "%-14s w = %s: shortfall total %.4f, max %.3e, ratio %.3e; at 10w total %.4f (change %.2e)\n",
+            "%-14s w = %s: shortfall total %.4f, max %.3e, ratio %.3e; at 10w total %.4f (change %.2e, relative %.2e)\n",
             mode,
             r["tracking_weight"],
             tot,
             num(r["delivery_shortfall_max"]),
             num(r["delivery_shortfall_ratio"]),
             tot10,
-            tot10 - tot
+            tot10 - tot,
+            (tot10 - tot) / tot
         )
     end
 end
@@ -623,6 +638,10 @@ end
 # - **No market power.** Aggregators are price-takers in both stages.
 # - **Hour-separable, divisible bids.** No indivisible or binary blocks, and no intertemporal
 #   coupling inside a bid; the delivery shortfall (section 8) measures the cost.
+# - **Heuristic tracking weight.** The delivery penalty weight is ten times the largest price
+#   in play, not a proven bound on the tracking multiplier, so the reported shortfall is an
+#   upper bound on the hour-separability loss; the `10w` column measures its sensitivity
+#   (section 8).
 # - **Inelastic reactive power in stage 2** (section 1).
 # - **Lossless flex welfare** against loss-inclusive DADP welfare; use the like-for-like column
 #   (section 3).
