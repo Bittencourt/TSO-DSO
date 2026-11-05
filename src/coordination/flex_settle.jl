@@ -297,7 +297,9 @@ throws: `ledger`, `feasibility`, `payment_rows`, `p_import_lossless`, `bills` an
 
 Throws `ArgumentError` before any solve when `input.T != T`, when the aggregator buses are not
 exactly `input.buses` (one aggregator per bus), or when the default TOU bins do not exist for
-`T`; the physics guards of the clear apply too.
+`T`; the physics guards of the clear apply too, also before any solve (among them, `pf`
+must be a `ConvexBranchFlow` and every `λ₀[t]` must be positive). A failure of the
+congested-hour price split after the redispatch is the status `"error:dlmp_split"`.
 """
 function clear_flex_market(
     feeder::AbstractFeeder,

@@ -1038,6 +1038,34 @@ end
         f.Pdc,
     )
     @test_throws ArgumentError phys([cap], f.π0)
+    # the congested-hour split needs the SOCP handles and a positive λ₀: refused up front
+    e_pf = M.caught(
+        () -> TSODSO._flex_physics(
+            fd,
+            TSODSO.LinDistFlow(),
+            [f.agg],
+            f.π0;
+            T = M.T_INT,
+            λ₀ = f.π0,
+            n_blocks = 4,
+        ),
+    )
+    @test e_pf isa ArgumentError && occursin("ConvexBranchFlow", e_pf.msg)
+    e_λ0 = M.caught(() -> phys([f.agg], f.π0; λ₀ = [f.π0[1], 0.0, f.π0[3]]))
+    @test e_λ0 isa ArgumentError && occursin("positive", e_λ0.msg)
+    e_λneg = M.caught(() -> phys([f.agg], f.π0; λ₀ = [f.π0[1], -1.0, f.π0[3]]))
+    @test e_λneg isa ArgumentError && occursin("positive", e_λneg.msg)
+
+    # a split reconstruction failure after stage 2 maps to a status; other errors do not
+    s = TSODSO._congestion_status(
+        ErrorException("decompose_dlmp: four-way split does NOT reconstruct the nodal DADP"),
+    )
+    @test s[1] == "error:dlmp_split"
+    @test startswith(s[2], "congestion: decompose_dlmp:")
+    @test TSODSO._congestion_status(SolveFailedError("no point")) ==
+          ("error:SolveFailedError", "congestion: no point")
+    @test TSODSO._congestion_status(ErrorException("unrelated")) === nothing
+    @test TSODSO._congestion_status(ArgumentError("decompose_dlmp: bad")) === nothing
 
     # stage-1 and delivery outcomes map to prefixed statuses; anything else is not mapped
     s = TSODSO._physics_error_status(SolveFailedError("no point"), "baseline: ")

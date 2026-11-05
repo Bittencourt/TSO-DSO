@@ -364,6 +364,45 @@ end
         ),
         ("empty", g -> tight([t.agg]; flex_market = FlexMarket[], welfare_optimizer = g)),
         ("capacitor", g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)),
+        (
+            "lindistflow",
+            g -> compare_tariffs(
+                M.feeder2(t.smax),
+                TSODSO.LinDistFlow(),
+                [t.agg];
+                T = M.T_INT,
+                λ₀ = t.π0,
+                bins = F.BINS,
+                flex_market = FlexMarket(),
+                welfare_optimizer = g,
+            ),
+        ),
+        (
+            "zero_lambda0",
+            g -> compare_tariffs(
+                M.feeder2(t.smax),
+                ConvexBranchFlow(),
+                [t.agg];
+                T = M.T_INT,
+                λ₀ = [t.π0[1], 0.0, t.π0[3]],
+                bins = F.BINS,
+                flex_market = FlexMarket(),
+                welfare_optimizer = g,
+            ),
+        ),
+        (
+            "negative_lambda0",
+            g -> compare_tariffs(
+                M.feeder2(t.smax),
+                ConvexBranchFlow(),
+                [t.agg];
+                T = M.T_INT,
+                λ₀ = [t.π0[1], -1.0, t.π0[3]],
+                bins = F.BINS,
+                flex_market = FlexMarket(),
+                welfare_optimizer = g,
+            ),
+        ),
     ]
     for (label, g) in cases
         rr = refused(g)
@@ -377,4 +416,19 @@ end
     # the capacitor refusal comes from the comparison guard, not from the physics
     e_cap = refused(g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)).e
     @test e_cap isa ArgumentError && occursin("FixedCapacitor", e_cap.msg)
+    # the formulation and λ₀ refusals name their reasons
+    e_pf = refused(g -> cases[end - 2][2](g)).e
+    @test e_pf isa ArgumentError && occursin("ConvexBranchFlow", e_pf.msg)
+    e_λ = refused(g -> cases[end - 1][2](g)).e
+    @test e_λ isa ArgumentError && occursin("positive", e_λ.msg)
+    # the same inputs without flex_market keep the default path (no new guard there)
+    r_pf = compare_tariffs(
+        M.feeder2(t.smax),
+        TSODSO.LinDistFlow(),
+        [t.agg];
+        T = M.T_INT,
+        λ₀ = t.π0,
+        bins = F.BINS,
+    )
+    @test r_pf.summary.tariff == ["dadp", "flat", "tou", "fit"]
 end

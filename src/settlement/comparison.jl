@@ -326,10 +326,14 @@ change money only. `household_bills` gains bus-granularity rows per flex row and
 over hours per bus, and over buses per hour); the column is `missing` on the base rows.
 `equity_breakouts` is unchanged. A redispatch that fails becomes a status row
 (`infeasible_redispatch`, `inexact_redispatch` or `error:<Type>`) with no bill or rebound
-rows. With `flex_market`, these throw `ArgumentError` before any solve: `houses` (household
-attribution of flexibility payments is not modelled), an empty vector, an entry that is
-not a `FlexMarket`, two entries with the same row name, and any aggregator holding a
-`FixedCapacitor` (its constant reactive injection has no stage-2 representation).
+rows; so does a failure of the congested-hour price split after the redispatch
+(`error:dlmp_split`). With `flex_market`, these throw `ArgumentError` before any solve:
+`houses` (household attribution of flexibility payments is not modelled), an empty vector,
+an entry that is not a `FlexMarket`, two entries with the same row name, a power-flow
+formulation other than `ConvexBranchFlow` (the congested-hour split reads its constraint
+duals), a `λ₀` with a non-finite or non-positive entry (it normalises the congestion
+score), and any aggregator holding a `FixedCapacitor` (its constant reactive injection has
+no stage-2 representation).
 """
 function compare_tariffs(
     feeder::AbstractFeeder,
@@ -405,6 +409,20 @@ function compare_tariffs(
             ArgumentError(
                 "compare_tariffs: houses cannot be combined with flex_market — household " *
                 "attribution of flexibility payments is not modelled; pass one or the other.",
+            ),
+        )
+        pf isa ConvexBranchFlow || throw(
+            ArgumentError(
+                "compare_tariffs: flex_market needs ConvexBranchFlow (the congested-hour " *
+                "split of the redispatch prices reads its cone, voltage-drop, exactness-copy " *
+                "and thermal-limit duals); got $(typeof(pf)).",
+            ),
+        )
+        all(t -> isfinite(λ₀[t]) && λ₀[t] > 0, 1:T) || throw(
+            ArgumentError(
+                "compare_tariffs: with flex_market, λ₀ must be finite and positive in every " *
+                "hour (it normalises the congestion score of the clearing prices); got " *
+                "$(collect(λ₀)).",
             ),
         )
         for (k, a) in enumerate(aggs)

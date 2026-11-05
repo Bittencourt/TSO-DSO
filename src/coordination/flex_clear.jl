@@ -477,6 +477,18 @@ function _dispatch_record(ds)
     )
 end
 
+# Internal: a failure of the congested-hour classifier on a solved, gated stage 2 →
+# `(status, notes)` with the `"congestion: "` prefix. The DLMP split's sum-to-price check
+# raises an `ErrorException` whose message starts with `"decompose_dlmp:"`; it becomes
+# `"error:dlmp_split"`. A solver-outcome type maps as in `_physics_error_status`. `nothing`
+# for anything else (the caller rethrows).
+function _congestion_status(err)
+    if err isa ErrorException && startswith(err.msg, "decompose_dlmp:")
+        return "error:dlmp_split", first("congestion: " * err.msg, 400)
+    end
+    return _physics_error_status(err, "congestion: ")
+end
+
 # Internal: the physics record, every field present; unknown fields are `nothing`.
 function _physics_record(;
     status,
@@ -567,11 +579,15 @@ them by construction.
 `wall_s` is the wall time of the whole clear. Every solver outcome is a status: a stage-2
 outcome as in [`_redispatch`](@ref), and a stage-1 or delivery `SolveFailedError`,
 `CertificateError` or `ConvergenceError` as `"error:<Type>"` with `notes` prefixed
-`"baseline: "` or `"delivery: "`. On any status other than `"ok"` the fields that were not
-computed are `nothing` (the probe counts stay those already known). Anything else throws.
+`"baseline: "` or `"delivery: "`. A failure of the congested-hour split after a successful
+stage 2 (its sum-to-price reconstruction check) is `"error:dlmp_split"` with `notes` prefixed
+`"congestion: "`. On any status other than `"ok"` the fields that were not computed are
+`nothing` (the probe counts stay those already known). Anything else throws.
 
 Throws `ArgumentError` before any solve on an empty population, a `price` or `λ₀` of the
-wrong length or with a non-finite entry, `n_blocks < 1`, or a `FixedCapacitor` in the
+wrong length or with a non-finite entry, a `λ₀` with a non-positive entry (it normalises the
+congestion score), `n_blocks < 1`, a power-flow formulation other than `ConvexBranchFlow`
+(the congested-hour split reads its constraint duals), or a `FixedCapacitor` in the
 population.
 """
 function _flex_physics(
@@ -594,8 +610,21 @@ function _flex_physics(
         throw(ArgumentError("_flex_physics: price has a non-finite entry."))
     (length(λ₀) == T && all(isfinite, λ₀)) ||
         throw(ArgumentError("_flex_physics: λ₀ must have length T=$T with finite entries."))
+    all(>(0), λ₀) || throw(
+        ArgumentError(
+            "_flex_physics: λ₀ must be positive in every hour (it normalises the " *
+            "congestion score of the clearing prices); got $(collect(λ₀)).",
+        ),
+    )
     n_blocks >= 1 ||
         throw(ArgumentError("_flex_physics: n_blocks=$n_blocks must be at least 1."))
+    pf isa ConvexBranchFlow || throw(
+        ArgumentError(
+            "_flex_physics: the flexibility market needs ConvexBranchFlow (the congested-" *
+            "hour split reads its cone, voltage-drop, exactness-copy and thermal-limit " *
+            "duals); got $(typeof(pf)).",
+        ),
+    )
     _refuse_fixed_capacitor(aggs, "_flex_physics")
     p = Float64[price[t] for t in 1:T]
     λ = Float64[λ₀[t] for t in 1:T]
@@ -638,7 +667,15 @@ function _flex_physics(
         return _physics_record(; status = rd.status, notes = rd.notes, known...)
     row = Dict(j => i for (i, j) in enumerate(rd.input2.buses))
     π = Vector{Float64}[Float64[rd.input2.prices[row[a.bus], t] for t in 1:T] for a in aggs]
-    ch = _congested_hours(rd.ctx2::ModelContext, λ; T = T)  # ok status: the solve exists
+    # ok status: the solve exists. The split is read after the gate, so a failure of its
+    # reconstruction check is a recorded status, never an exception.
+    ch = try
+        _congested_hours(rd.ctx2::ModelContext, λ; T = T)
+    catch err
+        mapped = _congestion_status(err)
+        mapped === nothing && rethrow()
+        return _physics_record(; status = mapped[1], notes = mapped[2], known...)
+    end
     stage2 = (;
         u = rd.u,
         w = rd.w,
