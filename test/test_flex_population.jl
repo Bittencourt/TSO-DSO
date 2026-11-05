@@ -236,7 +236,8 @@ end
 @testitem "flex population: FIT and MPC paths reject the phase-43 devices explicitly (WR-05)" tags =
     [:population] begin
     using TSODSO
-    using TSODSO: Bus, Branch, Feeder, _flex_devices_for_house, _reject_unsupported_flex_devices
+    using TSODSO:
+        Bus, Branch, Feeder, _flex_devices_for_house, _reject_unsupported_flex_devices
 
     T = 3
     feeder = Feeder(

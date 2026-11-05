@@ -600,10 +600,22 @@ function _flex_ev(s_pop::Integer, bus::Int, house_index::Int, T::Int; scale::Rea
     hour_to_t(h) = clamp(round(Int, h * T / 24), 1, T)
 
     t_arr = hour_to_t(
-        _flex_trunc_normal(sub(_FLEX_SUB_ARR), _EV_ARR_MU, _EV_ARR_SD, _EV_ARR_LO, _EV_ARR_HI),
+        _flex_trunc_normal(
+            sub(_FLEX_SUB_ARR),
+            _EV_ARR_MU,
+            _EV_ARR_SD,
+            _EV_ARR_LO,
+            _EV_ARR_HI,
+        ),
     )
     t_dep = hour_to_t(
-        _flex_trunc_normal(sub(_FLEX_SUB_DEP), _EV_DEP_MU, _EV_DEP_SD, _EV_DEP_LO, _EV_DEP_HI),
+        _flex_trunc_normal(
+            sub(_FLEX_SUB_DEP),
+            _EV_DEP_MU,
+            _EV_DEP_SD,
+            _EV_DEP_LO,
+            _EV_DEP_HI,
+        ),
     )
     if t_dep == t_arr   # degenerate (tiny T): shift departure by one slot
         t_dep = mod1(t_arr + 1, T)
@@ -818,24 +830,37 @@ function BehaviourSpec(;
             "valid keywords are $(join(string.(_BEH_KEYS), ", "))",
         ),
     )
-    (isfinite(compliance) && 0 <= compliance <= 1) ||
-        throw(ArgumentError("BehaviourSpec: compliance must lie in [0, 1]; got $compliance"))
+    (isfinite(compliance) && 0 <= compliance <= 1) || throw(
+        ArgumentError("BehaviourSpec: compliance must lie in [0, 1]; got $compliance"),
+    )
     (isfinite(opt_out) && 0 <= opt_out <= 1) ||
         throw(ArgumentError("BehaviourSpec: opt_out must lie in [0, 1]; got $opt_out"))
     reb = nothing
     if rebound !== nothing
         (rebound isa NamedTuple && haskey(rebound, :W) && haskey(rebound, :r)) || throw(
-            ArgumentError("BehaviourSpec: rebound must be nothing or a NamedTuple (; W, r)"),
+            ArgumentError(
+                "BehaviourSpec: rebound must be nothing or a NamedTuple (; W, r)",
+            ),
         )
         (rebound.W isa Integer && rebound.W >= 1) || throw(
-            ArgumentError("BehaviourSpec: rebound W must be an integer >= 1; got $(rebound.W)"),
+            ArgumentError(
+                "BehaviourSpec: rebound W must be an integer >= 1; got $(rebound.W)",
+            ),
         )
         (rebound.r isa Real && isfinite(rebound.r) && rebound.r >= 1) || throw(
-            ArgumentError("BehaviourSpec: rebound r must be finite and >= 1; got $(rebound.r)"),
+            ArgumentError(
+                "BehaviourSpec: rebound r must be finite and >= 1; got $(rebound.r)",
+            ),
         )
         reb = (; W = Int(rebound.W), r = Float64(rebound.r))
     end
-    return BehaviourSpec(Float64(compliance), Float64(opt_out), reb, Int(seed), include_storage)
+    return BehaviourSpec(
+        Float64(compliance),
+        Float64(opt_out),
+        reb,
+        Int(seed),
+        include_storage,
+    )
 end
 
 _is_default_behaviour(s::BehaviourSpec) =
@@ -843,9 +868,12 @@ _is_default_behaviour(s::BehaviourSpec) =
 
 _beh_wrapped(d) = d isa Union{PartialCompliance, OptOut, Rebound}
 _beh_in_wrap_set(d, spec::BehaviourSpec) =
-    !_beh_wrapped(d) &&
-    (is_flexible_load(d) || d isa ElectricVehicle || d isa HeatPump ||
-     (spec.include_storage && d isa PVBattery))
+    !_beh_wrapped(d) && (
+        is_flexible_load(d) ||
+        d isa ElectricVehicle ||
+        d isa HeatPump ||
+        (spec.include_storage && d isa PVBattery)
+    )
 
 """
     apply_behaviour(aggregators, spec::BehaviourSpec; T) -> aggregators

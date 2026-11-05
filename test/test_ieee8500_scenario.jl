@@ -104,7 +104,13 @@ end
     # The builder itself rejects :default_10pct off the 8500 family.
     feeder13 = build_feeder(:ieee13)
     profiles = generate_profiles(; seed = 1, T = 10)
-    @test_throws ArgumentError build_population(:default_10pct, feeder13, :ieee13, profiles, 1)
+    @test_throws ArgumentError build_population(
+        :default_10pct,
+        feeder13,
+        :ieee13,
+        profiles,
+        1,
+    )
     # The unknown-selector message names all three selectors.
     err = try
         build_population(:bogus, feeder13, :ieee13, profiles, 1)
@@ -184,7 +190,8 @@ end
         sampled = Set(harness_sample(rng, buses, density))
         full = build_population(:default, feeder, feeder_sym, profiles, seed)
         return filter(
-            agg -> agg.bus in sampled || any(dv -> dv isa TSODSO.FixedCapacitor, agg.devices),
+            agg ->
+                agg.bus in sampled || any(dv -> dv isa TSODSO.FixedCapacitor, agg.devices),
             full,
         )
     end
