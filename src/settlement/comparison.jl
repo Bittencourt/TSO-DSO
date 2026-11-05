@@ -1178,7 +1178,8 @@ function _flex_tables(
         surplus = Float64[s.surplus[b] for b in buses]
         aggregators_total = sum(led.balances[(:aggregator, b)] for b in buses)
         dso = led.balances[:dso]
-        flex_netload = Float64[-sum(phys.delivered.net[slot[b]][t] for b in buses) for t in 1:T]
+        flex_netload =
+            Float64[-sum(phys.delivered.net[slot[b]][t] for b in buses) for t in 1:T]
         rb = rebound(dadp_netload, flex_netload)
         up = 0.0
         down = 0.0
@@ -1229,7 +1230,8 @@ function _flex_tables(
                     n_blocks = fm.n_blocks,
                     baseline_inflation = fm.baseline_inflation,
                     flex_payments_total = s.flex_payments_total,
-                    energy_merchandising_surplus = dso + s.flex_payments_total +
+                    energy_merchandising_surplus = dso +
+                                                   s.flex_payments_total +
                                                    s.baseline_overpayment,
                     tariff_on_activation = s.tariff_on_activation,
                     flex_payment_on_delivered = s.flex_payment_on_delivered,
@@ -1250,7 +1252,8 @@ function _flex_tables(
                     redispatch_p_import_total = sum(phys.p_import_stage2),
                     welfare_socp_import = s.welfare_socp_import,
                     welfare_dadp_lossless = welfare_dadp_lossless,
-                    welfare_gap_vs_dadp_lossless = s.welfare_lossless - welfare_dadp_lossless,
+                    welfare_gap_vs_dadp_lossless = s.welfare_lossless -
+                                                   welfare_dadp_lossless,
                     price_gap_vs_dadp_max = price_gap,
                     bid_repair_max = phys.bid_repair_max,
                     min_bid_ask_gap = phys.min_bid_ask_gap,
@@ -1305,7 +1308,9 @@ end
 # when every clear was a status row (no rows), so the appended column set does not depend on
 # the solver outcome.
 function _with_shortfall_column(df::DataFrame)
-    hasproperty(df, :delivery_shortfall) ||
-        (df[!, :delivery_shortfall] = Union{Missing, Float64}[missing for _ in 1:size(df, 1)])
+    hasproperty(df, :delivery_shortfall) || (
+        df[!, :delivery_shortfall] =
+            Union{Missing, Float64}[missing for _ in 1:size(df, 1)]
+    )
     return df
 end

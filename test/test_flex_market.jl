@@ -1440,11 +1440,15 @@ end
 
         fx = s[5:7, :]
         @test all(
-            st -> st in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
+            st ->
+                st in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
                 startswith(st, "error:"),
             fx.status,
         )
-        @test all(in(("feasible", "infeasible", "solve_failed", "not_run")), fx.feasibility_status)
+        @test all(
+            in(("feasible", "infeasible", "solve_failed", "not_run")),
+            fx.feasibility_status,
+        )
         @test all(==("ok"), fx.status)
         all(==("ok"), fx.status) || continue
         @test all(isfinite, fx.welfare)
