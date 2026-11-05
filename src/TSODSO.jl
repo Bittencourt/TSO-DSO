@@ -303,12 +303,16 @@ include("experiments/run_stochastic.jl")
 # order: SettlementLedger (types + double-entry construction) → run_inputs (run-output →
 # SettlementInput adapters) → tariffs (pure price construction) → price_taker →
 # feasibility → equity (pure post-solve analytics). Each file declares its own exports.
+# The coordination files load after equity.jl and before comparison.jl: the
+# flexibility-market legs use price_taker, feasibility and decompose_dlmp, and the
+# comparison runner uses the coordination types.
 include("settlement/SettlementLedger.jl")
 include("settlement/run_inputs.jl")     # run-output → SettlementInput adapters
 include("settlement/tariffs.jl")        # revenue-neutral flat/TOU price construction (pure)
 include("settlement/price_taker.jl")    # thin penalty-free counterfactual dispatch QP
 include("settlement/feasibility.jl")    # AC-physics feasibility status (report, never throw)
 include("settlement/equity.jl")         # Gini/Theil/Atkinson/Palma + breakouts + rebound
+include("coordination/coordination.jl") # coordination schemes: PriceBased, FlexMarket
 include("settlement/comparison.jl")     # compare_tariffs — the SETL-02/05 comparison runner
 
 # --- Advanced API: documented and stable but not exported (qualify as `TSODSO.name`) ---

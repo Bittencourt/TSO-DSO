@@ -108,6 +108,17 @@ Pages = [
 Order = [:type, :constant, :function]
 ```
 
+## Coordination
+
+The coordination schemes that steer aggregator dispatch on a shared feeder: price-based
+coordination through the dynamic distribution price, and the opt-in DSO flexibility market.
+
+```@autodocs
+Modules = [TSODSO]
+Pages = ["coordination/coordination.jl"]
+Order = [:type, :constant, :function]
+```
+
 ## ADMM Decomposition
 
 ```@autodocs
