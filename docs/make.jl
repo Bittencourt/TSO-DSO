@@ -57,6 +57,7 @@ for src in (
     # tariff-comparison sections read from results/settlement_comparison/ — the same
     # committed-CSV pattern as the Case-A population page above.
     "settlement_equity.jl",
+    "flex_market.jl",           # flexibility market vs price coordination, read from results/settlement_comparison/
     # Case A welfare-gain magnitude (Phase 42): the honest pre-registered measurement's
     # writeup. The live/precomputed split here is TOTAL — the page SOLVES NOTHING at all:
     # its whole live slice is reading results/thesis_case_a_magnitude/*.csv (a
@@ -117,6 +118,7 @@ makedocs(;
             "The Experiment Harness" => "generated/experiments.md",
             "Case A Population (784 houses)" => "generated/case_a_population.md",
             "Settlement, Tariffs & Equity" => "generated/settlement_equity.md",
+            "Flexibility Market vs Price Coordination" => "generated/flex_market.md",
             "Case A Magnitude" => "generated/case_a_magnitude.md",
         ],
         "Status & Exception Policy" => "status_policy.md",
