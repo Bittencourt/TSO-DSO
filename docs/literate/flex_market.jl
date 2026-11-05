@@ -422,7 +422,8 @@ let
                 join((@sprintf("%.4f", num(r["baseline_overpayment"])) for r in rs), " / "),
                 same_physics
             )
-            o05, o10 = num(rs[2]["baseline_overpayment"]), num(rs[3]["baseline_overpayment"])
+            o05, o10 =
+                num(rs[2]["baseline_overpayment"]), num(rs[3]["baseline_overpayment"])
             o05 > 0 && @printf(
                 "%-14s %-8s overpayment(β = 0.10) / overpayment(β = 0.05) = %.6f\n",
                 mode,
@@ -459,7 +460,8 @@ let
     for mode in FLEX_MODES
         r = find_row(mode, "flex_uniform")
         r === nothing && continue
-        tot, tot10 = num(r["delivery_shortfall_total"]), num(r["delivery_shortfall_total_10w"])
+        tot, tot10 =
+            num(r["delivery_shortfall_total"]), num(r["delivery_shortfall_total_10w"])
         @printf(
             "%-14s w = %s: shortfall total %.4f, max %.3e, ratio %.3e; at 10w total %.4f (change %.2e)\n",
             mode,
@@ -555,7 +557,8 @@ end
 
 let
     flat = filter(r -> r["mode"] == "ieee123" && r["tariff"] == "flat", rebound_rows)
-    flex = filter(r -> r["mode"] == "ieee123" && r["tariff"] == "flex_uniform", rebound_rows)
+    flex =
+        filter(r -> r["mode"] == "ieee123" && r["tariff"] == "flex_uniform", rebound_rows)
     if !isempty(flat) && !isempty(flex)
         k = argmin([num(r["counterfactual_net_load"]) for r in flat])
         t = flat[k]["t"]
