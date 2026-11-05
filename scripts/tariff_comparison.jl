@@ -8,6 +8,20 @@
 # usage:
 #   julia --project=. scripts/tariff_comparison.jl --mode ieee13-ground
 #   julia --project=. scripts/tariff_comparison.jl --mode case-a-784 [--time-limit-s 3600]
+#   julia --project=. scripts/tariff_comparison.jl --mode ieee13-ground --flex-market
+#   julia --project=. scripts/tariff_comparison.jl --mode ieee123 [--flex-market]
+#   julia --project=. scripts/tariff_comparison.jl --mode ieee123-default
+#   julia --project=. scripts/tariff_comparison.jl --mode <mode> --record-timeout <S>
+#
+# Flags:
+#
+#   --flex-market     Boolean (no value). Adds the flexibility-market legs of
+#                     `flex_markets_for(mode)` to the comparison (`compare_tariffs(...;
+#                     flex_market)`). Allowed on ieee13-ground, ieee123 and ieee123-default;
+#                     refused on case-a-784 (a houses run cannot carry flex legs).
+#   --record-timeout S  Writes the mode's "(run)" row with status "timeout", run_wall_s = S
+#                     and notes "stopped after S s wall", WITHOUT solving: the honest record
+#                     of a run that was stopped or killed before it finished.
 #
 # Modes (--mode):
 #
@@ -16,6 +30,14 @@
 #                  pinned :mem price profile, engine :centralized. Bills settle at BUS
 #                  granularity (the one-aggregator-per-bus shape IS the household
 #                  granularity here). Seconds-to-minutes wall time.
+#                  With --flex-market (the flexibility-market measurement):
+#                  the run also clears 8 flex legs (flat baseline x uniform/pay-as-bid x
+#                  beta in {0, 0.05, 0.10}, plus the TOU baseline under both rules at beta
+#                  0). Before ANY write, the in-run dadp row must reproduce the committed
+#                  dadp row (welfare, aggregators_total, status, compared after a CSV round
+#                  trip, so bitwise); on any difference the script errors and writes
+#                  nothing. Only the rows whose tariff starts with "flex_" are upserted
+#                  (summary, bills, rebound): the committed base rows stay as recorded.
 #   case-a-784     THE deliverable: the thesis-scale 784-house population. Thesis
 #                  constants exactly as `scripts/thesis_caseA.jl` / the
 #                  `scripts/case_a_scaling.jl` header restate them: T = 24, SEED = 42,
@@ -27,6 +49,26 @@
 #                  (bus-major, house-index ascending — the alignment is asserted) so the
 #                  per-house attribution cannot drift from the population. LONG-RUNNING:
 #                  the ADMM leg alone is ~10+ min per the Phase-40 measurement.
+#   ieee123        The modified IEEE-123 feeder with the certified test-fixture population
+#                  (test/fixtures_ieee123.jl, copied below: 85 load nodes, one seeded
+#                  Thermostatic + Deferrable + PVBattery house per node, seed 20260719),
+#                  T = 24, the fixture's digitized price profile, engine :centralized.
+#                  The welfare solves (DADP and every flex redispatch) use the documented
+#                  conditioning select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel =
+#                  3e-9): the default tol_gap trips the exactness gate on this feeder at the
+#                  precision floor (test/test_ieee123_admm.jl). The gates themselves (tau,
+#                  epsilon, the hybrid floor) are untouched. All rows of this mode are
+#                  written, and its rebound rows too. Several minutes of wall time.
+#   ieee123-default  The same feeder with the DEFAULT generated population,
+#                  build_population(:default, ..., :ieee123, ...) at seed 20260718, the :mem
+#                  prices and the default SOCP optimizer, engine :centralized. Its DADP
+#                  solve is expected to be REFUSED at the exactness certificate; whatever
+#                  happens is written (a "(run)" status row on a refusal), never re-tuned.
+#
+# Wall time: the ieee13-ground flex path and both IEEE-123 modes stamp run_wall_s (the
+# @elapsed of the mode's compare call, in s) on every summary row they write, "(run)"
+# status rows included. The default ieee13-ground and case-a-784 paths are unchanged and
+# do not stamp it.
 #
 # CSV contract (the case_a_scaling idiom): rows are UPSERTED keyed on their provenance
 # identity (mode, tariff / unit_id / group, seed, t_horizon) with `cols = :union` —
@@ -54,20 +96,32 @@
 #   tariff_comparison.csv   — one row per tariff per mode (+ "(run)" status rows)
 #   household_bills.csv     — per-household (or per-bus) bill/surplus rows
 #   equity_breakouts.csv    — per-group equity rows (pv_group / bus / load tercile)
+#   rebound_hourly.csv      — per-hour rebound rows (with delivery_shortfall on flex rows),
+#                             written only by the --flex-market and IEEE-123 paths, keyed
+#                             (mode, tariff, t, seed, t_horizon)
 #
 # Regenerate the committed artifacts:
 #   julia --project=. scripts/tariff_comparison.jl --mode ieee13-ground
 #   julia --project=. scripts/tariff_comparison.jl --mode case-a-784   # long-running
+#   julia --project=. scripts/tariff_comparison.jl --mode ieee13-ground --flex-market
+#   julia --project=. scripts/tariff_comparison.jl --mode ieee123 --flex-market   # minutes
+#   julia --project=. scripts/tariff_comparison.jl --mode ieee123-default
 
 using DrWatson
 @quickactivate "TSODSO"
 using TSODSO
 using TSODSO:
     ADMM,
+    Aggregator,
     CertificateError,
     ConvergenceError,
     ConvexBranchFlow,
+    Deferrable,
+    FlexMarket,
+    PVBattery,
+    SOCP,
     SolveFailedError,
+    Thermostatic,
     UnconvergedAdmmError,
     _CASE_A_PV_FRACTION,
     _CASE_A_TOTAL_HOUSES,
@@ -83,9 +137,12 @@ using TSODSO:
     case_a_household_map,
     compare_tariffs,
     generate_profiles,
+    ieee123_load_nodes,
+    ieee123_modified,
+    select_optimizer,
     sub_seed
 using CSV
-using DataFrames: DataFrame, eachrow
+using DataFrames: DataFrame, eachrow, nrow
 using LinearAlgebra: BLAS
 
 const SEED_GROUND = 20260718   # the ground-fixture regression seed (IEEE13Fixtures') — the
@@ -102,6 +159,13 @@ const OUT_DIR = joinpath(projectdir(), "results", "settlement_comparison")
 const SUMMARY_CSV = joinpath(OUT_DIR, "tariff_comparison.csv")
 const BILLS_CSV = joinpath(OUT_DIR, "household_bills.csv")
 const BREAKOUTS_CSV = joinpath(OUT_DIR, "equity_breakouts.csv")
+const REBOUND_CSV = joinpath(OUT_DIR, "rebound_hourly.csv")
+
+# IEEE-123 seeds: the certified fixture population's seed (test/fixtures_ieee123.jl) and the
+# seed of the default generated population whose DADP refusal the ieee123-default mode records.
+const SEED_IEEE123 = 20260719
+const SEED_IEEE123_DEFAULT = 20260718
+const MODES = ("ieee13-ground", "case-a-784", "ieee123", "ieee123-default")
 
 # ---- kv-flag parsing (case_a_scaling.jl conventions) -----------------------------------------
 
@@ -114,12 +178,23 @@ end
 
 parse_args!(args) = (
     mode = let m = parse_kv_flag(args, "--mode", "ieee13-ground")
-        (m in ("ieee13-ground", "case-a-784")) || throw(
+        (m in MODES) || throw(
             ArgumentError(
-                "--mode must be \"ieee13-ground\" or \"case-a-784\" (got $(repr(m)))",
+                "--mode must be one of $(join(repr.(MODES), ", ")) (got $(repr(m)))",
             ),
         )
         m
+    end,
+    # Boolean flag (no value): `parse_kv_flag` requires a value, so test membership.
+    flex_market = ("--flex-market" in args),
+    record_timeout = let s = parse_kv_flag(args, "--record-timeout", nothing)
+        s === nothing ? nothing :
+        let S = parse(Float64, s)
+            (isfinite(S) && S >= 0) || throw(
+                ArgumentError("--record-timeout must be a finite number of seconds ≥ 0 (got $S)"),
+            )
+            S
+        end
     end,
     T_H = let T = parse(Int, parse_kv_flag(args, "--t-horizon", "24"))
         T >= 1 || throw(ArgumentError("--t-horizon must be ≥ 1 (got $T)"))
@@ -141,10 +216,36 @@ parse_args!(args) = (
 )
 
 # Per-mode seed defaults: the smoke leg uses the ground-fixture regression seed
-# (SEED_GROUND), the thesis-scale leg the LOCKED thesis seed (SEED_CASE_A). A --seed
-# override applies to either.
-mode_seed(mode::String, seed::Union{Nothing, Int}) =
-    seed !== nothing ? seed : (mode == "ieee13-ground" ? SEED_GROUND : SEED_CASE_A)
+# (SEED_GROUND), the thesis-scale leg the LOCKED thesis seed (SEED_CASE_A), the IEEE-123
+# modes SEED_IEEE123 / SEED_IEEE123_DEFAULT. A --seed override applies to any mode.
+function mode_seed(mode::String, seed::Union{Nothing, Int})
+    seed !== nothing && return seed
+    mode == "ieee13-ground" && return SEED_GROUND
+    mode == "ieee123" && return SEED_IEEE123
+    mode == "ieee123-default" && return SEED_IEEE123_DEFAULT
+    return SEED_CASE_A
+end
+
+"""
+    flex_markets_for(mode) -> Vector{FlexMarket}
+
+The flexibility-market legs a mode clears under `--flex-market`. Every mode gets the flat
+baseline under both payment rules at baseline inflation beta in {0, 0.05, 0.10} (6 legs,
+one physics clear, since the rule and beta change money only); ieee13-ground adds the TOU
+baseline under both rules at beta 0 (8 legs, 2 clears). case-a-784 has none.
+"""
+function flex_markets_for(mode::String)
+    flat = [
+        FlexMarket(; payment_rule = r, baseline_inflation = β) for
+        r in (:uniform, :pay_as_bid) for β in (0.0, 0.05, 0.10)
+    ]
+    mode == "ieee13-ground" && return vcat(
+        flat,
+        [FlexMarket(; baseline_tariff = :tou, payment_rule = r) for r in (:uniform, :pay_as_bid)],
+    )
+    mode in ("ieee123", "ieee123-default") && return flat
+    throw(ArgumentError("flex_markets_for: no flexibility-market legs for mode $(repr(mode))"))
+end
 
 # ---- provenance + CSV upsert (case_a_scaling.jl idiom) ---------------------------------------
 
@@ -324,6 +425,23 @@ const BREAKOUTS_COLS = Symbol[
     :t_horizon,
 ]
 
+# Per-hour rebound rows: written only by the flexibility-market and IEEE-123 paths.
+const REBOUND_COLS = Symbol[
+    :mode,
+    :tariff,
+    :t,
+    :baseline_net_load,
+    :counterfactual_net_load,
+    :delta,
+    :classification,
+    :delivery_shortfall,
+    :julia_version,
+    :threads,
+    :blas_threads,
+    :seed,
+    :t_horizon,
+]
+
 # All three artifacts EXIST regardless of outcome (header-only = certified nothing).
 # Called BEFORE the run-failure branch in both modes: a "(run)" status row must never
 # ship without its sibling header-only tables (the docs readers open all three
@@ -336,23 +454,40 @@ function ensure_all_schemas()
 end
 
 """
-    write_compare_results(res, mode_name, T_H, seed) -> nothing
+    write_compare_results(res, mode_name, T_H, seed; run_wall_s = nothing,
+                          only_flex = false, rebound = false) -> nothing
 
 Upsert the runner's three committed tables row by row, each stamped with the script-side
 provenance (`seed`, `mode`) beside the runner's own stamp (`julia_version`, `threads`,
-`blas_threads`, `t_horizon`).
+`blas_threads`, `t_horizon`). The keywords are used only by the flexibility-market and
+IEEE-123 paths (at their defaults the behaviour is the original one): `run_wall_s` stamps
+that column on every summary row, `only_flex` restricts every table to the rows whose
+tariff starts with "flex_", and `rebound` also upserts the per-hour rebound rows into
+`rebound_hourly.csv`.
 """
-function write_compare_results(res, mode_name::String, T_H::Int, seed::Int)
+function write_compare_results(
+    res,
+    mode_name::String,
+    T_H::Int,
+    seed::Int;
+    run_wall_s::Union{Nothing, Float64} = nothing,
+    only_flex::Bool = false,
+    rebound::Bool = false,
+)
+    keep(r) = !only_flex || startswith(String(r.tariff), "flex_")
+    wall = run_wall_s === nothing ? (;) : (run_wall_s = run_wall_s,)
     for r in eachrow(res.summary)
+        keep(r) || continue
         row = NamedTuple(r)
         row = haskey(row, :notes) ? merge(row, (notes = flatten_note(row.notes),)) : row
         upsert_row(
             SUMMARY_CSV,
-            merge(row, (mode = mode_name,), provenance_row(T_H, seed));
+            merge(row, (mode = mode_name,), provenance_row(T_H, seed), wall);
             key = (:mode, :tariff, :seed, :t_horizon),
         )
     end
     for r in eachrow(res.household_bills)
+        keep(r) || continue
         upsert_row(
             BILLS_CSV,
             merge(NamedTuple(r), (mode = mode_name,), provenance_row(T_H, seed));
@@ -360,11 +495,23 @@ function write_compare_results(res, mode_name::String, T_H::Int, seed::Int)
         )
     end
     for r in eachrow(res.equity_breakouts)
+        keep(r) || continue
         upsert_row(
             BREAKOUTS_CSV,
             merge(NamedTuple(r), (mode = mode_name,), provenance_row(T_H, seed));
             key = (:mode, :tariff, :grouping, :group, :metric_kind, :seed, :t_horizon),
         )
+    end
+    if rebound
+        ensure_schema(REBOUND_CSV, REBOUND_COLS)
+        for r in eachrow(res.rebound)
+            keep(r) || continue
+            upsert_row(
+                REBOUND_CSV,
+                merge(NamedTuple(r), (mode = mode_name,), provenance_row(T_H, seed));
+                key = (:mode, :tariff, :t, :seed, :t_horizon),
+            )
+        end
     end
     return nothing
 end
@@ -381,8 +528,10 @@ function write_run_status_row(
     mode_name::String,
     engine::String,
     T_H::Int,
-    seed::Int,
+    seed::Int;
+    run_wall_s::Union{Nothing, Float64} = nothing,
 )
+    wall = run_wall_s === nothing ? (;) : (run_wall_s = run_wall_s,)
     row = merge(
         (
             mode = mode_name,
@@ -397,6 +546,7 @@ function write_run_status_row(
             iters = outcome.iters,
         ),
         provenance_row(T_H, seed),
+        wall,
     )
     upsert_row(SUMMARY_CSV, row; key = (:mode, :tariff, :seed, :t_horizon))
     return nothing
@@ -404,9 +554,8 @@ end
 
 # ---- ieee13-ground mode ----------------------------------------------------------------------
 
-function ground_main(T_H::Int, seed::Int)
-    # BLAS pinned to 1 for row-to-row comparability (the case_a_scaling discipline).
-    BLAS.set_num_threads(1)
+# The ieee13-ground feeder, price and population (shared by the default and flex paths).
+function ground_setup(T_H::Int, seed::Int)
     feeder = build_feeder(FEEDER_SYM)
     profiles = generate_profiles(; seed = sub_seed(seed, :profiles), T = T_H)
     λ₀ = build_price(PRICE_SYM, T_H, nothing)
@@ -417,6 +566,13 @@ function ground_main(T_H::Int, seed::Int)
         profiles,
         sub_seed(seed, :population),
     )
+    return feeder, λ₀, aggs
+end
+
+function ground_main(T_H::Int, seed::Int)
+    # BLAS pinned to 1 for row-to-row comparability (the case_a_scaling discipline).
+    BLAS.set_num_threads(1)
+    feeder, λ₀, aggs = ground_setup(T_H, seed)
 
     println(
         "tariff_comparison ieee13-ground: T=$T_H, seed=$seed, engine=:centralized, " *
@@ -454,6 +610,303 @@ function ground_main(T_H::Int, seed::Int)
         "ieee13-ground complete in $(round(wall_s; digits = 2)) s → " *
         "$SUMMARY_CSV, $BILLS_CSV, $BREAKOUTS_CSV",
     )
+    return nothing
+end
+
+"""
+    assert_dadp_reproduces(outcome, T_H, seed) -> nothing
+
+Provenance guard of the ieee13-ground flex path, run BEFORE any write. The in-run dadp row
+must reproduce the committed ieee13-ground dadp row of the same (seed, t_horizon) in
+`welfare`, `aggregators_total` and `status`. The in-run values go through a CSV round trip
+first: the CSV writer emits Float64 cells in shortest round-trip form, so on the pinned
+environment a reproduction compares equal bit for bit, and the comparison is `isequal` with
+no tolerance. On any difference (or a missing committed row, or a refused in-run DADP) this
+throws with both values printed and nothing is written: the flex rows must never be mixed
+with base rows of a different provenance. Re-recording the base rows is a separate,
+explicit decision; this check is never bypassed with a tolerance.
+"""
+function assert_dadp_reproduces(outcome, T_H::Int, seed::Int)
+    head = "ieee13-ground --flex-market: provenance check FAILED (seed=$seed, t_horizon=$T_H); NOTHING WRITTEN."
+    isfile(SUMMARY_CSV) || error("$head No committed summary CSV at $SUMMARY_CSV.")
+    old = CSV.read(SUMMARY_CSV, DataFrame)
+    committed = filter(
+        r ->
+            isequal(r.mode, "ieee13-ground") &&
+                isequal(r.tariff, "dadp") &&
+                isequal(r.seed, seed) &&
+                isequal(r.t_horizon, T_H),
+        old,
+    )
+    nrow(committed) == 1 ||
+        error("$head Expected exactly 1 committed dadp row, found $(nrow(committed)).")
+    c = committed[1, :]
+    outcome.ok || error(
+        "$head The in-run DADP solve was refused: status=$(repr(outcome.status)) vs " *
+        "committed status=$(repr(c.status)). Message: $(outcome.message)",
+    )
+    inrun = filter(r -> r.tariff == "dadp", outcome.res.summary)
+    nrow(inrun) == 1 || error("$head Expected exactly 1 in-run dadp row, found $(nrow(inrun)).")
+    cols = [:welfare, :aggregators_total, :status]
+    io = IOBuffer()
+    CSV.write(io, inrun[:, cols])
+    rt = CSV.read(IOBuffer(take!(io)), DataFrame)
+    diffs = String[]
+    for col in cols
+        a = c[col]
+        b = rt[1, col]
+        isequal(a, b) || push!(
+            diffs,
+            "$col: committed=$(repr(a)) in-run=$(repr(b)) (in-run before the round trip: " *
+            "$(repr(inrun[1, col])))",
+        )
+    end
+    isempty(diffs) || error(
+        "$head The in-run dadp row does not reproduce the committed one:\n  " *
+        join(diffs, "\n  ") *
+        "\nStop and investigate; re-recording the base rows is a separate, explicit decision.",
+    )
+    println(
+        "  provenance check passed: in-run dadp row == committed (welfare=$(repr(c.welfare)), " *
+        "aggregators_total=$(repr(c.aggregators_total)), status=$(repr(c.status)))",
+    )
+    flush(stdout)
+    return nothing
+end
+
+# Print one line per summary row of a finished run.
+function print_summary_rows(summary; only_flex::Bool = false)
+    for r in eachrow(summary)
+        (only_flex && !startswith(String(r.tariff), "flex_")) && continue
+        line = "  → $(r.tariff): welfare=$(r.welfare) payments=$(r.total_payments) " *
+               "feas=$(r.feasibility_status) status=$(r.status)"
+        if hasproperty(r, :welfare_gap_vs_dadp_lossless) && startswith(String(r.tariff), "flex_")
+            line *= " gap_lossless=$(r.welfare_gap_vs_dadp_lossless) " *
+                    "shortfall=$(r.delivery_shortfall_total) " *
+                    "overpay=$(r.baseline_overpayment) flex_wall_s=$(r.flex_wall_s)"
+        end
+        println(line)
+    end
+    flush(stdout)
+    return nothing
+end
+
+# The ieee13-ground flexibility-market measurement: the 8 flex legs on the same run as the base
+# legs. Only the flex rows are written, after the provenance guard: the committed base rows stay
+# exactly as recorded and are never back-filled with the new columns' values.
+function ground_flex_main(T_H::Int, seed::Int)
+    BLAS.set_num_threads(1)
+    feeder, λ₀, aggs = ground_setup(T_H, seed)
+    markets = flex_markets_for("ieee13-ground")
+    println(
+        "tariff_comparison ieee13-ground --flex-market: T=$T_H, seed=$seed, " *
+        "engine=:centralized, aggregators=$(length(aggs)), flex legs=$(length(markets)) " *
+        "(BLAS pinned to 1) — comparing...",
+    )
+    flush(stdout)
+    wall_s = @elapsed outcome = run_compare_outcome() do
+        compare_tariffs(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = T_H,
+            λ₀ = λ₀,
+            engine = :centralized,
+            flex_market = markets,
+        )
+    end
+    assert_dadp_reproduces(outcome, T_H, seed)
+    ensure_all_schemas()
+    write_compare_results(
+        outcome.res,
+        "ieee13-ground",
+        T_H,
+        seed;
+        run_wall_s = wall_s,
+        only_flex = true,
+        rebound = true,
+    )
+    print_summary_rows(outcome.res.summary; only_flex = true)
+    println(
+        "ieee13-ground --flex-market complete in $(round(wall_s; digits = 2)) s → " *
+        "$SUMMARY_CSV, $BILLS_CSV, $REBOUND_CSV",
+    )
+    return nothing
+end
+
+# ---- IEEE-123 modes --------------------------------------------------------------------------
+
+# IEEE-123 certified population, copied verbatim from test/fixtures_ieee123.jl (through its copy
+# in scripts/actor_behaviour_sweep.jl). A script cannot include the fixture file: @testmodule is
+# a no-op outside the test runner (see scripts/repro_stability_check.jl). The only change is
+# that the seed and the horizon are arguments.
+const BATT_λ_MIN = 3.8
+const BATT_λ_MED = 6.2
+const BATT_λ_MAX = 8.9
+const LOAD_SCALE_IEEE123 = 0.05
+const PV_SCALE_IEEE123 = 0.12
+const DEV_SCALE_IEEE123 = 0.05 * (0.05 / 0.03)
+
+temperature_profile() = Float64[
+    19, 18, 17, 16, 16, 17, 19, 21, 23, 26, 28, 30,
+    31, 32, 32, 31, 29, 27, 25, 23, 22, 21, 20, 19,
+]
+
+ieee123_lambda0() = Float64[
+    3.8, 3.7, 3.6, 3.6, 3.7, 4.0, 4.8, 5.8, 6.5, 6.2, 5.9, 5.7,
+    5.6, 5.8, 6.0, 6.8, 8.2, 9.0, 8.6, 7.4, 6.2, 5.2, 4.4, 4.0,
+]
+
+function house(
+    bus;
+    seed,
+    T,
+    φ,
+    pv_scale = 1.0,
+    load_scale = 1.0,
+    dev_scale = 1.0,
+    batt_pmax = 0.5,
+    batt_emax = 2.0,
+    batt_soc0 = 1.0,
+)
+    prof = generate_profiles(seed = seed + bus, T = T)
+    Ppv = Float64[pv_scale * p for p in prof.pv]
+    Pdc = Float64[load_scale * d for d in prof.demand]
+    therm = Thermostatic(
+        bus, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0 * dev_scale, 0.5, temperature_profile(),
+    )
+    defer = Deferrable(bus, 8, 16, 1.0 * dev_scale, 0.5 * dev_scale, 0.5)
+    batt = PVBattery(
+        bus, 0.95, 1.0, batt_pmax, 0.0, batt_emax, batt_soc0,
+        BATT_λ_MIN, BATT_λ_MED, BATT_λ_MAX, Ppv,
+    )
+    return Aggregator(bus, φ, [therm, defer, batt], Pdc)
+end
+
+function ieee123_population(seed::Int, T::Int)
+    return [
+        house(
+            bus;
+            seed = seed,
+            T = T,
+            φ = 0.90,
+            load_scale = LOAD_SCALE_IEEE123,
+            pv_scale = PV_SCALE_IEEE123,
+            dev_scale = DEV_SCALE_IEEE123,
+            batt_pmax = 0.5 * LOAD_SCALE_IEEE123,
+            batt_emax = 2.0 * LOAD_SCALE_IEEE123,
+            batt_soc0 = 1.0 * LOAD_SCALE_IEEE123,
+        ) for bus in ieee123_load_nodes()
+    ]
+end
+
+# Record one IEEE-123 mode's outcome: a "(run)" status row on a refusal, otherwise every row
+# (summary, bills, breakouts, rebound), with run_wall_s on every summary row either way.
+function write_mode_outcome(outcome, mode_name::String, T_H::Int, seed::Int, wall_s::Float64)
+    ensure_all_schemas()
+    if !outcome.ok
+        write_run_status_row(
+            outcome,
+            mode_name,
+            "centralized",
+            T_H,
+            seed;
+            run_wall_s = wall_s,
+        )
+        println(
+            "  → DADP run RECORDED as $(outcome.status) after $(round(wall_s; digits = 2)) s " *
+            "(a measured outcome, never re-tuned) → $SUMMARY_CSV\n    $(outcome.message)",
+        )
+        flush(stdout)
+        return nothing
+    end
+    write_compare_results(outcome.res, mode_name, T_H, seed; run_wall_s = wall_s, rebound = true)
+    print_summary_rows(outcome.res.summary)
+    println(
+        "$mode_name complete in $(round(wall_s; digits = 2)) s → " *
+        "$SUMMARY_CSV, $BILLS_CSV, $BREAKOUTS_CSV, $REBOUND_CSV",
+    )
+    return nothing
+end
+
+function ieee123_horizon_check(mode_name::String, T_H::Int)
+    T_H == 24 || throw(
+        ArgumentError(
+            "$mode_name: the IEEE-123 population and price profiles are 24-hour days " *
+            "(got --t-horizon $T_H)",
+        ),
+    )
+    return nothing
+end
+
+function ieee123_main(T_H::Int, seed::Int, flex::Bool)
+    ieee123_horizon_check("ieee123", T_H)
+    BLAS.set_num_threads(1)
+    feeder = ieee123_modified()
+    aggs = ieee123_population(seed, T_H)
+    λ₀ = ieee123_lambda0()
+    # Conditioning only (the documented tol_gap = 3e-9 of the IEEE-123 tests); the exactness
+    # gate, tau and epsilon are unchanged.
+    welfare_optimizer = select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9)
+    markets = flex ? flex_markets_for("ieee123") : nothing
+    println(
+        "tariff_comparison ieee123: T=$T_H, seed=$seed, engine=:centralized, " *
+        "aggregators=$(length(aggs)), tol_gap=3e-9, flex legs=" *
+        "$(markets === nothing ? 0 : length(markets)) (BLAS pinned to 1) — comparing...",
+    )
+    flush(stdout)
+    wall_s = @elapsed outcome = run_compare_outcome() do
+        compare_tariffs(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = T_H,
+            λ₀ = λ₀,
+            engine = :centralized,
+            welfare_optimizer = welfare_optimizer,
+            flex_market = markets,
+        )
+    end
+    write_mode_outcome(outcome, "ieee123", T_H, seed, wall_s)
+    return nothing
+end
+
+function ieee123_default_main(T_H::Int, seed::Int, flex::Bool)
+    ieee123_horizon_check("ieee123-default", T_H)
+    BLAS.set_num_threads(1)
+    feeder = ieee123_modified()
+    profiles = generate_profiles(; seed = sub_seed(seed, :profiles), T = T_H)
+    λ₀ = build_price(PRICE_SYM, T_H, nothing)
+    aggs = build_population(:default, feeder, :ieee123, profiles, sub_seed(seed, :population))
+    markets = flex ? flex_markets_for("ieee123-default") : nothing
+    println(
+        "tariff_comparison ieee123-default: T=$T_H, seed=$seed, engine=:centralized, " *
+        "aggregators=$(length(aggs)), default SOCP optimizer, flex legs=" *
+        "$(markets === nothing ? 0 : length(markets)) (BLAS pinned to 1) — comparing...",
+    )
+    flush(stdout)
+    wall_s = @elapsed outcome = run_compare_outcome() do
+        compare_tariffs(
+            feeder,
+            ConvexBranchFlow(),
+            aggs;
+            T = T_H,
+            λ₀ = λ₀,
+            engine = :centralized,
+            flex_market = markets,
+        )
+    end
+    write_mode_outcome(outcome, "ieee123-default", T_H, seed, wall_s)
+    return nothing
+end
+
+# --record-timeout: the honest record of a run that was stopped before it finished. No solve.
+function record_timeout_main(mode::String, T_H::Int, seed::Int, S::Float64)
+    ensure_all_schemas()
+    outcome = (; status = "timeout", message = "stopped after $S s wall", iters = missing)
+    engine = mode == "case-a-784" ? "admm" : "centralized"
+    write_run_status_row(outcome, mode, engine, T_H, seed; run_wall_s = S)
+    println("  → $mode RECORDED as timeout (run_wall_s = $S) → $SUMMARY_CSV")
     return nothing
 end
 
@@ -567,14 +1020,27 @@ end
 
 function comparison_main(args)
     parsed = parse_args!(args)
+    (parsed.mode == "case-a-784" && parsed.flex_market) && throw(
+        ArgumentError(
+            "--flex-market is not available on case-a-784: a houses run cannot " *
+            "carry flex legs (compare_tariffs refuses houses with flex_market)",
+        ),
+    )
     seed = mode_seed(parsed.mode, parsed.seed)
     println(
         "tariff_comparison: mode=$(parsed.mode) t_horizon=$(parsed.T_H) seed=$seed " *
-        "time_limit_s=$(parsed.time_limit_s) threads=$(Threads.nthreads()) " *
+        "time_limit_s=$(parsed.time_limit_s) flex_market=$(parsed.flex_market) " *
+        "record_timeout=$(something(parsed.record_timeout, "-")) threads=$(Threads.nthreads()) " *
         "blas=$(BLAS.get_num_threads()) (pinning BLAS to 1)",
     )
-    if parsed.mode == "ieee13-ground"
-        ground_main(parsed.T_H, seed)
+    if parsed.record_timeout !== nothing
+        record_timeout_main(parsed.mode, parsed.T_H, seed, parsed.record_timeout)
+    elseif parsed.mode == "ieee13-ground"
+        parsed.flex_market ? ground_flex_main(parsed.T_H, seed) : ground_main(parsed.T_H, seed)
+    elseif parsed.mode == "ieee123"
+        ieee123_main(parsed.T_H, seed, parsed.flex_market)
+    elseif parsed.mode == "ieee123-default"
+        ieee123_default_main(parsed.T_H, seed, parsed.flex_market)
     else
         caseA_main(parsed.T_H, seed, parsed.time_limit_s)
     end
