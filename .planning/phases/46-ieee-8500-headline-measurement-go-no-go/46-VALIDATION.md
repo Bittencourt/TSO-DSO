@@ -1,8 +1,8 @@
 ---
 phase: 46
 slug: ieee-8500-headline-measurement-go-no-go
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-11-05
 ---
@@ -76,11 +76,11 @@ do not run any IEEE-8500 solve.
 
 ## Validation Sign-Off
 
-- [ ] Every task has an `<automated>` verify or a Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers every MISSING reference
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 300 s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] Every task has an `<automated>` verify or a Wave 0 dependency
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers every MISSING reference
+- [x] No watch-mode flags
+- [x] Feedback latency < 300 s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-11-05
