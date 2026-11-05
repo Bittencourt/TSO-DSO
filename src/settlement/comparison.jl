@@ -888,10 +888,424 @@ function compare_tariffs(
         end
     end
 
+    # ---- flexibility-market legs (opt-in): appended through their own tables ------------
+    if flex_markets !== nothing
+        flex = _flex_tables(
+            feeder,
+            pf,
+            aggs,
+            input,
+            flex_markets;
+            T = T,
+            λ₀vec = λ₀vec,
+            bins = bins,
+            engine_str = engine_str,
+            τ_batt = τ_batt,
+            optimizer = welfare_optimizer,
+        )
+        return (
+            summary = vcat(_rows_to_dataframe(summary_rows), flex.summary; cols = :union),
+            household_bills = vcat(
+                _rows_to_dataframe(bill_rows),
+                flex.household_bills;
+                cols = :union,
+            ),
+            equity_breakouts = _rows_to_dataframe(breakout_rows),
+            rebound = vcat(_rows_to_dataframe(rebound_rows), flex.rebound; cols = :union),
+        )
+    end
+
     return (
         summary = _rows_to_dataframe(summary_rows),
         household_bills = _rows_to_dataframe(bill_rows),
         equity_breakouts = _rows_to_dataframe(breakout_rows),
         rebound = _rows_to_dataframe(rebound_rows),
     )
+end
+
+# The additive summary columns of a flexibility-market row, in order, appended after the 37
+# base columns of `_summary_row` (internal; `_flex_extras` builds them in this order).
+const FLEX_EXTRA_COLUMNS = (
+    :coordination,
+    :baseline_tariff,
+    :payment_rule,
+    :n_blocks,
+    :baseline_inflation,
+    :flex_payments_total,
+    :energy_merchandising_surplus,
+    :tariff_on_activation,
+    :flex_payment_on_delivered,
+    :flex_up_total,
+    :flex_down_total,
+    :delivery_shortfall_total,
+    :delivery_shortfall_max,
+    :delivery_shortfall_ratio,
+    :delivery_shortfall_total_10w,
+    :tracking_weight,
+    :baseline_overpayment,
+    :n_congested_hours,
+    :congestion_kappa,
+    :congestion_kappa_lo,
+    :congestion_kappa_hi,
+    :redispatch_socp_maxgap,
+    :redispatch_p_import_total,
+    :welfare_socp_import,
+    :welfare_dadp_lossless,
+    :welfare_gap_vs_dadp_lossless,
+    :price_gap_vs_dadp_max,
+    :bid_repair_max,
+    :min_bid_ask_gap,
+    :max_wash,
+    :n_probe_solves,
+    :n_probe_failed,
+    :baseline_batt_refused,
+    :flex_wall_s,
+)
+
+# Internal: the additive flex columns of one row, every key always present (`missing` when not
+# computed), so ok rows and status rows share one field set and `_rows_to_dataframe`, which keys
+# its schema on the first row, can never drop a column. Column meanings:
+#   - coordination / baseline_tariff / payment_rule / n_blocks / baseline_inflation: the market;
+#   - flex_payments_total: Σ price·quantity over the real payment rows (β phantom excluded);
+#     baseline_overpayment: the β phantom rows' total;
+#   - energy_merchandising_surplus: tariff collections − wholesale, i.e. the DSO line before
+#     any flexibility payment (dso_total + flex_payments_total + baseline_overpayment);
+#   - tariff_on_activation = Σ p_t·Δ (money overlap, informational); flex_payment_on_delivered:
+#     the uniform payment on the delivered deviation (missing for pay-as-bid);
+#   - flex_up_total / flex_down_total: Σ max(Δ, 0) and Σ max(−Δ, 0) over aggregators and hours;
+#   - delivery_shortfall_total / _max: Σ and max of |n − (b + Δ)|; _ratio: the total over
+#     Σ|Δ| (NaN with no activation); _total_10w: the total at ten times the tracking weight;
+#   - tracking_weight: the delivery penalty weight w;
+#   - n_congested_hours with congestion_kappa (the threshold) and the measured interval
+#     [congestion_kappa_lo, congestion_kappa_hi) of thresholds that give the same hours;
+#   - redispatch_socp_maxgap / redispatch_p_import_total: the stage-2 exactness gap and Σ import;
+#   - welfare_socp_import: utilities minus λ₀ on the stage-2 SOCP import (exact when the
+#     shortfall is 0); welfare_dadp_lossless: the DADP dispatch on the lossless footing, and
+#     welfare_gap_vs_dadp_lossless = welfare − welfare_dadp_lossless (like for like);
+#   - price_gap_vs_dadp_max: max |π − λ_dadp| over activated (|Δ| above the range floor)
+#     bus-hours (NaN with no activation);
+#   - bid_repair_max, min_bid_ask_gap, max_wash, n_probe_solves, n_probe_failed: bid and
+#     clearing diagnostics; baseline_batt_refused: refused stage-1 battery certificates;
+#   - flex_wall_s: wall time of the shared physics of the clear.
+function _flex_extras(;
+    coordination = missing,
+    baseline_tariff = missing,
+    payment_rule = missing,
+    n_blocks = missing,
+    baseline_inflation = missing,
+    flex_payments_total = missing,
+    energy_merchandising_surplus = missing,
+    tariff_on_activation = missing,
+    flex_payment_on_delivered = missing,
+    flex_up_total = missing,
+    flex_down_total = missing,
+    delivery_shortfall_total = missing,
+    delivery_shortfall_max = missing,
+    delivery_shortfall_ratio = missing,
+    delivery_shortfall_total_10w = missing,
+    tracking_weight = missing,
+    baseline_overpayment = missing,
+    n_congested_hours = missing,
+    congestion_kappa = missing,
+    congestion_kappa_lo = missing,
+    congestion_kappa_hi = missing,
+    redispatch_socp_maxgap = missing,
+    redispatch_p_import_total = missing,
+    welfare_socp_import = missing,
+    welfare_dadp_lossless = missing,
+    welfare_gap_vs_dadp_lossless = missing,
+    price_gap_vs_dadp_max = missing,
+    bid_repair_max = missing,
+    min_bid_ask_gap = missing,
+    max_wash = missing,
+    n_probe_solves = missing,
+    n_probe_failed = missing,
+    baseline_batt_refused = missing,
+    flex_wall_s = missing,
+)
+    return (;
+        coordination,
+        baseline_tariff,
+        payment_rule,
+        n_blocks,
+        baseline_inflation,
+        flex_payments_total,
+        energy_merchandising_surplus,
+        tariff_on_activation,
+        flex_payment_on_delivered,
+        flex_up_total,
+        flex_down_total,
+        delivery_shortfall_total,
+        delivery_shortfall_max,
+        delivery_shortfall_ratio,
+        delivery_shortfall_total_10w,
+        tracking_weight,
+        baseline_overpayment,
+        n_congested_hours,
+        congestion_kappa,
+        congestion_kappa_lo,
+        congestion_kappa_hi,
+        redispatch_socp_maxgap,
+        redispatch_p_import_total,
+        welfare_socp_import,
+        welfare_dadp_lossless,
+        welfare_gap_vs_dadp_lossless,
+        price_gap_vs_dadp_max,
+        bid_repair_max,
+        min_bid_ask_gap,
+        max_wash,
+        n_probe_solves,
+        n_probe_failed,
+        baseline_batt_refused,
+        flex_wall_s,
+    )
+end
+
+# Internal: the summary row of a flexibility-market leg whose clear did not reach `ok`. The
+# market identity, the DADP lossless welfare and whatever bid diagnostics exist are filled;
+# every other value is `missing`, with the same field set as an ok row.
+function _flex_status_row(
+    fm::FlexMarket,
+    phys;
+    engine_str::String,
+    T::Int,
+    nb::Int,
+    welfare_dadp_lossless::Float64,
+)
+    known(x) = x === nothing ? missing : x
+    return merge(
+        _summary_row(
+            tariff = _flex_row_name(fm),
+            engine = engine_str,
+            t_horizon = T,
+            status = phys.status,
+            notes = first(string(phys.notes), 400),
+            batt_not_checked = nb,
+        ),
+        _flex_extras(;
+            coordination = coordination_label(fm),
+            baseline_tariff = string(fm.baseline_tariff),
+            payment_rule = string(fm.payment_rule),
+            n_blocks = fm.n_blocks,
+            baseline_inflation = fm.baseline_inflation,
+            congestion_kappa = FLEX_CONGESTION_KAPPA,
+            welfare_dadp_lossless = welfare_dadp_lossless,
+            bid_repair_max = known(phys.bid_repair_max),
+            min_bid_ask_gap = known(phys.min_bid_ask_gap),
+            n_probe_solves = phys.n_probe_solves,
+            n_probe_failed = phys.n_probe_failed,
+            baseline_batt_refused = phys.baseline === nothing ? missing :
+                                    phys.baseline.n_battery_refused,
+            flex_wall_s = phys.wall_s,
+        ),
+    )
+end
+
+# Internal: the flexibility-market rows of `compare_tariffs` (summary, household_bills and
+# rebound tables), from the DADP run's settlement `input`. The markets are grouped by their
+# clear key (baseline tariff, n_blocks) in first-appearance order: the physics of a clear and
+# its AC check run once per key, and each `FlexMarket` then settles its own money on the
+# shared physics, so the payment rule and β cannot move a physics column. Rows follow the
+# input order of `fms`.
+function _flex_tables(
+    feeder::AbstractFeeder,
+    pf::AbstractPowerFlow,
+    aggs::AbstractVector{<:Aggregator},
+    input::SettlementInput,
+    fms::Vector{FlexMarket};
+    T::Int,
+    λ₀vec::Vector{Float64},
+    bins::Vector{Vector{Int}},
+    engine_str::String,
+    τ_batt::Real,
+    optimizer = nothing,
+)
+    buses = input.buses
+    nb = length(buses)
+    agg_buses = Int[a.bus for a in aggs]
+    slot = Dict(b => k for (k, b) in enumerate(agg_buses))
+    row_of = Dict(b => i for (i, b) in enumerate(buses))
+    dadp_netload = Float64[-sum(input.bus_nets[b][t] for b in buses) for t in 1:T]
+    welfare_dadp_lossless =
+        sum(input.bus_utilities[b] for b in buses) -
+        sum(λ₀vec[t] * (-sum(input.bus_nets[b][t] for b in buses)) for t in 1:T)
+
+    clears = Dict{Tuple{Symbol, Int}, Any}()
+    summary_rows = Vector{NamedTuple}()
+    bill_rows = Vector{NamedTuple}()
+    rebound_rows = Vector{NamedTuple}()
+    for fm in fms
+        key = (fm.baseline_tariff, fm.n_blocks)
+        if !haskey(clears, key)
+            price = _baseline_price(input, fm; bins = bins)
+            phys = _flex_physics(
+                feeder,
+                pf,
+                aggs,
+                price;
+                T = T,
+                λ₀ = λ₀vec,
+                n_blocks = fm.n_blocks,
+                optimizer = optimizer,
+                τ_batt = τ_batt,
+            )
+            feas =
+                phys.status == "ok" ?
+                ac_feasibility_status(feeder, aggs, phys.delivered.net; T = T) : nothing
+            clears[key] = (; phys, feas)
+        end
+        c = clears[key]
+        phys = c.phys
+        name = _flex_row_name(fm)
+        if phys.status != "ok"
+            push!(
+                summary_rows,
+                _flex_status_row(
+                    fm,
+                    phys;
+                    engine_str = engine_str,
+                    T = T,
+                    nb = nb,
+                    welfare_dadp_lossless = welfare_dadp_lossless,
+                ),
+            )
+            continue
+        end
+        st = c.feas
+        s = _flex_settle(phys, fm, agg_buses, input; T = T, λ₀ = λ₀vec)
+        led = s.ledger
+        bills = Float64[s.bills[b] for b in buses]
+        surplus = Float64[s.surplus[b] for b in buses]
+        aggregators_total = sum(led.balances[(:aggregator, b)] for b in buses)
+        dso = led.balances[:dso]
+        flex_netload = Float64[-sum(phys.delivered.net[slot[b]][t] for b in buses) for t in 1:T]
+        rb = rebound(dadp_netload, flex_netload)
+        up = 0.0
+        down = 0.0
+        for Δ in phys.Δ, t in 1:T
+            up += max(Δ[t], 0.0)
+            down += max(-Δ[t], 0.0)
+        end
+        activated = up + down
+        price_gap = NaN
+        for (k, b) in enumerate(agg_buses), t in 1:T
+            abs(phys.Δ[k][t]) > FLEX_RANGE_FLOOR || continue
+            g = abs(phys.π[k][t] - input.prices[row_of[b], t])
+            price_gap = isnan(price_gap) ? g : max(price_gap, g)
+        end
+        push!(
+            summary_rows,
+            merge(
+                _summary_row(
+                    tariff = name,
+                    engine = engine_str,
+                    t_horizon = T,
+                    status = "ok",
+                    notes = string(phys.notes),
+                    welfare = s.welfare_lossless,
+                    total_payments = -aggregators_total,
+                    fairness_total = missing,  # flexibility payments are not one price vector
+                    merchandising_surplus = dso,
+                    dso_total = dso,
+                    aggregators_total = aggregators_total,
+                    wholesale_total = led.balances[:wholesale],
+                    feasibility_status = string(st.status),
+                    n_thermal_violations = st.n_thermal_violations,
+                    n_voltage_violations = st.n_voltage_violations,
+                    max_overload_ratio = st.max_overload_ratio,
+                    batt_ok = phys.delivered.n_battery_ok,
+                    batt_refused = phys.delivered.n_battery_refused,
+                    batt_not_checked = phys.delivered.n_battery_not_checked,
+                    eq_bills = _equity_columns(bills),
+                    eq_surplus = _equity_columns(surplus),
+                    rebound_amount = rb.rebound_amount,
+                    rebound_ratio = rb.rebound_ratio,
+                    bills_granularity = "bus",
+                ),
+                _flex_extras(;
+                    coordination = coordination_label(fm),
+                    baseline_tariff = string(fm.baseline_tariff),
+                    payment_rule = string(fm.payment_rule),
+                    n_blocks = fm.n_blocks,
+                    baseline_inflation = fm.baseline_inflation,
+                    flex_payments_total = s.flex_payments_total,
+                    energy_merchandising_surplus = dso + s.flex_payments_total +
+                                                   s.baseline_overpayment,
+                    tariff_on_activation = s.tariff_on_activation,
+                    flex_payment_on_delivered = s.flex_payment_on_delivered,
+                    flex_up_total = up,
+                    flex_down_total = down,
+                    delivery_shortfall_total = phys.shortfall_total,
+                    delivery_shortfall_max = maximum(maximum, phys.shortfall),
+                    delivery_shortfall_ratio = activated > 0 ?
+                                               phys.shortfall_total / activated : NaN,
+                    delivery_shortfall_total_10w = phys.shortfall_10w_total,
+                    tracking_weight = phys.weight,
+                    baseline_overpayment = s.baseline_overpayment,
+                    n_congested_hours = count(phys.congested),
+                    congestion_kappa = FLEX_CONGESTION_KAPPA,
+                    congestion_kappa_lo = phys.kappa_lo,
+                    congestion_kappa_hi = phys.kappa_hi,
+                    redispatch_socp_maxgap = phys.maxgap,
+                    redispatch_p_import_total = sum(phys.p_import_stage2),
+                    welfare_socp_import = s.welfare_socp_import,
+                    welfare_dadp_lossless = welfare_dadp_lossless,
+                    welfare_gap_vs_dadp_lossless = s.welfare_lossless - welfare_dadp_lossless,
+                    price_gap_vs_dadp_max = price_gap,
+                    bid_repair_max = phys.bid_repair_max,
+                    min_bid_ask_gap = phys.min_bid_ask_gap,
+                    max_wash = phys.max_wash,
+                    n_probe_solves = phys.n_probe_solves,
+                    n_probe_failed = phys.n_probe_failed,
+                    baseline_batt_refused = phys.baseline.n_battery_refused,
+                    flex_wall_s = phys.wall_s,
+                ),
+            ),
+        )
+        for (i, b) in enumerate(buses)
+            push!(
+                bill_rows,
+                (
+                    tariff = name,
+                    unit_id = b,
+                    bus = b,
+                    granularity = "bus",
+                    bill = bills[i],
+                    surplus = surplus[i],
+                    pv_group = missing,
+                    load_tercile = missing,
+                    delivery_shortfall = sum(phys.shortfall[slot[b]]),
+                ),
+            )
+        end
+        for t in 1:T
+            push!(
+                rebound_rows,
+                (
+                    tariff = name,
+                    t = t,
+                    baseline_net_load = dadp_netload[t],
+                    counterfactual_net_load = flex_netload[t],
+                    delta = rb.delta[t],
+                    classification = t in rb.reduction_hours ? "reduction" :
+                                     t in rb.increase_hours ? "increase" : "",
+                    delivery_shortfall = sum(phys.shortfall[slot[b]][t] for b in buses),
+                ),
+            )
+        end
+    end
+    return (
+        summary = _rows_to_dataframe(summary_rows),
+        household_bills = _with_shortfall_column(_rows_to_dataframe(bill_rows)),
+        rebound = _with_shortfall_column(_rows_to_dataframe(rebound_rows)),
+    )
+end
+
+# Internal: a flex bill or rebound table always carries the `delivery_shortfall` column, even
+# when every clear was a status row (no rows), so the appended column set does not depend on
+# the solver outcome.
+function _with_shortfall_column(df::DataFrame)
+    hasproperty(df, :delivery_shortfall) ||
+        (df[!, :delivery_shortfall] = Union{Missing, Float64}[missing for _ in 1:size(df, 1)])
+    return df
 end

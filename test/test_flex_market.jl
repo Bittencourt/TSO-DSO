@@ -1382,3 +1382,191 @@ end
         @test c.gap <= M.TOL_BAND
     end
 end
+
+# The comparison-table integration runs on the peaked market fixture (congested hour 2 is
+# up-activated, so the β row has a phantom) with the default solver everywhere. Measured over
+# the three seeds (julia 1.12.5): every flex row is ok; the pay-as-bid minus uniform aggregator
+# total is −8.21e-3, −1.13e-2 and −7.05e-3 (strict, no slack); the per-bus bill and per-hour
+# rebound delivery_shortfall columns sum to the summary total with a difference of exactly 0.0
+# (asserted with ==).
+@testitem "flex market: compare_tariffs appends flex rows" setup =
+    [FlexMarketFixtures, FlexFenceFixtures] tags = [:flex_market, :settlement] begin
+    using TSODSO
+    using DataFrames
+    M = FlexMarketFixtures
+    F = FlexFenceFixtures
+
+    fms = [
+        FlexMarket(),
+        FlexMarket(; payment_rule = :pay_as_bid),
+        FlexMarket(; baseline_inflation = 0.05),
+    ]
+    flex_names = ["flex_uniform", "flex_pab", "flex_uniform_beta0.05"]
+    extra = String[string(k) for k in TSODSO.FLEX_EXTRA_COLUMNS]
+    @test keys(TSODSO._flex_extras()) == TSODSO.FLEX_EXTRA_COLUMNS
+    @test all(ismissing, values(TSODSO._flex_extras()))
+    @test length(extra) == 34
+
+    function run_case(seed)
+        f = M.market_agg(seed)
+        cmp(; kw...) = compare_tariffs(
+            M.feeder2(f.smax),
+            ConvexBranchFlow(),
+            [f.agg];
+            T = M.T_INT,
+            λ₀ = f.π0,
+            bins = F.BINS,
+            kw...,
+        )
+        r0 = cmp()
+        r = cmp(; flex_market = fms)
+        # the DADP run's settlement input, solved independently with the default optimizer
+        input = M.market_dadp(f; optimizer = TSODSO.select_optimizer(TSODSO.SOCP())).input
+        n = input.bus_nets[2]
+        w_dadp = input.bus_utilities[2] - sum(f.π0[t] * (-n[t]) for t in 1:M.T_INT)
+        return (; r0, r, w_dadp)
+    end
+
+    for seed in M.SEEDS
+        c = run_case(seed)
+        s, s0 = c.r.summary, c.r0.summary
+        # schema: base rows untouched, flex rows appended with the additive columns
+        @test nrow(s) == 7
+        @test s.tariff == vcat(["dadp", "flat", "tou", "fit"], flex_names)
+        @test names(s) == vcat(F.SUMMARY_COLUMNS, extra)
+        @test isequal(s[1:4, F.SUMMARY_COLUMNS], s0)
+        @test all(ismissing, s[1:4, :coordination])
+        @test isequal(c.r.equity_breakouts, c.r0.equity_breakouts)
+
+        fx = s[5:7, :]
+        @test all(
+            st -> st in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
+                startswith(st, "error:"),
+            fx.status,
+        )
+        @test all(in(("feasible", "infeasible", "solve_failed", "not_run")), fx.feasibility_status)
+        @test all(==("ok"), fx.status)
+        all(==("ok"), fx.status) || continue
+        @test all(isfinite, fx.welfare)
+        @test all(isfinite, fx.welfare_gap_vs_dadp_lossless)
+        @test all(isfinite, fx.tariff_on_activation)
+        # field mapping
+        @test all(==("centralized"), fx.engine)
+        @test all(==("flex_market"), fx.coordination)
+        @test fx.payment_rule == ["uniform", "pay_as_bid", "uniform"]
+        @test fx.baseline_inflation == [0.0, 0.0, 0.05]
+        @test all(==("bus"), fx.bills_granularity)
+        @test all(ismissing, fx.fairness_total)
+        @test fx.total_payments == -fx.aggregators_total
+        @test fx.merchandising_surplus == fx.dso_total
+        @test fx.welfare_dadp_lossless == fill(c.w_dadp, 3)
+        @test fx.welfare_gap_vs_dadp_lossless == fx.welfare .- fx.welfare_dadp_lossless
+        @test fx.energy_merchandising_surplus ==
+              fx.dso_total .+ fx.flex_payments_total .+ fx.baseline_overpayment
+        @test fx.congestion_kappa == fill(TSODSO.FLEX_CONGESTION_KAPPA, 3)
+        # uniform and pay-as-bid share the physics; pay-as-bid pays the aggregators less
+        u, p, b = 1, 2, 3
+        @test fx.welfare[u] == fx.welfare[p]
+        @test fx.feasibility_status[u] == fx.feasibility_status[p]
+        @test fx.aggregators_total[p] < fx.aggregators_total[u]
+        # β changes money only: every physics column equals the uniform row's
+        for col in (
+            :welfare,
+            :feasibility_status,
+            :max_overload_ratio,
+            :n_thermal_violations,
+            :n_voltage_violations,
+            :delivery_shortfall_total,
+            :delivery_shortfall_max,
+            :flex_up_total,
+            :flex_down_total,
+            :n_congested_hours,
+            :welfare_socp_import,
+            :redispatch_socp_maxgap,
+            :redispatch_p_import_total,
+            :tariff_on_activation,
+            :flex_wall_s,
+            :rebound_amount,
+        )
+            @test isequal(fx[b, col], fx[u, col])
+        end
+        @test fx.baseline_overpayment[u] == 0.0
+        @test fx.baseline_overpayment[b] > 0
+
+        # household bills: one bus row per flex tariff, with the additive shortfall column
+        hb = c.r.household_bills
+        n0 = nrow(c.r0.household_bills)
+        @test isequal(hb[1:n0, names(c.r0.household_bills)], c.r0.household_bills)
+        @test names(hb) == vcat(names(c.r0.household_bills), ["delivery_shortfall"])
+        @test all(ismissing, hb.delivery_shortfall[1:n0])
+        # rebound: T rows per flex tariff
+        rbd = c.r.rebound
+        m0 = nrow(c.r0.rebound)
+        @test isequal(rbd[1:m0, names(c.r0.rebound)], c.r0.rebound)
+        @test all(ismissing, rbd.delivery_shortfall[1:m0])
+        for (k, nm) in enumerate(flex_names)
+            bills_k = hb[hb.tariff .== nm, :]
+            @test nrow(bills_k) == 1
+            @test all(==("bus"), bills_k.granularity)
+            @test sum(bills_k.bill) == fx.total_payments[k]
+            @test sum(bills_k.delivery_shortfall) == fx.delivery_shortfall_total[k]
+            reb_k = rbd[rbd.tariff .== nm, :]
+            @test reb_k.t == collect(1:M.T_INT)
+            @test sum(reb_k.delivery_shortfall) == fx.delivery_shortfall_total[k]
+        end
+    end
+
+    # a failed redispatch is a status row with the identical field set and no bill or
+    # rebound rows; appending it never changes the schema
+    function status_case(seed)
+        f = M.market_agg(seed)
+        input = M.market_dadp(f; smax = TSODSO.SMAX_NO_LIMIT).input
+        g = M.market_agg(seed; pdc_add = 2.0)
+        return TSODSO._flex_tables(
+            M.feeder2(1.0),
+            ConvexBranchFlow(),
+            [g.agg],
+            input,
+            FlexMarket[FlexMarket(), FlexMarket(; payment_rule = :pay_as_bid)];
+            T = M.T_INT,
+            λ₀vec = f.π0,
+            bins = F.BINS,
+            engine_str = "centralized",
+            τ_batt = 1e-3,
+        )
+    end
+    st = status_case(M.SEEDS[1])
+    @test st.summary.status == ["infeasible_redispatch", "infeasible_redispatch"]
+    @test st.summary.tariff == ["flex_uniform", "flex_pab"]
+    @test names(st.summary) == vcat(F.SUMMARY_COLUMNS, extra)
+    @test all(ismissing, st.summary.welfare)
+    @test all(==("not_run"), st.summary.feasibility_status)
+    @test all(!isempty, st.summary.notes)
+    @test st.summary.payment_rule == ["uniform", "pay_as_bid"]
+    @test nrow(st.household_bills) == 0 && nrow(st.rebound) == 0
+    @test "delivery_shortfall" in names(st.household_bills)
+    @test "delivery_shortfall" in names(st.rebound)
+    ok = run_case(M.SEEDS[1]).r.summary
+    @test names(vcat(ok, st.summary; cols = :union)) == names(ok)
+    # the status-row builder and an ok row share one field set
+    phys = (;
+        status = "error:SolveFailedError",
+        notes = "baseline: no point",
+        bid_repair_max = nothing,
+        min_bid_ask_gap = nothing,
+        n_probe_solves = 0,
+        n_probe_failed = 0,
+        baseline = nothing,
+        wall_s = 0.0,
+    )
+    row = TSODSO._flex_status_row(
+        FlexMarket(),
+        phys;
+        engine_str = "centralized",
+        T = M.T_INT,
+        nb = 1,
+        welfare_dadp_lossless = 0.0,
+    )
+    @test String[string(k) for k in propertynames(row)] == names(ok)
+    @test row.status == "error:SolveFailedError" && row.baseline_batt_refused === missing
+end

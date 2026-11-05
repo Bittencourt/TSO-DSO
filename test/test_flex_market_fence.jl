@@ -319,6 +319,10 @@ end
     rt = tight([t.agg]; welfare_optimizer = c.factory)
     @test c.n[] == 1
     @test rt.summary.tariff == ["dadp", "flat", "tou", "fit"]
+    c2 = counting()
+    rf = tight([t.agg]; flex_market = FlexMarket(), welfare_optimizer = c2.factory)
+    @test c2.n[] == 2
+    @test rf.summary.tariff == ["dadp", "flat", "tou", "fit", "flex_uniform"]
 
     # every guard fires before any solve: the counting factory is never called
     err(g) = M.caught(g)
