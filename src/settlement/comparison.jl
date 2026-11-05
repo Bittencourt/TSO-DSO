@@ -432,15 +432,7 @@ function compare_tariffs(
                 "$([a.bus for a in aggs]).",
             ),
         )
-        for (k, a) in enumerate(aggs)
-            any(d -> d isa FixedCapacitor, a.devices) && throw(
-                ArgumentError(
-                    "compare_tariffs: aggs[$k] (bus $(a.bus)) holds a FixedCapacitor; with " *
-                    "flex_market its constant reactive injection has no stage-2 representation " *
-                    "(the flexibility product is active power only).",
-                ),
-            )
-        end
+        _refuse_fixed_capacitor(aggs, "compare_tariffs")
     end
     λ₀vec = Float64[float(λ₀[t]) for t in 1:T]
 
