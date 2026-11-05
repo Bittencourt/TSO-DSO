@@ -292,7 +292,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 42. Thesis Case A Magnitude | 6/6 | Complete    | 2026-10-26 |
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 5/5 | Complete    | 2026-11-02 |
 | 44. Aggregator as Actor | 7/7 | Complete    | 2026-11-03 |
-| 45. Flexibility Market vs Price Coordination | 7/7 | Complete   | 2026-11-05 |
+| 45. Flexibility Market vs Price Coordination | 7/7 | Complete    | 2026-11-05 |
 | 46. IEEE-8500 Headline Measurement (go/no-go) | 0/TBD | Not started | - |
 
 ## Deferred / Future-Milestone Notes
