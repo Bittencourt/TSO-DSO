@@ -950,7 +950,8 @@ the feeder's own per-unit base (`_IEEE13_*`/`_IEEE123_*` residential scales, sel
 `generate_profiles(; T = s.T)` draw), so this stays consistent with the Scenario's horizon
 without taking `T` as a separate argument. Deterministic in `seed`: two calls with the SAME
 `seed` return structurally identical aggregators (same per-bus profile draws); a DIFFERENT seed
-changes every house. Throws `ArgumentError` on any other selector.
+changes every house. `:case_a_784` and `:default_10pct` are documented below. Throws
+`ArgumentError` on any other selector.
 
 `feeder_sym` (the caller's already-validated `Scenario.feeder` selector) now
 disambiguates the IEEE-13 vs IEEE-123 residential scale directly, instead of re-deriving it
@@ -1007,6 +1008,19 @@ load through the 6.86 MVA head branch). The selector is defined over `:ieee13` o
 other `feeder_sym` throws `ArgumentError`. `case_a_household_map` rebuilds the
 house → (bus, aggregator, device set, PV group) map from the same helpers without
 constructing `Aggregator`s or drawing profiles.
+
+# `:default_10pct` population
+
+`sym = :default_10pct` is density 0.1 on the IEEE-8500 fixtures: it builds the full `:default`
+population (unchanged), then keeps the aggregators at a seeded sample of
+`clamp(round(Int, 0.1 * n_load), 1, n_load)` load buses plus, unconditionally, the 4 capacitor
+aggregators. The sample is `sort(buses[randperm(LehmerRNG(seed), n_load)[1:n]])`, the same rule
+as the benchmark harness's density filter, so at an equal `seed` the two give the same
+aggregators. Sizes: `:ieee8500` 1,177 load buses -> 118 houses + 4 capacitors = 122
+aggregators; `:ieee8500_mv` 1,138 -> 114 + 4 = 118. When reached through a `Scenario`, `seed`
+is the population sub-seed `sub_seed(s.seed, :population)`, not the harness's literal seed, so
+the bus sample and the per-house profile draws differ from the harness runs (same size and
+structure, different draws). Any other `feeder_sym` throws `ArgumentError`.
 """
 function build_population(
     sym::Symbol,
@@ -1084,11 +1098,30 @@ function _build_population_core(
             )
         end
         return aggs
+    elseif sym === :default_10pct
+        if feeder_sym ∉ (:ieee8500, :ieee8500_mv)
+            throw(
+                ArgumentError(
+                    "build_population(:default_10pct): defined over the IEEE-8500 fixtures " *
+                    "only; got feeder selector $(repr(feeder_sym))",
+                ),
+            )
+        end
+        # Build the full density-1.0 population (the unchanged `:default` branch), then keep a
+        # seeded 10% sample of the load buses plus every capacitor aggregator. Same rule as
+        # the benchmark harness (`sample_density_buses` + `density_filtered_population` in
+        # scripts/benchmark_ieee8500.jl): randperm on a LehmerRNG(seed), first n, sorted.
+        full = _build_population_core(:default, feeder, feeder_sym, profiles, seed, sel)
+        buses = _load_buses(feeder, feeder_sym)
+        n = clamp(round(Int, 0.1 * length(buses)), 1, length(buses))
+        perm = StableRNGs.Random.randperm(StableRNGs.LehmerRNG(seed), length(buses))
+        keep = Set(sort(buses[perm[1:n]]))
+        return filter(a -> a.bus in keep || any(d -> d isa FixedCapacitor, a.devices), full)
     elseif sym !== :default
         throw(
             ArgumentError(
                 "build_population: unknown population selector $(repr(sym)); " *
-                "expected :default or :case_a_784",
+                "expected :default, :default_10pct or :case_a_784",
             ),
         )
     end

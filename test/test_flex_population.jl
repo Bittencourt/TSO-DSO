@@ -17,7 +17,7 @@
     using TSODSO
     using TSODSO: build_feeder, build_population, generate_profiles, sub_seed
 
-    @test TSODSO.SCENARIO_VALID_POPULATIONS == (:default, :case_a_784)
+    @test TSODSO.SCENARIO_VALID_POPULATIONS == (:default, :case_a_784, :default_10pct)
 
     feeder = build_feeder(:ieee13)
     profiles = generate_profiles(; seed = sub_seed(42, :profiles), T = 24)

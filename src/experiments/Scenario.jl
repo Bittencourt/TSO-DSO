@@ -20,8 +20,13 @@
 
 """
 Valid `feeder` selectors a `Scenario` may name (dispatch target: `build_feeder`, materialize.jl).
+`:ieee8500` (full MV + LV) and `:ieee8500_mv` (MV-only reduction) are the IEEE-8500 family; a
+`Scenario` on either is restricted by construction guards (see [`Scenario`](@ref)).
 """
-const SCENARIO_VALID_FEEDERS = (:ieee13, :ieee123)
+const SCENARIO_VALID_FEEDERS = (:ieee13, :ieee123, :ieee8500, :ieee8500_mv)
+
+# The IEEE-8500 feeder family (private; the construction guards below key on it).
+const _SCENARIO_8500_FEEDERS = (:ieee8500, :ieee8500_mv)
 
 """
 Legacy `strategy` selector symbols accepted by the `Scenario` outer keyword constructor. Each
@@ -44,8 +49,11 @@ const SCENARIO_VALID_PRICES = (:mem,)
 
 """
 Valid `population` selectors a `Scenario` may name (dispatch target: `build_population`, materialize.jl).
+`:default` is one aggregator per load bus (on the IEEE-8500 feeders that is density 1.0);
+`:case_a_784` is the IEEE-13 Case A population; `:default_10pct` means density 0.1 of the load
+buses plus the capacitor aggregators, defined on the two IEEE-8500 feeders only.
 """
-const SCENARIO_VALID_POPULATIONS = (:default, :case_a_784)
+const SCENARIO_VALID_POPULATIONS = (:default, :case_a_784, :default_10pct)
 
 """
     Scenario
@@ -101,6 +109,21 @@ supplied, never by comparing against defaults).
 (`solve_admm` supports only the free-sign priced frontier); any invalid strategy knob. The foreign-`pf_*` checks
 are judged against the neutral defaults (`pf_ε != 0.0`, `pf_thesis_literal == true`) because the
 inner constructor cannot see which keywords were supplied.
+
+# IEEE-8500 feeder family
+
+`feeder = :ieee8500` or `:ieee8500_mv` adds four construction guards, each an `ArgumentError`:
+
+  - `population = :default_10pct` on any other feeder (the density-0.1 sample, 10% of the load
+    buses plus the capacitor aggregators, is defined on the two IEEE-8500 feeders only);
+  - `population = :case_a_784` on an IEEE-8500 feeder (an IEEE-13 population; the existing
+    `:ieee123` + `:case_a_784` behaviour, a materialization-time error, is unchanged);
+  - `pf = :ac` on an IEEE-8500 feeder (never measured at this scale);
+  - strategy `MPC` or `Stochastic` on an IEEE-8500 feeder (never measured at this scale).
+
+`population = :default` on an IEEE-8500 feeder is allowed: it is density 1.0 (every load bus
+plus the capacitor aggregators), which was measured out-of-memory on a 15 GB host with ADMM, so
+it is documented here rather than guarded.
 
 `savename` silently drops the struct-valued `strategy` field; the on-disk filename flattening of
 `strategy` is `scenario_filename`'s job (store.jl).
@@ -207,6 +230,38 @@ struct Scenario
                     "Scenario: strategy ADMM requires allow_export = true (the free-sign " *
                     "priced frontier is the SOC-exactness enabler; import-only is not " *
                     "supported by solve_admm)",
+                ),
+            )
+        end
+        if population === :default_10pct && feeder ∉ _SCENARIO_8500_FEEDERS
+            throw(
+                ArgumentError(
+                    "Scenario: population :default_10pct is defined on the IEEE-8500 " *
+                    "feeders $(_SCENARIO_8500_FEEDERS) only; got feeder=$(repr(feeder))",
+                ),
+            )
+        end
+        if population === :case_a_784 && feeder ∈ _SCENARIO_8500_FEEDERS
+            throw(
+                ArgumentError(
+                    "Scenario: population :case_a_784 is defined over the IEEE-13 load " *
+                    "buses only; got feeder=$(repr(feeder))",
+                ),
+            )
+        end
+        if feeder ∈ _SCENARIO_8500_FEEDERS && pf === :ac
+            throw(
+                ArgumentError(
+                    "Scenario: pf = :ac has never been measured on the IEEE-8500 feeders; " *
+                    "got feeder=$(repr(feeder))",
+                ),
+            )
+        end
+        if feeder ∈ _SCENARIO_8500_FEEDERS && strategy isa Union{MPC, Stochastic}
+            throw(
+                ArgumentError(
+                    "Scenario: strategy $(nameof(typeof(strategy))) has never been " *
+                    "measured on the IEEE-8500 feeders; got feeder=$(repr(feeder))",
                 ),
             )
         end
