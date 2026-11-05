@@ -201,9 +201,11 @@ function _path_branches(feeder, j::Int)
     path = Int[]
     cur = j
     while cur != feeder.root
-        haskey(child_branch, cur) || error(
-            "decompose_dlmp: bus $cur has no parent branch — feeder is not the expected " *
-            "radial tree",
+        haskey(child_branch, cur) || throw(
+            ArgumentError(
+                "decompose_dlmp: bus $cur has no parent branch — feeder is not the expected " *
+                "radial tree",
+            ),
         )
         b = child_branch[cur]
         push!(path, b)
@@ -272,6 +274,12 @@ function Base.NamedTuple(d::DlmpDecomposition)
         total = getfield(d, :total),
     )
 end
+
+# The prefix of the `ErrorException` message `decompose_dlmp` raises when its four-way split
+# fails the sum-to-price check. It is the single source of that text: the flexibility-market
+# clear maps exactly this failure (and nothing else that says "decompose_dlmp:") to a status,
+# so the thrower and the mapper must share it rather than repeat it.
+const _DLMP_RECON_FAIL = "decompose_dlmp: four-way split does NOT reconstruct the nodal DADP"
 
 """
     decompose_dlmp(ctx; bus = nothing, T = nothing, rtol = 1e-5, atol = 1e-7)
@@ -410,7 +418,8 @@ function decompose_dlmp(
     end
     tol = atol + rtol * maximum(abs, total)
     worst_res <= tol || error(
-        "decompose_dlmp: four-way split does NOT reconstruct the nodal DADP — worst residual " *
+        _DLMP_RECON_FAIL *
+        " — worst residual " *
         "|energy+cone+congestion+drop − dual(balance_p)| = $worst_res at (bus=$worst_j, " *
         "t=$worst_t) exceeds tol=$tol (atol=$atol, rtol=$rtol). A component is missing or " *
         "mis-signed (thesis 3.31/3.33/3.36/3.39/3.43).",

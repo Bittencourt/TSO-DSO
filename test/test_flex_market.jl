@@ -1105,18 +1105,28 @@ end
     e_λneg = M.caught(() -> phys([f.agg], f.π0; λ₀ = [f.π0[1], -1.0, f.π0[3]]))
     @test e_λneg isa ArgumentError && occursin("positive", e_λneg.msg)
 
-    # a split reconstruction failure after stage 2 maps to a status; other errors do not
-    s = TSODSO._congestion_status(
-        ErrorException(
-            "decompose_dlmp: four-way split does NOT reconstruct the nodal DADP",
-        ),
+    # a split reconstruction failure after stage 2 maps to a status; other errors do not. The
+    # failure is raised by the real `decompose_dlmp` on a real gated stage-2 context: a
+    # negative atol (a forcing seam, not a tolerance) makes its sum-to-price check fail, so a
+    # reworded message in dlmp.jl that the mapper no longer accepts fails here.
+    ctx2 = M.stage2(f, f.smax).r.ctx2
+    e_split = M.caught(() -> TSODSO.decompose_dlmp(ctx2; atol = -1.0, rtol = 0.0))
+    @test e_split isa ErrorException
+    @test startswith(e_split.msg, TSODSO._DLMP_RECON_FAIL)
+    s = TSODSO._congestion_status(e_split)
+    @test s !== nothing && s[1] == "error:dlmp_split"
+    @test s !== nothing && startswith(s[2], "congestion: " * TSODSO._DLMP_RECON_FAIL)
+    # a malformed tree is misuse: an ArgumentError from the split's own path walk, never mapped
+    e_tree = M.caught(
+        () -> TSODSO._path_branches((root = 1, branches = [(from = 1, to = 2)]), 3),
     )
-    @test s[1] == "error:dlmp_split"
-    @test startswith(s[2], "congestion: decompose_dlmp:")
+    @test e_tree isa ArgumentError && occursin("no parent branch", e_tree.msg)
+    @test TSODSO._congestion_status(e_tree) === nothing
     @test TSODSO._congestion_status(SolveFailedError("no point")) ==
           ("error:SolveFailedError", "congestion: no point")
     @test TSODSO._congestion_status(ErrorException("unrelated")) === nothing
-    @test TSODSO._congestion_status(ArgumentError("decompose_dlmp: bad")) === nothing
+    @test TSODSO._congestion_status(ErrorException("decompose_dlmp: other")) === nothing
+    @test TSODSO._congestion_status(ArgumentError(TSODSO._DLMP_RECON_FAIL)) === nothing
 
     # stage-1 and delivery outcomes map to prefixed statuses; anything else is not mapped
     s = TSODSO._physics_error_status(SolveFailedError("no point"), "baseline: ")

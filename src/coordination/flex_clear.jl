@@ -505,11 +505,13 @@ end
 
 # Internal: a failure of the congested-hour classifier on a solved, gated stage 2 →
 # `(status, notes)` with the `"congestion: "` prefix. The DLMP split's sum-to-price check
-# raises an `ErrorException` whose message starts with `"decompose_dlmp:"`; it becomes
-# `"error:dlmp_split"`. A solver-outcome type maps as in `_physics_error_status`. `nothing`
-# for anything else (the caller rethrows).
+# raises an `ErrorException` whose message starts with `_DLMP_RECON_FAIL`, the prefix that
+# `decompose_dlmp` itself uses; it becomes `"error:dlmp_split"`. Other `decompose_dlmp`
+# errors (a malformed tree or a missing handle, both `ArgumentError`) are not matched. A
+# solver-outcome type maps as in `_physics_error_status`. `nothing` for anything else (the
+# caller rethrows).
 function _congestion_status(err)
-    if err isa ErrorException && startswith(err.msg, "decompose_dlmp:")
+    if err isa ErrorException && startswith(err.msg, _DLMP_RECON_FAIL)
         return "error:dlmp_split", first("congestion: " * err.msg, 400)
     end
     return _physics_error_status(err, "congestion: ")
