@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
 status: executing
-stopped_at: Completed 45-02-PLAN.md
-last_updated: "2026-11-05T01:48:40.012Z"
+stopped_at: Completed 45-03-PLAN.md
+last_updated: "2026-11-05T02:22:35.627Z"
 last_activity: 2026-11-05
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 40
-  completed_plans: 35
+  completed_plans: 36
   percent: 75
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
 Phase: 45 (flexibility-market-vs-price-coordination) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-11-05
-Progress: [█████████░] 88%
+Progress: [█████████░] 90%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
 policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
@@ -241,6 +241,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | Phase 44 P07 | 180m | 3 tasks | 9 files |
 | Phase 45 P01 | 18min | 2 tasks | 7 files |
 | Phase 45 P02 | 24min | 2 tasks | 7 files |
+| Phase 45 P03 | 35min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -355,6 +356,9 @@ Recent decisions affecting current work:
 - [Phase 45]: P01: FlexMarket keyword constructor type-checks (ArgumentError, Bool rejected) and stores beta -0.0 as 0.0; _flex_row_name injective over the 36-element grid
 - [Phase 45]: Absent flex bid blocks store width 0.0 and price 0.0 (never NaN); V0 = NaN only when the baseline solve fails — stage-2 pseudo-device multiplies prices by bounded variables; a NaN would poison the objective
 - [Phase 45]: A failed bid probe drops its block and the next secant spans from the last good point; probes never throw — keeps the offered quantity, honours the status-gate honesty policy
+- [Phase 45]: 45-03: FlexBidDevice creates JuMP variables only for offered blocks, so all-zero bids give Δ == 0 exactly — avoids degenerate [0,0] IPM bounds; the zero-width test asserts ==
+- [Phase 45]: 45-03: congested hour iff max_j(|congestion|+|drop|)/λ₀[t] > κ = 1e-2, robustness interval [kappa_lo, kappa_hi) reported — measured about [1e-9, 0.09) on the tight fixture; the β rows in 45-04 use it
+- [Phase 45]: 45-03: delivery weight w = 10·max(max|π|, max λ₀, max|price|) is fixed; a 10w re-delivery only reports shortfall_10w_total — an L1 exact penalty needs w above every tracking multiplier; w and 10w nets agree within 1.26e-10
 
 ### Roadmap Evolution
 
@@ -603,8 +607,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-11-05T01:48:39.990Z
-Stopped at: Completed 45-02-PLAN.md
+Last session: 2026-11-05T02:22:29.589Z
+Stopped at: Completed 45-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
