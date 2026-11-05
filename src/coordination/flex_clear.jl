@@ -356,7 +356,9 @@ function _congested_hours(
     )
     d = decompose_dlmp(ctx2)
     scores = Float64[
-        maximum(abs(d.congestion[j, t]) + abs(d.drop[j, t]) for j in axes(d.congestion, 1)) / λ₀[t] for t in 1:T
+        maximum(
+            abs(d.congestion[j, t]) + abs(d.drop[j, t]) for j in axes(d.congestion, 1)
+        ) / λ₀[t] for t in 1:T
     ]
     congested = Bool[s > κ for s in scores]
     kappa_lo = maximum((scores[t] for t in 1:T if !congested[t]); init = 0.0)
@@ -589,9 +591,8 @@ function _flex_physics(
     )
     all(isfinite, price) ||
         throw(ArgumentError("_flex_physics: price has a non-finite entry."))
-    (length(λ₀) == T && all(isfinite, λ₀)) || throw(
-        ArgumentError("_flex_physics: λ₀ must have length T=$T with finite entries."),
-    )
+    (length(λ₀) == T && all(isfinite, λ₀)) ||
+        throw(ArgumentError("_flex_physics: λ₀ must have length T=$T with finite entries."))
     n_blocks >= 1 ||
         throw(ArgumentError("_flex_physics: n_blocks=$n_blocks must be at least 1."))
     _refuse_fixed_capacitor(aggs, "_flex_physics")
@@ -605,29 +606,35 @@ function _flex_physics(
     catch err
         mapped = _physics_error_status(err, "baseline: ")
         mapped === nothing && rethrow()
-        return _physics_record(;
-            status = mapped[1],
-            notes = mapped[2],
-            price = p,
-            t_start,
-        )
+        return _physics_record(; status = mapped[1], notes = mapped[2], price = p, t_start)
     end
     baseline = _dispatch_record(stage1)
     b = baseline.net
 
     # 2. truthful bids around each baseline (status-gated inside; never throws on a solve)
-    bids = FlexBids[flex_bids(a, b[k]; T = T, n_blocks = n_blocks) for (k, a) in enumerate(aggs)]
+    bids = FlexBids[
+        flex_bids(a, b[k]; T = T, n_blocks = n_blocks) for (k, a) in enumerate(aggs)
+    ]
     n_probe_solves = sum(fb.n_solves for fb in bids)
     n_probe_failed = sum(fb.n_failed for fb in bids)
     bid_repair_max = maximum(fb.repair_max for fb in bids)
     min_bid_ask_gap = minimum(fb.min_bid_ask_gap for fb in bids)
-    known = (; price = p, baseline, bids, n_probe_solves, n_probe_failed, bid_repair_max,
-        min_bid_ask_gap, t_start)
+    known = (;
+        price = p,
+        baseline,
+        bids,
+        n_probe_solves,
+        n_probe_failed,
+        bid_repair_max,
+        min_bid_ask_gap,
+        t_start,
+    )
 
     # 3. stage 2: the DSO redispatch over the bid pseudo-devices
     s2 = _stage2_aggregators(aggs, b, bids; T = T)
     rd = _redispatch(feeder, pf, s2; T = T, λ₀ = λ, optimizer = optimizer)
-    rd.status == "ok" || return _physics_record(; status = rd.status, notes = rd.notes, known...)
+    rd.status == "ok" ||
+        return _physics_record(; status = rd.status, notes = rd.notes, known...)
     row = Dict(j => i for (i, j) in enumerate(rd.input2.buses))
     π = Vector{Float64}[Float64[rd.input2.prices[row[a.bus], t] for t in 1:T] for a in aggs]
     ch = _congested_hours(rd.ctx2, λ; T = T)
@@ -647,8 +654,7 @@ function _flex_physics(
 
     # 4. delivery: each aggregator follows its activated target
     targets = Vector{Float64}[b[k] .+ rd.Δ[k] for k in eachindex(aggs)]
-    weight =
-        10 * max(maximum(x -> maximum(abs, x), π), maximum(λ), maximum(abs, p))
+    weight = 10 * max(maximum(x -> maximum(abs, x), π), maximum(λ), maximum(abs, p))
     local delivered_raw, shortfall_10w_total
     try
         delivered_raw = [
@@ -656,8 +662,9 @@ function _flex_physics(
             (k, a) in enumerate(aggs)
         ]
         shortfall_10w_total = sum(
-            sum(_deliver(a, p, targets[k]; T = T, weight = 10 * weight, τ_batt = τ_batt).shortfall)
-            for (k, a) in enumerate(aggs)
+            sum(
+                _deliver(a, p, targets[k]; T = T, weight = 10 * weight, τ_batt = τ_batt).shortfall,
+            ) for (k, a) in enumerate(aggs)
         )
     catch err
         mapped = _physics_error_status(err, "delivery: ")

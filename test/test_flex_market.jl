@@ -181,7 +181,9 @@
 
     # Stage 2 on the tight fixture with K blocks over `feeder2(smax)`.
     function stage2(f, smax; K = 4, bids = nothing)
-        fb = bids === nothing ? TSODSO.flex_bids(f.agg, f.base; T = T_INT, n_blocks = K) : bids
+        fb =
+            bids === nothing ? TSODSO.flex_bids(f.agg, f.base; T = T_INT, n_blocks = K) :
+            bids
         s2 = TSODSO._stage2_aggregators([f.agg], [f.base], [fb]; T = T_INT)
         r = TSODSO._redispatch(feeder2(smax), ConvexBranchFlow(), s2; T = T_INT, λ₀ = f.π0)
         return (; fb, s2, r)
@@ -657,7 +659,13 @@ end
     f = M.tight_agg(M.SEEDS[1])
     fb = TSODSO.flex_bids(f.agg, f.base; T = M.T_INT, n_blocks = 4)
     s2 = TSODSO._stage2_aggregators([f.agg], [f.base], [fb]; T = M.T_INT)
-    r0 = TSODSO._redispatch(M.feeder2(f.smax), ConvexBranchFlow(), s2; T = M.T_INT, λ₀ = f.π0)
+    r0 = TSODSO._redispatch(
+        M.feeder2(f.smax),
+        ConvexBranchFlow(),
+        s2;
+        T = M.T_INT,
+        λ₀ = f.π0,
+    )
     r1 = TSODSO._redispatch(
         M.feeder2(f.smax),
         ConvexBranchFlow(),
@@ -762,8 +770,20 @@ end
     # guards
     f = M.tight_agg(M.SEEDS[1])
     p = f.π0
-    @test_throws ArgumentError TSODSO._deliver(f.agg, p[1:2], f.base; T = M.T_INT, weight = 1.0)
-    @test_throws ArgumentError TSODSO._deliver(f.agg, p, f.base[1:2]; T = M.T_INT, weight = 1.0)
+    @test_throws ArgumentError TSODSO._deliver(
+        f.agg,
+        p[1:2],
+        f.base;
+        T = M.T_INT,
+        weight = 1.0,
+    )
+    @test_throws ArgumentError TSODSO._deliver(
+        f.agg,
+        p,
+        f.base[1:2];
+        T = M.T_INT,
+        weight = 1.0,
+    )
     @test_throws ArgumentError TSODSO._deliver(
         f.agg,
         p,
@@ -902,16 +922,8 @@ end
     f = M.tight_agg(M.SEEDS[1])
     fd = M.feeder2(f.smax)
     pf = ConvexBranchFlow()
-    phys(aggs, p; kw...) = TSODSO._flex_physics(
-        fd,
-        pf,
-        aggs,
-        p;
-        T = M.T_INT,
-        λ₀ = f.π0,
-        n_blocks = 4,
-        kw...,
-    )
+    phys(aggs, p; kw...) =
+        TSODSO._flex_physics(fd, pf, aggs, p; T = M.T_INT, λ₀ = f.π0, n_blocks = 4, kw...)
     @test_throws ArgumentError phys([f.agg], f.π0[1:2])
     @test_throws ArgumentError phys([f.agg], [f.π0[1], NaN, f.π0[3]])
     @test_throws ArgumentError phys([f.agg], f.π0; n_blocks = 0)
