@@ -517,6 +517,304 @@ function record_nogo(opts)
     return row
 end
 
+# ---------------------------------------------------------------------------- measured run
+
+"""
+    scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem = true) -> NamedTuple
+
+Run the ADMM `Scenario` `s` phase by phase, in the order of `TSODSO.run(::ADMM, s)` plus
+`solve_admm` (same calls, same arguments), each phase timed with `@elapsed`:
+
+1. materialize: `_materialize(s)`, `build_powerflow(s)`, the reactive-mode resolution;
+2. build: `_admm_build` (the DSO model and one AgrOpt model per aggregator);
+3. solve: `_admm_iterate!` with the strategy's knobs and the wall-clock cap `time_limit_s`;
+4. certify: `_admm_certify` (skipped on a budget exit or without consensus, as solve_admm does).
+
+No explicit garbage-collection call runs between phases. With `sample_mem`, VmHWM (kB) is read after every phase.
+
+Returns row-ready fields (`status`, timings, sizes, `iters`, `gap_ratio`, `vmhwm_kb`,
+`hwm_by_phase`, `message`, ...) and `result`: on `status == "ok"` the certified result
+NamedTuple with `welfare`, `dadp`, `exact_maxgap` and `iters` converted exactly as
+`run(::ADMM, s)` converts them, else `nothing`. Expected solver outcomes become statuses; any
+exception that is not a `TSODSOError` propagates.
+"""
+function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bool = true)
+    A = s.strategy
+    A isa ADMM || throw(ArgumentError("scenario_admm_phases: needs an ADMM strategy, got $(typeof(A))"))
+    hwm() = sample_mem ? proc_status_kb("VmHWM") : missing
+    hwm_by_phase = Pair{Symbol, Any}[]
+    t = Dict{Symbol, Float64}()
+    sizes = Dict{Symbol, Any}()
+    local feeder, λ₀, aggs, pf, mode, rmode, st
+    have_st = false
+    status = "started"
+    iters = missing
+    gap_ratio = missing
+    message = ""
+    result = nothing
+    try
+        t[:materialize] = @elapsed begin
+            feeder, λ₀, aggs = TSODSO._materialize(s)
+            pf = TSODSO.build_powerflow(s)
+            TSODSO._check_admm_pair!(:solve_admm, feeder, pf)
+            mode = TSODSO.normalize_reactive_mode(TSODSO._default_reactive_consensus(aggs))
+            rmode = TSODSO._react_mode(mode)
+        end
+        push!(hwm_by_phase, :materialize => hwm())
+        sizes[:n_buses] = length(feeder.buses)
+        sizes[:n_branches] = length(feeder.branches)
+        sizes[:n_load_buses] =
+            s.feeder in FEEDERS_8500 ? length(TSODSO._load_buses(feeder, s.feeder)) : missing
+        sizes[:n_aggregators] = length(aggs)
+        sizes[:n_cap_aggregators] =
+            count(a -> any(d -> d isa TSODSO.FixedCapacitor, a.devices), aggs)
+
+        ρf = Float64(A.ρ)
+        t[:build] = @elapsed begin
+            st = TSODSO._admm_build(
+                feeder,
+                pf,
+                aggs,
+                s.T,
+                λ₀,
+                ρf,
+                ρf,
+                mode,
+                rmode;
+                agr_optimizer = TSODSO.select_optimizer(TSODSO.QP()),
+            )
+        end
+        have_st = true
+        push!(hwm_by_phase, :build => hwm())
+        # Sizes from the models the run already holds (no extra build).
+        sizes[:n_agr_models] = length(st.agr_by_bus)
+        sizes[:dso_vars] = JuMP.num_variables(st.dso.model)
+        sizes[:dso_cons] =
+            JuMP.num_constraints(st.dso.model; count_variable_in_set_constraints = true)
+        sizes[:agr_vars] = sum(JuMP.num_variables(m.model) for m in values(st.agr_by_bus))
+        sizes[:agr_cons] = sum(
+            JuMP.num_constraints(m.model; count_variable_in_set_constraints = true) for
+            m in values(st.agr_by_bus)
+        )
+
+        t[:solve] = @elapsed begin
+            TSODSO._admm_iterate!(
+                st,
+                rmode,
+                A.maxiter,
+                A.ε_abs,
+                A.ε_rel,
+                A.τ_ratio,
+                A.μ,
+                1e-2,
+                1e4,
+                time_limit_s,
+                false,
+            )
+        end
+        push!(hwm_by_phase, :solve => hwm())
+        iters = Int(st.residuals.iters)
+
+        if !st.converged_flag && !st.budget_exceeded_flag
+            status = "convergence_error"
+            iters = A.maxiter
+            message =
+                "maxiter=$(A.maxiter) reached without primal and dual residual consensus; " *
+                "no certificate attempted"
+        elseif st.budget_exceeded_flag
+            status = "budget_exceeded"
+            message = "wall-clock cap time_limit_s=$(time_limit_s) reached; certify skipped, no welfare"
+        else
+            local r
+            certified = false
+            t[:certify] = @elapsed begin
+                r = try
+                    TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, nothing, 1e-4, false)
+                catch err
+                    err isa CertificateError || rethrow()
+                    err
+                end
+            end
+            push!(hwm_by_phase, :certify => hwm())
+            if r isa CertificateError
+                status = "refused_certificate"
+                iters = Int(st.residuals.iters)
+                gap_ratio = parse_gap_ratio(r.msg)   # before truncation
+                message = "CertificateError kind=$(r.kind): " * first(string(r.msg), 400)
+            else
+                status = "ok"
+                ratio = get(st.dso.ctx.meta, :socp_maxratio, missing)
+                gap_ratio = ratio === nothing ? missing : ratio
+                result = (;
+                    r...,
+                    welfare = Float64(r.welfare),
+                    dadp = Matrix{Float64}(r.dadp),
+                    exact_maxgap = Float64(r.exact_maxgap),
+                    iters = Int(r.iters),
+                )
+                iters = result.iters
+                message = "certified; exact_maxgap=$(result.exact_maxgap) welfare=$(result.welfare)"
+            end
+        end
+    catch err
+        err isa TSODSOError || rethrow()
+        status = "error:" * string(nameof(typeof(err)))
+        if err isa CertificateError
+            status = "refused_certificate"
+            gap_ratio = parse_gap_ratio(err.msg)
+        end
+        iters = if hasproperty(err, :iterations) && err.iterations !== nothing
+            Int(err.iterations)
+        elseif have_st && status == "refused_certificate"
+            Int(st.residuals.iters)
+        else
+            -1
+        end
+        message = first(string(err.msg), 400)
+    end
+    phase_s(k) = get(t, k, missing)
+    return (;
+        status,
+        iters,
+        gap_ratio,
+        materialize_s = phase_s(:materialize),
+        build_s = phase_s(:build),
+        solve_s = phase_s(:solve),
+        certify_s = phase_s(:certify),
+        n_buses = get(sizes, :n_buses, missing),
+        n_branches = get(sizes, :n_branches, missing),
+        n_load_buses = get(sizes, :n_load_buses, missing),
+        n_aggregators = get(sizes, :n_aggregators, missing),
+        n_cap_aggregators = get(sizes, :n_cap_aggregators, missing),
+        n_agr_models = get(sizes, :n_agr_models, missing),
+        dso_vars = get(sizes, :dso_vars, missing),
+        dso_cons = get(sizes, :dso_cons, missing),
+        agr_vars = get(sizes, :agr_vars, missing),
+        agr_cons = get(sizes, :agr_cons, missing),
+        vmhwm_kb = sample_mem ? proc_status_kb("VmHWM") : missing,
+        maxrss_kb = Sys.maxrss() ÷ 1024,
+        hwm_by_phase,
+        message = one_line(message),
+        result,
+    )
+end
+
+"""The population selector the measured run uses on `feeder`."""
+population_for(feeder::Symbol) = feeder in FEEDERS_8500 ? :default_10pct : :default
+
+function _provenance_fields(opts)
+    return (;
+        heap_size_hint = get(ENV, "JULIA_HEAP_SIZE_HINT", missing),
+        julia_version = string(VERSION),
+        git_head = git_head(),
+        threads = Threads.nthreads(),
+        run_label = opts.run_label === nothing ? missing : opts.run_label,
+    )
+end
+
+"""
+    run_measured_point(opts) -> NamedTuple
+
+validate (done by `parse_options`) -> pre-flight -> `started` row -> phases -> final row. A
+pre-flight refusal writes one `preflight_refused` row and returns normally (exit 0); nothing is
+retried or retuned.
+"""
+function run_measured_point(opts)
+    pop = population_for(opts.feeder)
+    key = (;
+        row_kind = "measured",
+        feeder = string(opts.feeder),
+        population = string(pop),
+        T = opts.T,
+        strategy = "ADMM",
+        seed = opts.seed,
+        sub_seed_population = TSODSO.sub_seed(opts.seed, :population),
+    )
+    path = joinpath(opts.results_dir, "scenario_table.csv")
+    prov = _provenance_fields(opts)
+    cap_txt = "wall-clock cap time_limit_s=$(opts.time_limit) (harness default; the library path has none)"
+
+    # Pre-flight: first thing after argument validation, before any materialization.
+    avail_kb = mem_available_kb()
+    if !preflight_ok(avail_kb, opts.min_gib)
+        need_kb = round(Int, opts.min_gib * 1024^2)
+        row = scenario_row(;
+            key...,
+            prov...,
+            status = "preflight_refused",
+            mem_avail_before_kb = avail_kb,
+            note = "pre-flight refused: MemAvailable $(avail_kb) kB = " *
+                   "$(_fmt(kb_to_gib(avail_kb))) GiB is below --min-mem-avail-gib " *
+                   "$(opts.min_gib) ($(need_kb) kB); nothing was materialized, not retried",
+        )
+        upsert_rows!(path, [row])
+        println("preflight_refused: ", row.note, " -> ", path)
+        return row
+    end
+
+    upsert_rows!(
+        path,
+        [
+            scenario_row(;
+                key...,
+                prov...,
+                status = "started",
+                mem_avail_before_kb = avail_kb,
+                note = "started; " * cap_txt,
+            ),
+        ],
+    )
+
+    s = Scenario(;
+        name = "ieee8500-scn",
+        feeder = opts.feeder,
+        population = pop,
+        strategy = ADMM(),
+        T = opts.T,
+        seed = opts.seed,
+    )
+    ph = scenario_admm_phases(s; time_limit_s = opts.time_limit, sample_mem = true)
+
+    hwm_txt = join(("$(k)=$(v)" for (k, v) in ph.hwm_by_phase), " ")
+    row = scenario_row(;
+        key...,
+        prov...,
+        status = ph.status,
+        n_buses = ph.n_buses,
+        n_branches = ph.n_branches,
+        n_load_buses = ph.n_load_buses,
+        n_aggregators = ph.n_aggregators,
+        n_cap_aggregators = ph.n_cap_aggregators,
+        n_agr_models = ph.n_agr_models,
+        dso_vars = ph.dso_vars,
+        dso_cons = ph.dso_cons,
+        agr_vars = ph.agr_vars,
+        agr_cons = ph.agr_cons,
+        materialize_s = ph.materialize_s,
+        build_s = ph.build_s,
+        solve_s = ph.solve_s,
+        certify_s = ph.certify_s,
+        iters = ph.iters,
+        gap_ratio = ph.gap_ratio,
+        vmhwm_kb = ph.vmhwm_kb,
+        vmhwm_gib = ismissing(ph.vmhwm_kb) || ph.vmhwm_kb < 0 ? missing : kb_to_gib(ph.vmhwm_kb),
+        maxrss_gib = kb_to_gib(ph.maxrss_kb),
+        mem_avail_before_kb = avail_kb,
+        note = "$(cap_txt); Sys.maxrss $(ph.maxrss_kb) kB; VmHWM kB after each phase: " *
+               "$(hwm_txt); $(ph.message)",
+    )
+    upsert_rows!(path, [row])
+    println(
+        "measured: feeder=$(row.feeder) population=$(row.population) T=$(row.T) " *
+        "seed=$(row.seed) status=$(row.status) iters=$(row.iters) " *
+        "buses=$(row.n_buses) aggregators=$(row.n_aggregators) " *
+        "materialize_s=$(row.materialize_s) build_s=$(row.build_s) solve_s=$(row.solve_s) " *
+        "certify_s=$(row.certify_s) vmhwm_kb=$(row.vmhwm_kb) maxrss_gib=$(row.maxrss_gib) " *
+        "gap_ratio=$(row.gap_ratio) -> $path",
+    )
+    return row
+end
+
 # ---------------------------------------------------------------------------- entry point
 
 function main(args)
