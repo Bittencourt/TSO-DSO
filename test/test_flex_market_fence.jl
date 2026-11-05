@@ -418,7 +418,8 @@ end
     @test e_cap isa ArgumentError && occursin("FixedCapacitor", e_cap.msg)
     # a complete but descending aggregator order is refused before the DADP run
     lo = Aggregator(1, 1.0, AbstractDevice[Interruptible(1, 0.0, 2.0, t.a, t.bc)], t.Pdc)
-    e_ord = refused(g -> tight([t.agg, lo]; flex_market = FlexMarket(), welfare_optimizer = g))
+    e_ord =
+        refused(g -> tight([t.agg, lo]; flex_market = FlexMarket(), welfare_optimizer = g))
     @test e_ord.e isa ArgumentError && e_ord.n == 0
     @test e_ord.e isa ArgumentError && occursin("ascending bus order", e_ord.e.msg)
     @test e_ord.e isa ArgumentError && occursin("compare_tariffs", e_ord.e.msg)

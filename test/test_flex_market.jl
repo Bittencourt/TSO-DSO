@@ -1107,7 +1107,9 @@ end
 
     # a split reconstruction failure after stage 2 maps to a status; other errors do not
     s = TSODSO._congestion_status(
-        ErrorException("decompose_dlmp: four-way split does NOT reconstruct the nodal DADP"),
+        ErrorException(
+            "decompose_dlmp: four-way split does NOT reconstruct the nodal DADP",
+        ),
     )
     @test s[1] == "error:dlmp_split"
     @test startswith(s[2], "congestion: decompose_dlmp:")

@@ -658,12 +658,7 @@ function ground_main(T_H::Int, seed::Int)
         "  the in-run dadp row does not reproduce the committed one: the mode's flex rows " *
         "are purged with the base rows (re-run --flex-market to record them again)",
     )
-    purge_rows(
-        "ieee13-ground",
-        seed,
-        T_H;
-        tariff = t -> stale_flex || !isflex_tariff(t),
-    )
+    purge_rows("ieee13-ground", seed, T_H; tariff = t -> stale_flex || !isflex_tariff(t))
     write_compare_results(outcome.res, "ieee13-ground", T_H, seed)
     for r in eachrow(outcome.res.summary)
         println(

@@ -752,8 +752,14 @@ function _flex_physics(
     end
     # the 10w re-delivery is a sensitivity diagnostic only: its own solver outcome never
     # discards the valid primary delivery
-    shortfall_10w_total, notes_10w =
-        _shortfall_diagnostic(aggs, p, targets; T = T, weight = 10 * weight, τ_batt = τ_batt)
+    shortfall_10w_total, notes_10w = _shortfall_diagnostic(
+        aggs,
+        p,
+        targets;
+        T = T,
+        weight = 10 * weight,
+        τ_batt = τ_batt,
+    )
     delivered = _dispatch_record(delivered_raw)
     shortfall = Vector{Float64}[d.shortfall for d in delivered_raw]
     return _physics_record(;
