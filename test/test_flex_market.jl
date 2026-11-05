@@ -1105,7 +1105,8 @@ end
               sum(c.input.λ₀[t] * r.p_import_lossless[t] for t in 1:M.T_INT)
         # bills and surplus at bus granularity, from the ledger
         @test r.bills[2] == -led.balances[(:aggregator, 2)]
-        @test r.surplus[2] == r.physics.delivered.utility[1] + led.balances[(:aggregator, 2)]
+        @test r.surplus[2] ==
+              r.physics.delivered.utility[1] + led.balances[(:aggregator, 2)]
         # welfare: utilities of the delivered dispatch minus wholesale on the import
         U = r.physics.delivered.utility[1]
         @test r.welfare_lossless ==
@@ -1153,8 +1154,7 @@ end
         @test u.tariff_on_activation == p.tariff_on_activation
         # uniform: one row per activated (bus, hour) at the clearing price
         Δ = u.physics.Δ[1]
-        @test [(r.bus, r.t) for r in u.payment_rows] ==
-              [(2, t) for t in 1:M.T_INT if Δ[t] != 0]
+        @test [(r.bus, r.t) for r in u.payment_rows] == [(2, t) for t in 1:M.T_INT if Δ[t] != 0]
         @test all(r -> r.price == u.physics.π[1][r.t], u.payment_rows)
         @test all(r -> r.quantity == Δ[r.t], u.payment_rows)
         # pay-as-bid: every block with a non-zero accepted quantity at its own price (rejected
@@ -1197,7 +1197,8 @@ end
     # baseline-tariff resolution: TOU bins resolve only on the TOU path, before any solve
     f = M.market_agg(M.SEEDS[1])
     input = M.market_dadp(f).input
-    tou = M.market_clear(f, input, FlexMarket(; baseline_tariff = :tou); bins = [[1, 2], [3]])
+    tou =
+        M.market_clear(f, input, FlexMarket(; baseline_tariff = :tou); bins = [[1, 2], [3]])
     @test tou.status == "ok"
     @test tou.baseline_price == tou_prices(input; bins = [[1, 2], [3]])
     @test ledger_residual(tou.ledger) == 0.0
@@ -1252,8 +1253,11 @@ end
         f = M.market_agg(seed)
         input = M.market_dadp(f).input
         rs = [
-            M.market_clear(f, input, FlexMarket(; payment_rule = rule, baseline_inflation = β))
-            for β in (0.0, 0.05, 0.10)
+            M.market_clear(
+                f,
+                input,
+                FlexMarket(; payment_rule = rule, baseline_inflation = β),
+            ) for β in (0.0, 0.05, 0.10)
         ]
         return (; f, rs)
     end
@@ -1319,10 +1323,11 @@ end
     function sweep(seed)
         f = M.tight_agg(seed)
         inC = M.market_dadp(f).input
-        W = sum(values(inC.bus_utilities)) - sum(f.π0[t] * inC.p_import[t] for t in 1:M.T_INT)
+        W =
+            sum(values(inC.bus_utilities)) -
+            sum(f.π0[t] * inC.p_import[t] for t in 1:M.T_INT)
         rs = [
-            M.market_clear(f, inC, FlexMarket(; n_blocks = K); optimizer = M.cent_opt()) for
-            K in M.LIVE_K
+            M.market_clear(f, inC, FlexMarket(; n_blocks = K); optimizer = M.cent_opt()) for K in M.LIVE_K
         ]
         ok = all(r -> r.status == "ok", rs)
         gaps = ok ? Float64[W - r.welfare_socp_import for r in rs] : Float64[]
@@ -1338,7 +1343,7 @@ end
         @test all(>=(0.0), c.gaps)
         @test all(r -> r.welfare_socp_import <= c.W, c.rs)
         # the discretisation gap shrinks at every refinement and ends small
-        @test all(i -> c.gaps[i+1] < c.gaps[i], 1:(length(c.gaps)-1))
+        @test all(i -> c.gaps[i + 1] < c.gaps[i], 1:(length(c.gaps) - 1))
         @test c.gaps[end] <= M.TOL_GAP16
         # liveness: the market is not vacuous, refining the bids actually closes the gap
         @test c.gaps[1] - c.gaps[end] > 0
@@ -1364,7 +1369,9 @@ end
         Δ = r.physics.Δ[1]
         act = [t for t in 1:M.T_INT if abs(Δ[t]) > TSODSO.FLEX_RANGE_FLOOR]
         row = findfirst(==(2), inC.buses)
-        gap = isempty(act) ? NaN : maximum(abs(r.physics.π[1][t] - inC.prices[row, t]) for t in act)
+        gap =
+            isempty(act) ? NaN :
+            maximum(abs(r.physics.π[1][t] - inC.prices[row, t]) for t in act)
         return (; ok = true, act, gap)
     end
     for seed in M.SEEDS

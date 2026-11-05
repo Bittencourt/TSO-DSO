@@ -47,12 +47,17 @@ function _baseline_price(
 end
 
 # One flexibility-payment row of the ledger's `flex_payments` flow.
-const _FlexRow = NamedTuple{(:bus, :t, :price, :quantity), Tuple{Int, Int, Float64, Float64}}
+const _FlexRow =
+    NamedTuple{(:bus, :t, :price, :quantity), Tuple{Int, Int, Float64, Float64}}
 
 # Internal: the price of the highest accepted up block of hour `t` (blocks are in
 # non-decreasing price order); a block counts as accepted above the range floor, and if no
 # block clears the floor the highest block with a non-zero quantity is used.
-function _marginal_up_price(u::AbstractMatrix{Float64}, up_m::AbstractMatrix{Float64}, t::Int)
+function _marginal_up_price(
+    u::AbstractMatrix{Float64},
+    up_m::AbstractMatrix{Float64},
+    t::Int,
+)
     k = findlast(>(FLEX_RANGE_FLOOR), view(u, t, :))
     k === nothing && (k = findlast(!=(0.0), view(u, t, :)))
     k === nothing && throw(
@@ -90,7 +95,9 @@ delivered deviation is reported for the uniform rule and is `missing` for pay-as
 """
 function _flex_payment_rows(phys, fm::FlexMarket, agg_buses::AbstractVector{Int})
     phys.status == "ok" || throw(
-        ArgumentError("_flex_payment_rows: physics status is $(repr(phys.status)), not ok."),
+        ArgumentError(
+            "_flex_payment_rows: physics status is $(repr(phys.status)), not ok.",
+        ),
     )
     length(agg_buses) == length(phys.Δ) || throw(
         ArgumentError(
@@ -113,10 +120,12 @@ function _flex_payment_rows(phys, fm::FlexMarket, agg_buses::AbstractVector{Int}
             w = phys.w[k]
             for t in 1:T
                 for kk in axes(u, 2)
-                    u[t, kk] != 0 && push!(rows, _FlexRow((bus, t, fb.up_m[t, kk], u[t, kk])))
+                    u[t, kk] != 0 &&
+                        push!(rows, _FlexRow((bus, t, fb.up_m[t, kk], u[t, kk])))
                 end
                 for kk in axes(w, 2)
-                    w[t, kk] != 0 && push!(rows, _FlexRow((bus, t, fb.dn_g[t, kk], -w[t, kk])))
+                    w[t, kk] != 0 &&
+                        push!(rows, _FlexRow((bus, t, fb.dn_g[t, kk], -w[t, kk])))
                 end
             end
         end
@@ -279,7 +288,8 @@ original aggregators (`ac_feasibility_status`) and reports, never gates.
 `baseline_price`, `physics`, `ledger`, `feasibility`, `payment_rows`, `flex_payments_total`,
 `baseline_overpayment`, `tariff_on_activation`, `flex_payment_on_delivered`,
 `p_import_lossless`, `bills`, `surplus`, `welfare_lossless` and `welfare_socp_import`.
-`physics` is the full physics record; `bills` and `surplus` are per-bus `Dict`s. `status` is `"ok"`, `"infeasible_redispatch"` (the offered flexibility
+`physics` is the full physics record; `bills` and `surplus` are per-bus `Dict`s.
+`status` is `"ok"`, `"infeasible_redispatch"` (the offered flexibility
 cannot restore network feasibility), `"inexact_redispatch"` (the stage-2 SOCP is not exact) or
 `"error:<Type>"` (another solver outcome, with `notes`). A status other than `"ok"` never
 throws: `ledger`, `feasibility`, `payment_rows`, `p_import_lossless`, `bills` and `surplus` are
