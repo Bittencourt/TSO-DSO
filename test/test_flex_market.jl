@@ -238,6 +238,32 @@
         n_blocks = K,
     )
 
+    # ---- failure seam ----
+    # A test-only device that wraps `inner` and counts its `contribute!` calls in `calls`. On
+    # the call numbered `fail_at` it throws the `SolveFailedError` that `assert_solved!` throws
+    # on a failed solve, instead of contributing, so a chosen solve fails deterministically
+    # whatever the solver would do; every other call contributes `inner` unchanged.
+    # `fail_at = 0` never fails (a counting dry run).
+    struct FailAtCall{D <: AbstractDevice} <: AbstractDevice
+        inner::D
+        fail_at::Int
+        calls::Base.RefValue{Int}
+    end
+    function TSODSO.contribute!(d::FailAtCall, ctx::TSODSO.ModelContext; T::Int, kwargs...)
+        d.calls[] += 1
+        d.calls[] == d.fail_at &&
+            throw(SolveFailedError("injected failure at contribute! call $(d.fail_at)"))
+        return TSODSO.contribute!(d.inner, ctx; T = T, kwargs...)
+    end
+    TSODSO.is_flexible_load(d::FailAtCall) = TSODSO.is_flexible_load(d.inner)
+
+    # The Interruptible aggregator of the tight or market fixture `f` with its device wrapped in
+    # `FailAtCall(fail_at)`; returns the aggregator and the wrapper (to read its call count).
+    function failing_agg(f, fail_at)
+        dev = FailAtCall(Interruptible(2, 0.0, 2.0, f.a, f.bc), Int(fail_at), Ref(0))
+        return Aggregator(2, 1.0, AbstractDevice[dev], f.Pdc), dev
+    end
+
     # ---- market fixtures ----
     const TOL_MKT_BAL = 1.37e-14
 
@@ -1035,23 +1061,62 @@ end
     end
 
     # the 10w sensitivity diagnostic reproduces the record's total, and its own solver outcome
-    # is (missing, note), never a throw and never a failed leg (an absurd weight, far beyond
-    # any rule's value, forces the solver outcome); a malformed input still throws
+    # is (missing, note), never a throw; a malformed input still throws. The solver outcome is
+    # injected by the FailAtCall seam (its first solve throws SolveFailedError), so no solver
+    # behaviour on extreme data is assumed.
     f1 = M.tight_agg(M.SEEDS[1])
     ph1 = M.tight_physics(f1, f1.smax)
-    redeliver(w, tg) = TSODSO._shortfall_diagnostic(
-        [f1.agg],
+    redeliver(aggs, tg) = TSODSO._shortfall_diagnostic(
+        aggs,
         ph1.price,
         tg;
         T = M.T_INT,
-        weight = w,
+        weight = 10 * ph1.weight,
         τ_batt = 1e-3,
     )
-    @test redeliver(10 * ph1.weight, ph1.targets) == (ph1.shortfall_10w_total, "")
-    bad = redeliver(1e300, ph1.targets)
+    @test redeliver([f1.agg], ph1.targets) == (ph1.shortfall_10w_total, "")
+    bad = redeliver([first(M.failing_agg(f1, 1))], ph1.targets)
     @test bad[1] === missing
     @test startswith(bad[2], "delivery at 10w (sensitivity diagnostic only")
-    @test_throws ArgumentError redeliver(10 * ph1.weight, [ph1.targets[1][1:2]])
+    @test occursin("injected failure", bad[2])
+    @test_throws ArgumentError redeliver([f1.agg], [ph1.targets[1][1:2]])
+
+    # the same outcome inside a whole clear. A counting dry run gives the number of device
+    # solves of the clear; the last one is the 10w diagnostic. Failing exactly that solve keeps
+    # the clear "ok" with the primary delivery, puts the note in `notes` and leaves
+    # `shortfall_10w_total` missing; failing the solve before it (the primary delivery) is a
+    # "delivery: " status with no delivery.
+    function injected(f, fail_at)
+        agg, dev = M.failing_agg(f, fail_at)
+        ph = TSODSO._flex_physics(
+            M.feeder2(f.smax),
+            ConvexBranchFlow(),
+            [agg],
+            f.π0;
+            T = M.T_INT,
+            λ₀ = f.π0,
+            n_blocks = 4,
+        )
+        return (; ph, calls = dev.calls[])
+    end
+    dry = injected(f1, 0)
+    @test dry.ph.status == "ok" && dry.ph.notes == ""
+    # the wrapper is transparent: the dry run reproduces the plain clear
+    @test dry.ph.delivered.net == ph1.delivered.net
+    @test dry.ph.shortfall_total == ph1.shortfall_total
+    @test dry.ph.shortfall_10w_total == ph1.shortfall_10w_total
+    diag = injected(f1, dry.calls).ph
+    @test diag.status == "ok"
+    @test startswith(diag.notes, "delivery at 10w (sensitivity diagnostic only")
+    @test occursin("injected failure", diag.notes)
+    @test diag.shortfall_10w_total === missing
+    @test diag.delivered.net == dry.ph.delivered.net
+    @test diag.shortfall_total == dry.ph.shortfall_total
+    @test diag.Δ == dry.ph.Δ && diag.weight == dry.ph.weight
+    prim = injected(f1, dry.calls - 1).ph
+    @test prim.status == "error:SolveFailedError"
+    @test startswith(prim.notes, "delivery: injected failure")
+    @test prim.delivered === nothing && prim.shortfall_10w_total === nothing
 
     # an offer that cannot restore the limit: a status, the bids known, no delivery
     function infeasible(seed)
@@ -1687,6 +1752,38 @@ end
     @test nrow(st.household_bills) == 0 && nrow(st.rebound) == 0
     @test "delivery_shortfall" in names(st.household_bills)
     @test "delivery_shortfall" in names(st.rebound)
+
+    # a failed 10w diagnostic reaches the table as an ok row, with the note and a missing
+    # delivery_shortfall_total_10w: the FailAtCall seam fails the last device solve of the
+    # clear (the diagnostic), located by a counting dry run of the same call
+    function diag_tables(seed, fail_at)
+        f = M.market_agg(seed)
+        input = M.market_dadp(f).input
+        agg, dev = M.failing_agg(f, fail_at)
+        t = TSODSO._flex_tables(
+            M.feeder2(f.smax),
+            ConvexBranchFlow(),
+            [agg],
+            input,
+            FlexMarket[FlexMarket()];
+            T = M.T_INT,
+            λ₀vec = f.π0,
+            bins = F.BINS,
+            engine_str = "centralized",
+            τ_batt = 1e-3,
+        )
+        return (; s = t.summary, calls = dev.calls[])
+    end
+    dry_t = diag_tables(M.SEEDS[1], 0)
+    @test dry_t.s.status == ["ok"] && dry_t.s.notes == [""]
+    @test !ismissing(dry_t.s.delivery_shortfall_total_10w[1])
+    dg = diag_tables(M.SEEDS[1], dry_t.calls).s
+    @test dg.status == ["ok"]
+    @test startswith(dg.notes[1], "delivery at 10w (sensitivity diagnostic only")
+    @test ismissing(dg.delivery_shortfall_total_10w[1])
+    @test dg.delivery_shortfall_total == dry_t.s.delivery_shortfall_total
+    @test isequal(dg.welfare, dry_t.s.welfare)
+    @test dg.feasibility_status == dry_t.s.feasibility_status
     ok = run_case(M.SEEDS[1]).r.summary
     @test names(vcat(ok, st.summary; cols = :union)) == names(ok)
     # the status-row builder and an ok row share one field set
