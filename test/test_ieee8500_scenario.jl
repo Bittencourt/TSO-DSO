@@ -233,3 +233,163 @@ end
     @test check_default(:ieee13) == 10
     @test check_default(:ieee123) == length(TSODSO.ieee123_load_nodes())
 end
+
+# ---------------------------------------------------------------------------- measurement script
+#
+# The items below include scripts/ieee8500_scenario_point.jl inside their own body (its `main`
+# runs only when the file is the program, so the include defines the helpers and nothing more).
+# None of them solves an IEEE-8500 point: the NO-GO record is derived from the committed CSVs, and
+# the phase composition is checked on IEEE-13 only.
+
+@testitem "ieee8500 scenario: NO-GO record derived from the committed CSVs" begin
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # Binary GiB: 1 GiB = 1,048,576 kB.
+    @test kb_to_gib(1_048_576) == 1.0
+
+    dir = joinpath(pkgdir(TSODSO), "results", "ieee8500_benchmark")
+    # MemTotal of the host the earlier runs used, passed explicitly so B2 does not depend on the
+    # machine running the test.
+    host_kb = 15_765_568
+    row = derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = joinpath(dir, "point_resources.csv"),
+        host_total_kb = host_kb,
+    )
+    @test keys(row) == SCENARIO_TABLE_COLUMNS
+    @test row.row_kind == "recorded_no_go"
+    @test row.status == "memory_infeasible"
+    @test row.feeder == "ieee8500"
+    @test row.T == 24
+    @test row.strategy == "ADMM"
+    # Raw counters, pinned by value.
+    @test row.vmhwm_kb == 11_753_716
+    @test row.p35_maxrss_kb == 12_079_316
+    @test row.vmhwm_gib == 11_753_716 / 1024^2
+    @test round(row.vmhwm_gib; digits = 3) == 11.209
+    @test row.p35_maxrss_gib == 12_079_316 / 1024^2
+    # B1: the larger measured peak; B2: an estimate above it.
+    @test row.b1_gib == 12_079_316 / 1024^2
+    @test round(row.b1_gib; digits = 3) == 11.520
+    @test row.b2_gib_estimate == row.b1_gib + 0.12 * host_kb / 1024^2
+    @test row.b2_gib_estimate > row.b1_gib
+    @test row.threshold_gib == 10.0
+    @test row.b1_gib > row.threshold_gib
+    # The attribution anchor.
+    @test row.anchor_iters == 7
+    @test row.iters == 7
+    @test round(row.anchor_delta_gib; digits = 4) == 9.2955
+    @test round(row.gap_ratio; digits = 2) == 223.68
+    # The note labels B2 as an estimate and states the counter-fact.
+    @test occursin("is an estimate, not a bound", row.note)
+    @test occursin("measured lower bound", row.note)
+    @test occursin("Counter-fact", row.note)
+    @test !occursin('\n', row.note)
+
+    # The verdict is refused (not recorded) when the threshold is above the measured peaks.
+    @test_throws ArgumentError derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = joinpath(dir, "point_resources.csv"),
+        host_total_kb = host_kb,
+        threshold_gib = 12.0,
+    )
+end
+
+@testitem "ieee8500 scenario: memory pre-flight reads MemAvailable" begin
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    dir = mktempdir()
+    path = joinpath(dir, "meminfo")
+    write(
+        path,
+        "MemTotal:       15765568 kB\nMemFree:          812344 kB\n" *
+        "MemAvailable:    4324172 kB\nBuffers:          123456 kB\n",
+    )
+    kb = mem_available_kb(path)
+    @test kb == 4_324_172
+    @test !preflight_ok(kb, 8)
+    @test preflight_ok(kb, 0)
+    @test preflight_ok(9_000_000, 8)
+    @test preflight_ok(8 * 1_048_576, 8)
+    @test !preflight_ok(8 * 1_048_576 - 1, 8)
+
+    nomem = joinpath(dir, "meminfo_without_available")
+    write(nomem, "MemTotal:       15765568 kB\nMemFree:          812344 kB\n")
+    @test mem_available_kb(nomem) == -1
+    @test !preflight_ok(mem_available_kb(nomem), 8)
+end
+
+@testitem "ieee8500 scenario: keyed upsert and gap-ratio parse" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # Row schema: every column, in order, `note` last; an unknown column is refused.
+    r0 = scenario_row(; row_kind = "measured", feeder = "ieee13", status = "ok")
+    @test keys(r0) == SCENARIO_TABLE_COLUMNS
+    @test last(SCENARIO_TABLE_COLUMNS) === :note
+    @test ismissing(r0.iters)
+    @test_throws ArgumentError scenario_row(; not_a_column = 1)
+    @test scenario_row(; note = "a\nb\r\nc").note == "a b c"
+
+    path = joinpath(mktempdir(), "sub", "scenario_table.csv")
+    key = (; row_kind = "measured", feeder = "ieee13", population = "default", T = 10)
+    started = scenario_row(; key..., strategy = "ADMM", status = "started", note = "x")
+    other = scenario_row(; key..., T = 24, strategy = "ADMM", status = "memory_infeasible")
+    upsert_rows!(path, [started, other])
+    d1 = CSV.read(path, DataFrame)
+    @test nrow(d1) == 2
+
+    # The final row replaces the started row with the same key; the other key survives.
+    final = scenario_row(; key..., strategy = "ADMM", status = "ok", iters = 43, note = "y")
+    upsert_rows!(path, [final])
+    d2 = CSV.read(path, DataFrame)
+    @test nrow(d2) == 2
+    @test count(==(10), d2.T) == 1
+    @test d2.status[findfirst(==(10), d2.T)] == "ok"
+    @test d2.iters[findfirst(==(10), d2.T)] == 43
+    @test d2.status[findfirst(==(24), d2.T)] == "memory_infeasible"
+
+    # An added column is tolerated, and `note` stays last.
+    extra = merge(scenario_row(; key..., feeder = "ieee123", strategy = "ADMM"), (; extra_col = 7))
+    upsert_rows!(path, [extra])
+    d3 = CSV.read(path, DataFrame)
+    @test nrow(d3) == 3
+    @test :extra_col in propertynames(d3)
+    @test last(propertynames(d3)) === :note
+    @test d3.extra_col[findfirst(==("ieee123"), string.(d3.feeder))] == 7
+
+    # The ratio quoted in the production SOC-exactness refusal message.
+    msg =
+        "SOC exactness refused: worst gap/(atol_b+rtol·|cone|)=568.9541645248668 > 1 " *
+        "(rtol=0.0001, atol_b floor)"
+    @test parse_gap_ratio(msg) == 568.9541645248668
+    @test isnan(parse_gap_ratio("CertificateError without a ratio"))
+    @test isnan(parse_gap_ratio(""))
+end
+
+@testitem "ieee8500 scenario: ieee13 phase composition parity" begin
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # The script composes the solve_admm plumbing phase by phase; on the same Scenario it must give
+    # what the library path gives. Both paths are deterministic and run the same calls, and the
+    # observed differences are exactly 0, so the comparison is `==`.
+    s = Scenario(; name = "phase-parity", feeder = :ieee13, strategy = ADMM(), T = 10, seed = 3)
+    # No wall-clock cap, as on the library path (solve_admm defaults to `nothing`).
+    ph = scenario_admm_phases(s; time_limit_s = nothing, sample_mem = false)
+    @test ph.status == "ok"
+    @test ph.result !== nothing
+    lib = TSODSO.run_scenario(s)
+    @test ph.iters == lib.iters
+    @test ph.result.iters == lib.iters
+    @test ph.result.welfare == lib.welfare
+    @test ph.result.exact_maxgap == lib.exact_maxgap
+    @test ph.result.dadp == lib.dadp
+    @test ph.result.welfare isa Float64
+    @test ph.result.dadp isa Matrix{Float64}
+    @test ph.n_buses == 11
+    @test ph.n_aggregators == 10
+end
