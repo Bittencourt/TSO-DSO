@@ -41,8 +41,9 @@
 # recorded in the row's note; the library path runs without a cap.
 #
 # Sequence: read MemAvailable from /proc/meminfo on the script's first lines (before any package
-# load) -> validate flags -> pre-flight on that reading -> upsert a `started` row -> run the phases -> upsert the final row (same key,
-# so it replaces `started`, and any earlier final row of the same seed and label). A process
+# load) -> validate flags -> pre-flight on that reading -> upsert a `started` row -> run the
+# phases -> upsert the final row (same key, so it replaces `started`, and any earlier final row
+# of the same seed and label). A process
 # killed mid-run therefore leaves its `started` row (beside an earlier completed row of the same
 # key, which it never replaces), and the wrapper's point_resources.csv row (joined by run_label)
 # carries rc and oom_source.

@@ -778,8 +778,8 @@ hm_print_components(hm_attr24)
 
 # ### The Scenario-path measured table at T = 10
 #
-# The largest point measured as feasible earlier, `ieee8500` at density 0.1 and T = 10, was run once
-# through the `Scenario` path. It used the population selector `:default_10pct`, the ADMM strategy,
+# The largest point measured as feasible earlier, `ieee8500` at density 0.1 and T = 10, was run
+# through the `Scenario` path (first on 2026-11-05; the row below is the latest final row). It used the population selector `:default_10pct`, the ADMM strategy,
 # and `scripts/ieee8500_scenario_point.jl` under the per-point wrapper. The script times four steps
 # separately: materialize, build, solve (the ADMM loop) and certify. It reads `VmHWM` after each
 # step. The run's status is its measured outcome: a refusal, a convergence error, a budget exit, a
@@ -968,9 +968,9 @@ hm_print_measured(hm_meas, hm_label)
 # footprint. (Since 2026-11-06 the script reads MemAvailable on its first lines, before any package
 # is loaded, so only the bare Julia runtime's footprint remains; the row's note says which reading
 # it carries.) The first attempt asked for 7 GiB at that point and was refused by the script's own
-# gate, so nothing was materialized. Its `preflight_refused` row was then replaced by the second attempt's final row
-# under the same key, and only its wrapper row remains. The second attempt lowered the in-script
-# floor to the post-load equivalent of the approved level and ran to completion. The last wrapper
+# gate, so nothing was materialized. Its `preflight_refused` row was then replaced by the second
+# attempt's final row under the same key, and only its wrapper row remains. The second attempt
+# lowered the in-script floor to the post-load equivalent of the approved level and ran to completion. The last wrapper
 # row whose MaxRSS equals the measured row's VmHWM joins the measured row. The startup footprint is
 # computed below from that attempt's two readings, together with the launch level that the default
 # 8 GiB in-script gate implies on this host. Any later row for this label is a later launch of the
