@@ -971,9 +971,10 @@ hm_print_measured(hm_meas, hm_label)
 # gate, so nothing was materialized. Its `preflight_refused` row was then replaced by the second attempt's final row
 # under the same key, and only its wrapper row remains. The second attempt lowered the in-script
 # floor to the post-load equivalent of the approved level and ran to completion. The last wrapper
-# row joins the measured row. The startup footprint is computed below, from the last attempt's
-# two readings, together with the launch level that the default 8 GiB in-script gate implies on
-# this host. Any later row for this label is a later launch of the same point.
+# row whose MaxRSS equals the measured row's VmHWM joins the measured row. The startup footprint is
+# computed below from that attempt's two readings, together with the launch level that the default
+# 8 GiB in-script gate implies on this host. Any later row for this label is a later launch of the
+# same point.
 
 function hm_print_wrappers(wrappers, rows)
     for (k, w) in enumerate(wrappers)
@@ -994,10 +995,14 @@ function hm_print_wrappers(wrappers, rows)
     end
     isempty(rows) && return nothing
     r = only(rows)
-    last_w = last(wrappers)
-    @assert hm_num(last_w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"])
+    ## The wrapper row that joins the measured row is the LAST one whose MaxRSS equals the row's
+    ## VmHWM. A later launch of the label that did not replace the measured row (for example a
+    ## refused pre-flight, kept beside it) is printed above but does not join it.
+    joined = filter(w -> hm_num(w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"]), wrappers)
+    @assert !isempty(joined)
+    join_w = last(joined)
     footprint_kb =
-        hm_num(last_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
+        hm_num(join_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
     when =
         occursin("before any package load", r["note"]) ? "before package load" :
         "after package load"
