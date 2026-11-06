@@ -65,7 +65,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 - [x] **Phase 43: Flexible Devices (EV, Heat Pump, Smart Inverter)** - Trait refactor then V1G/V2G EVs, 2R2C heat pumps and PV reactive capability, each validated against centralized (completed 2026-11-02)
 - [x] **Phase 44: Aggregator as Actor** - Welfare vs profit (wedge) objectives, multi-bus portfolios, exogenous compliance/opt-out/rebound (completed 2026-11-03)
 - [x] **Phase 45: Flexibility Market vs Price Coordination** - DSO flexibility market with explicit baseline/payment rule and the cross-scheme comparison table (completed 2026-11-05)
-- [ ] **Phase 46: IEEE-8500 Headline Measurement (go/no-go)** - Recorded go/no-go and a measured 8500 table through `Scenario`
+- [x] **Phase 46: IEEE-8500 Headline Measurement (go/no-go)** - Recorded go/no-go and a measured 8500 table through `Scenario` (completed 2026-11-05)
 
 ## Phase Details
 
@@ -273,7 +273,14 @@ Plans:
   2. On GO, the IEEE-8500 headline point runs through `Scenario` (feeder selector widened additively) and a table reports size, build time, solve time, iterations, peak memory and exactness verdict, with "refused with certificate" counting as measured.
   3. No tolerance, τ or hybrid floor is changed to obtain the outcome.
 
-**Plans**: TBD
+**Plans**: 5 plans in 5 waves (sequential; the measured T = 10 run is launched by the orchestrator at the 46-04 checkpoint)
+
+Plans:
+- [x] 46-01-PLAN.md — Widen `Scenario` feeders to `:ieee8500`/`:ieee8500_mv`, `:default_10pct` population selector, guards for unmeasured combinations, tiny construction/materialization/harness-equivalence tests — SCALE-08
+- [x] 46-02-PLAN.md — `scripts/ieee8500_scenario_point.jl`: phase-timed Scenario run with status rows, MemAvailable pre-flight, keyed upsert, `--record-nogo` — SCALE-07/08
+- [x] 46-03-PLAN.md — Script helper tests + IEEE-13 parity with `run_scenario`, scripts index row, committed T = 24 NO-GO row — SCALE-07/08
+- [x] 46-04-PLAN.md — Launch-readiness check + orchestrator-launched detached T = 10 IEEE-8500 point (user-approved 7.1 GiB launch; outcome refused_certificate) — SCALE-08
+- [x] 46-05-PLAN.md — Committed measured rows, dated docs section computed from the CSVs (NO-GO threshold verdict, B1/B2, Scenario-path table, divergences, supersessions), gates, requirement closure — SCALE-07/08
 
 ### Coherence notes (departures from the research order)
 
@@ -293,7 +300,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 43. Flexible Devices (EV, Heat Pump, Smart Inverter) | 5/5 | Complete    | 2026-11-02 |
 | 44. Aggregator as Actor | 7/7 | Complete    | 2026-11-03 |
 | 45. Flexibility Market vs Price Coordination | 7/7 | Complete    | 2026-11-05 |
-| 46. IEEE-8500 Headline Measurement (go/no-go) | 0/TBD | Not started | - |
+| 46. IEEE-8500 Headline Measurement (go/no-go) | 5/5 | Complete    | 2026-11-05 |
 
 ## Deferred / Future-Milestone Notes
 

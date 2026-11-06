@@ -74,8 +74,8 @@ Research: `.planning/research/SUMMARY.md` (+ STACK, FEATURES, ARCHITECTURE, PITF
 ### Scale at IEEE-8500 (SCALE)
 
 - [x] **SCALE-06**: The ~3.4 GiB of unattributed memory growth in IEEE-8500 runs is profiled and attributed, with the result documented.
-- [ ] **SCALE-07**: A go/no-go decision for the headline run is recorded: GO only if attribution projects peak memory below ~10 GiB on the 15 GB host; otherwise "memory-infeasible on this host" is recorded with a lower-bounded requirement.
-- [ ] **SCALE-08**: The IEEE-8500 headline point is run through `Scenario` (feeder selector widened additively) and reported as a measured table — size, build time, solve time, iterations, peak memory, exactness verdict — where "refused with certificate" counts as a measured outcome.
+- [x] **SCALE-07**: A go/no-go decision for the headline run is recorded: GO only if attribution projects peak memory below ~10 GiB on the 15 GB host; otherwise "memory-infeasible on this host" is recorded with a lower-bounded requirement.
+- [x] **SCALE-08**: The IEEE-8500 headline point is run through `Scenario` (feeder selector widened additively) and reported as a measured table — size, build time, solve time, iterations, peak memory, exactness verdict — where "refused with certificate" counts as a measured outcome.
 
 ## Future Requirements
 
@@ -137,8 +137,8 @@ Deferred; tracked but not in this roadmap.
 | ACTOR-04 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
 | SETL-07 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv) |
 | SETL-08 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv) |
-| SCALE-07 | Phase 46 | Pending |
-| SCALE-08 | Phase 46 | Pending |
+| SCALE-07 | Phase 46 | Complete (plans 46-01..46-05; results/ieee8500_benchmark/scenario_table.csv recorded_no_go row; docs/literate/ieee8500_scaling.jl "Headline measurement and go/no-go") |
+| SCALE-08 | Phase 46 | Complete (plans 46-01..46-05; results/ieee8500_benchmark/scenario_table.csv measured row p46-scn-ieee8500-d10-T10, refused_certificate; docs/literate/ieee8500_scaling.jl "Headline measurement and go/no-go") |
 
 **Coverage:**
 - v5.0 requirements: 34 total
