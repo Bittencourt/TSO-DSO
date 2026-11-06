@@ -1021,8 +1021,7 @@ hm_hist = hm_wrappers(hm_label)
 @assert length(hm_hist) >= 3
 @assert [startswith(w["started_at"], "2026-11-05") for w in hm_hist[1:3]] == [true, true, false]
 @assert startswith(hm_hist[3]["started_at"], "2026-11-06")
-@assert [match(r"--min-mem-avail-gib ([0-9.]+)", w["args"])[1] for w in hm_hist[1:3]] ==
-        ["7", "5.5", "6.5"]
+@assert [match(r"--min-mem-avail-gib ([0-9.]+)", w["args"])[1] for w in hm_hist[1:3]] == ["7", "5.5", "6.5"]
 
 function hm_print_wrappers(wrappers, rows)
     for (k, w) in enumerate(wrappers)
@@ -1049,7 +1048,8 @@ function hm_print_wrappers(wrappers, rows)
     ## peak (`started`, `preflight_refused`) joins none, and neither does a row whose VmHWM differs
     ## from the wrapper's MaxRSS; then the last wrapper row is named as the launch outcome.
     vm = hm_num(r["vmhwm_kb"])
-    joined = isnan(vm) ? empty(wrappers) : filter(w -> hm_num(w["peak_rss_kb"]) == vm, wrappers)
+    joined =
+        isnan(vm) ? empty(wrappers) : filter(w -> hm_num(w["peak_rss_kb"]) == vm, wrappers)
     if isempty(joined)
         if isempty(wrappers)
             println("no wrapper row for this label")

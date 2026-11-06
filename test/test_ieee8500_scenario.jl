@@ -351,7 +351,8 @@ end
             map(
                 l ->
                     startswith(l, "ieee8500,0.1,24,1,anchor_after,") ?
-                    replace(l, "\",ERROR:CertificateError,7," => "\",budget_exceeded,7,") : l,
+                    replace(l, "\",ERROR:CertificateError,7," => "\",budget_exceeded,7,") :
+                    l,
                 att_lines,
             ),
             "\n",
@@ -364,7 +365,10 @@ end
     )
     @test br.anchor_iters == 7
     @test occursin("completed on this host once", br.note)
-    @test occursin("budget_exceeded after 7 iterations, not a solve run to the end", br.note)
+    @test occursin(
+        "budget_exceeded after 7 iterations, not a solve run to the end",
+        br.note,
+    )
 
     # The verdict uses the LARGER peak: a threshold between the two peaks (11.209 and 11.520 GiB)
     # is still a NO-GO.
@@ -784,7 +788,8 @@ end
             @test wrapper_rc(out, "fresh"; HEAP_SIZE_HINT = bad) == 2
         end
         @test readdir(joinpath(out, "runs")) == ["used.time"]
-        @test read(joinpath(out, "point_resources.csv"), String) == "run_label,rc\nrowonly,0\n"
+        @test read(joinpath(out, "point_resources.csv"), String) ==
+              "run_label,rc\nrowonly,0\n"
     end
 end
 
