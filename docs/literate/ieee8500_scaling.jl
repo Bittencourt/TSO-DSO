@@ -958,9 +958,9 @@ hm_print_measured(hm_meas, hm_label)
 # (`Base.JLOptions().heap_size_hint`, bytes, 0 = none), and the wrapper passes the flag only when
 # `HEAP_SIZE_HINT` is set. The provenance line above prints whatever the current row records.
 
-# **Wrapper rows and the pre-flight.** `point_resources.csv` is append-only, and it holds two rows
-# for this label. Both were launched with the user's explicit approval at about 7.1 GiB
-# MemAvailable. The planned 8 GiB launch gate could not be reached on this host even after other
+# **Wrapper rows and the pre-flight.** `point_resources.csv` is append-only. On 2026-11-05 it
+# received two rows for this label (attempts 1 and 2 below; any further attempt is a later launch).
+# Both were launched with the user's explicit approval at about 7.1 GiB MemAvailable. The planned 8 GiB launch gate could not be reached on this host even after other
 # work was closed.
 #
 # On 2026-11-05 the script read MemAvailable *after* Julia had started and loaded the package.
