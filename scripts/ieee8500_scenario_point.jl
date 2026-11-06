@@ -6,8 +6,13 @@
 #
 # Usage:
 #
-#   # measured run (launch through the per-point wrapper, detached and alone on the host):
-#   JULIA_HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh <label> -- --feeder ieee8500 --T 10 --run-label <label>
+#   # measured run (launch through the per-point wrapper, detached and alone on the host;
+#   # HEAP_SIZE_HINT makes the wrapper pass julia's `--heap-size-hint=` flag, omit it for no hint):
+#   HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh <label> -- --feeder ieee8500 --T 10 --run-label <label>
+#
+#   # Julia reads NO environment variable for the heap-size hint (JULIA_HEAP_SIZE_HINT is ignored);
+#   # only the `--heap-size-hint=` command-line flag sets it. The row's `heap_size_hint` column is
+#   # the EFFECTIVE value, `Base.JLOptions().heap_size_hint` in bytes (0 = no hint).
 #
 #   # NO-GO record from results/ieee8500_benchmark/memory_attribution.csv and point_resources.csv
 #   # (reads the committed CSVs only, solves nothing):
@@ -101,8 +106,11 @@ Measured-run flags:
   --results-dir <path>       output directory (or env TSODSO_IEEE8500_RESULTS_DIR),
                              default results/ieee8500_benchmark under the project
 
-Launch the measured IEEE-8500 run through the wrapper, detached and alone:
-  JULIA_HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh <label> -- --feeder ieee8500 --T 10 --run-label <label>
+Launch the measured IEEE-8500 run through the wrapper, detached and alone (HEAP_SIZE_HINT makes
+the wrapper pass julia's --heap-size-hint= flag; julia ignores JULIA_HEAP_SIZE_HINT):
+  HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh <label> -- --feeder ieee8500 --T 10 --run-label <label>
+The heap_size_hint column records the effective hint, Base.JLOptions().heap_size_hint, in bytes
+(0 = no hint).
 """
 
 # The 8500 family: below T = 9 the population's window construction is a loud error downstream.
@@ -702,9 +710,18 @@ end
 """The population selector the measured run uses on `feeder`."""
 population_for(feeder::Symbol) = feeder in FEEDERS_8500 ? :default_10pct : :default
 
+"""
+    effective_heap_size_hint() -> Int
+
+The heap-size hint this Julia process actually runs with, in bytes; 0 means no hint. It is read
+from `Base.JLOptions().heap_size_hint`, which only julia's `--heap-size-hint=` flag sets. Julia
+reads no environment variable for it, so an environment value is never recorded as provenance.
+"""
+effective_heap_size_hint() = Int(Base.JLOptions().heap_size_hint)
+
 function _provenance_fields(opts)
     return (;
-        heap_size_hint = get(ENV, "JULIA_HEAP_SIZE_HINT", missing),
+        heap_size_hint = effective_heap_size_hint(),
         julia_version = string(VERSION),
         git_head = git_head(),
         threads = Threads.nthreads(),

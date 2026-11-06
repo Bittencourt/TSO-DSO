@@ -402,3 +402,20 @@ end
     @test ph.n_buses == 11
     @test ph.n_aggregators == 10
 end
+
+@testitem "ieee8500 scenario: provenance records the effective heap-size hint" begin
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # Julia reads no environment variable for its heap-size hint, so the recorded value must be
+    # the process's own `Base.JLOptions().heap_size_hint` (bytes, 0 = none), whatever the
+    # environment says.
+    eff = Int(Base.JLOptions().heap_size_hint)
+    @test effective_heap_size_hint() === eff
+    @test eff >= 0
+    p = withenv("JULIA_HEAP_SIZE_HINT" => "8G") do
+        _provenance_fields((; run_label = "hint-check"))
+    end
+    @test p.heap_size_hint === eff
+    @test p.run_label == "hint-check"
+end

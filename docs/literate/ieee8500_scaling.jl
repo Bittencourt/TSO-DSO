@@ -787,6 +787,16 @@ function hm_status_sentence(status)
     return "unrecognized status."
 end
 
+# The `heap_size_hint` column holds the effective hint in bytes (`Base.JLOptions().heap_size_hint`,
+# 0 = none). A non-numeric value is the legacy environment-variable text that the first version of
+# the script recorded; see the correction note below.
+function hm_heap_txt(s)
+    b = tryparse(Int, s)
+    b === nothing && return "$(s) (legacy environment-variable value, never applied: none in effect)"
+    b == 0 && return "none (no --heap-size-hint)"
+    return @sprintf("%d bytes = %.3f GiB (--heap-size-hint)", b, b / 1024^3)
+end
+
 function hm_print_measured(rows, label)
     if isempty(rows)
         println("no measured row for run label $label: the point was not launched")
@@ -847,13 +857,21 @@ function hm_print_measured(rows, label)
         r["git_head"],
         ", threads ",
         r["threads"],
-        ", heap hint ",
-        r["heap_size_hint"],
+        ", heap-size hint ",
+        hm_heap_txt(r["heap_size_hint"]),
     )
     println("  outcome: ", hm_status_sentence(r["status"]))
     return nothing
 end
 hm_print_measured(hm_meas, hm_label)
+
+# **Correction (2026-11-06): the heap-size hint.** The measured row first committed on 2026-11-05
+# recorded `heap_size_hint = 8G`. That value was copied from the environment variable
+# `JULIA_HEAP_SIZE_HINT`, which julia does not read, and the wrapper did not pass the
+# `--heap-size-hint` flag (the run's `runs/p46-scn-ieee8500-d10-T10.time` command line has no such
+# flag). That run therefore had **no** heap-size hint. The script now records the effective hint
+# (`Base.JLOptions().heap_size_hint`, bytes, 0 = none), and the wrapper passes the flag only when
+# `HEAP_SIZE_HINT` is set. The provenance line above prints whatever the current row records.
 
 # **Wrapper rows and the pre-flight.** `point_resources.csv` is append-only, and it holds two rows
 # for this label. Both were launched with the user's explicit approval at about 7.1 GiB
@@ -922,7 +940,8 @@ hm_print_wrappers(hm_wrappers(hm_label), hm_meas)
 # | wall-clock cap | 1200 s | the library path has none; this script passes the harness's 1200 s and records it |
 # | certificate refusal | caught into a row | propagates in the library path; this script records it as a row |
 # | timing scope | one figure for build, loop and certify | separate materialize, build, solve and certify figures |
-# | process baseline | `GC.gc()` before ADMM, no heap hint | no forced collection; heap-size hint recorded in the row |
+# | process baseline | `GC.gc()` before ADMM | no forced collection |
+# | heap-size hint | none (the wrapper passed no `--heap-size-hint` flag) | the effective hint of the process, printed in the provenance line above (none on the 2026-11-05 row, see the correction note) |
 # | seed hashing | version-stable generator | `Base.hash`, so it depends on the Julia version (recorded) |
 #
 # If the two are compared, the reading is "same size and structure, different seed draws". The
@@ -1020,12 +1039,14 @@ hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
 #
 # The measured point needs a quiet host. Run one point at a time, detached, with no other Julia
 # process running. The script's pre-flight refuses below its floor (default 8 GiB MemAvailable)
-# and writes a `preflight_refused` row; it then exits 0. That reading is taken after package load,
+# and writes a `preflight_refused` row; it then exits 0. `HEAP_SIZE_HINT` makes the wrapper pass
+# julia's `--heap-size-hint=` flag (julia reads no environment variable for it); drop it to run
+# without a hint. That reading is taken after package load,
 # so on this host the default floor needs about one more GiB at launch, as printed above.
 # `--record-nogo` reads only the committed CSVs and rewrites the decision row:
 #
 # ```
-# JULIA_HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl nohup setsid \
+# HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl nohup setsid \
 #     scripts/run_ieee8500_point.sh p46-scn-ieee8500-d10-T10 -- \
 #     --feeder ieee8500 --T 10 --seed 1 --run-label p46-scn-ieee8500-d10-T10
 # julia --project=. scripts/ieee8500_scenario_point.jl --record-nogo

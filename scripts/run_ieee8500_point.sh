@@ -3,6 +3,13 @@
 #
 # usage: scripts/run_ieee8500_point.sh <label> -- <benchmark args...>
 #   SCRIPT=scripts/profile_ieee8500_memory.jl scripts/run_ieee8500_point.sh <label> -- <profiler args...>
+#   HEAP_SIZE_HINT=8G scripts/run_ieee8500_point.sh <label> -- <args...>   # julia --heap-size-hint=8G
+#
+# Heap-size hint (opt-in, added 2026-11-06): julia reads NO environment variable for its heap-size
+# hint, so JULIA_HEAP_SIZE_HINT=... has never had any effect on a run. Only the command-line flag
+# `--heap-size-hint=` sets it. When HEAP_SIZE_HINT is set, the wrapper passes
+# `--heap-size-hint=$HEAP_SIZE_HINT` to julia (visible in the run's .time command line); when it is
+# unset the julia command line is exactly what it was before.
 #
 # Records /usr/bin/time -v peak RSS, a `free -m` snapshot BEFORE the run, and OOM evidence from BOTH
 # `journalctl -k` (kernel OOM killer) and `journalctl -u earlyoom` (userspace killer, which sends
@@ -35,6 +42,17 @@ if [ "$(basename "$SCRIPT")" = "benchmark_ieee8500.jl" ]; then
   LABEL_ARGS=(--run-label "$LABEL")
 fi
 
+HEAP_ARGS=()
+if [ -n "${HEAP_SIZE_HINT:-}" ]; then
+  if ! [[ "$HEAP_SIZE_HINT" =~ ^[0-9]+([.][0-9]+)?[KMGTkmgt%]?$ ]]; then
+    echo "HEAP_SIZE_HINT must look like 8G, 8192M or 50% (got '$HEAP_SIZE_HINT')" >&2
+    exit 2
+  fi
+  HEAP_ARGS=("--heap-size-hint=$HEAP_SIZE_HINT")
+elif [ -n "${JULIA_HEAP_SIZE_HINT:-}" ]; then
+  echo "run_ieee8500_point: warning: julia ignores JULIA_HEAP_SIZE_HINT; no heap-size hint is applied (set HEAP_SIZE_HINT to pass --heap-size-hint)" >&2
+fi
+
 START="$(date '+%Y-%m-%d %H:%M:%S')"
 free -m > "$RUNS/$LABEL.free_before"
 MEM_AVAIL="$(awk '/^Mem:/{print $7}' "$RUNS/$LABEL.free_before")"
@@ -47,7 +65,7 @@ OTHER_JULIA="${OTHER_JULIA:-0}"
 PIDFILE="$RUNS/$LABEL.pid"
 rm -f "$PIDFILE"
 /usr/bin/time -v -o "$RUNS/$LABEL.time" bash -c 'echo $$ > "$0"; exec "$@"' "$PIDFILE" \
-  julia --project=. "$SCRIPT" "$@" "${LABEL_ARGS[@]}"
+  julia "${HEAP_ARGS[@]}" --project=. "$SCRIPT" "$@" "${LABEL_ARGS[@]}"
 RC=$?
 CHILD_PID="$(cat "$PIDFILE" 2>/dev/null || true)"
 
