@@ -426,6 +426,23 @@ const NOGO_DENSITY = 0.1
 const NOGO_T = 24
 const NOGO_HEAD_LABEL = "p35-head-d0.1-T24"
 const NOGO_KILLED_LABEL = "p35-head-d0.25-T24"
+# B2's host total comes from the measurement host's evidence, never from the machine that runs
+# --record-nogo: the `free -m` snapshot of the attribution run of this headline point (the run
+# whose VmHWM is cited and whose earlyoom log gives the 12 percent above).
+const NOGO_HOST_EVIDENCE_LABEL = "p39-attr-d0.1-T24"
+
+"""
+    free_total_kb(path) -> Int
+
+The total memory on the `Mem:` line of a `free -m` snapshot (a wrapper `runs/<label>.free_before`
+file), in kB: the MiB value times 1024 (`free -m` truncates to whole MiB).
+"""
+function free_total_kb(path::AbstractString)
+    for line in eachline(path)
+        startswith(line, "Mem:") && return parse(Int, split(line)[2]) * 1024
+    end
+    throw(ArgumentError("free_total_kb: no Mem: line in $path"))
+end
 
 _fmt(x; digits = 3) = string(round(x; digits = digits))
 
@@ -443,10 +460,12 @@ headline point (feeder ieee8500, density 0.1, ADMM only), computed ONLY from the
 - `anchor_delta_gib`, `anchor_iters`, `gap_ratio`: the attribution row (stage 1,
   `anchor_after`), the ratio parsed from its message;
 - `b1_gib`: a MEASURED lower bound, binary GiB of the larger observed peak;
-- `b2_gib_estimate`: an ESTIMATE, `b1_gib` plus the earlyoom SIGTERM fraction of MemTotal
-  (`host_total_kb`, else /proc/meminfo): the MemAvailable-equivalent needed to stay above the
-  host's earlyoom floor at the peak without leaning on swap. It depends on the earlyoom
-  configuration and is not a bound.
+- `b2_gib_estimate`: an ESTIMATE, `b1_gib` plus the earlyoom SIGTERM fraction of the host's total
+  memory: the MemAvailable-equivalent needed to stay above the host's earlyoom floor at the peak
+  without leaning on swap. It depends on the earlyoom configuration and is not a bound. The total
+  is `host_total_kb` when given, else the `free -m` total in
+  `runs/$(NOGO_HOST_EVIDENCE_LABEL).free_before` beside `resources_csv` (the measurement host's
+  evidence); the machine running the derivation is never read.
 
 The verdict compares the LARGER measured peak (B1) with `threshold_gib`: GO needs the point's
 peak below the threshold, so one observation above it is enough for NO-GO. It throws (never
@@ -503,8 +522,13 @@ function derive_nogo_row(;
 
     peak_kb = max(vmhwm_kb, p35_kb)
     b1 = kb_to_gib(peak_kb)
-    total_kb = host_total_kb === nothing ? meminfo_kb("MemTotal") : Int(host_total_kb)
-    total_kb > 0 || throw(ArgumentError("derive_nogo_row: MemTotal unavailable"))
+    host_src, total_kb = if host_total_kb === nothing
+        ev = joinpath("runs", NOGO_HOST_EVIDENCE_LABEL * ".free_before")
+        "free -m total in $(ev)", free_total_kb(joinpath(dirname(abspath(resources_csv)), ev))
+    else
+        "host_total_kb argument", Int(host_total_kb)
+    end
+    total_kb > 0 || throw(ArgumentError("derive_nogo_row: host total memory unavailable"))
     total_gib = kb_to_gib(total_kb)
     b2 = b1 + EARLYOOM_SIGTERM_FRACTION * total_gib
     b1 > threshold_gib || throw(
@@ -559,8 +583,9 @@ function derive_nogo_row(;
         "(point_resources.csv $(NOGO_HEAD_LABEL), rc $(p35_rc)). " *
         "B1 = $(_fmt(b1)) GiB is a measured lower bound on the point's peak resident set " *
         "(the larger observed peak, $(peak_kb) kB). " *
-        "B2 = B1 + $(round(Int, 100 * EARLYOOM_SIGTERM_FRACTION)) percent of MemTotal " *
-        "($(total_kb) kB = $(_fmt(total_gib)) GiB) = $(_fmt(b2)) GiB is an estimate, not a bound: " *
+        "B2 = B1 + $(round(Int, 100 * EARLYOOM_SIGTERM_FRACTION)) percent of the host's total " *
+        "memory ($(total_kb) kB = $(_fmt(total_gib)) GiB, $(host_src)) = $(_fmt(b2)) GiB is an " *
+        "estimate, not a bound: " *
         "the MemAvailable-equivalent needed to stay above earlyoom's SIGTERM limits " *
         "(mem $(round(Int, 100 * EARLYOOM_SIGTERM_FRACTION)) percent and swap " *
         "$(round(Int, 100 * EARLYOOM_SIGTERM_FRACTION)) percent on this host) at the peak without " *

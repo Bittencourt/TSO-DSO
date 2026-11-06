@@ -675,6 +675,9 @@ println("verdict: ", hm_verdict, " (recorded status: ", hm_nogo["status"], ")")
 #   that the host stays above that limit at the peak without relying on swap. It depends on the
 #   earlyoom setting, and the swap condition makes it inexact.
 #
+# The host total in B2 comes from the measurement host's evidence (a `free -m` snapshot the wrapper
+# saved), never from the machine that derives the row or builds this page.
+#
 # The requirement is on **MemAvailable at the peak**, not on installed RAM. The page cache, the
 # operating system and every other process share the same physical memory.
 
@@ -682,27 +685,29 @@ hm_b1_kb = max(hm_hwm_kb, hm_maxrss_kb)
 hm_b1_gib = hm_gib(hm_b1_kb)
 @assert isapprox(hm_b1_gib, hm_num(hm_nogo["b1_gib"]); rtol = 1e-12)
 hm_b2_gib = hm_num(hm_nogo["b2_gib_estimate"])
-hm_free_total_mib = let
-    fb = joinpath(
-        pkgdir(TSODSO),
-        "results",
-        "ieee8500_benchmark",
-        "runs",
-        "p46-scn-ieee8500-d10-T10.free_before",
-    )
-    parse(Int, split(only(filter(l -> startswith(l, "Mem:"), readlines(fb))))[2])
+## B2's host total is the measurement host's evidence, not the machine that builds this page: the
+## `free -m` total of the attribution run of this point (whose earlyoom log gives the 12 percent).
+## B2 is recomputed from it here and checked against the row.
+function hm_free_total_mib(label)
+    fb = joinpath(pkgdir(TSODSO), "results", "ieee8500_benchmark", "runs", label * ".free_before")
+    return parse(Int, split(only(filter(l -> startswith(l, "Mem:"), readlines(fb))))[2])
 end
+hm_host_label = "p39-attr-d0.1-T24"
+hm_host_mib = hm_free_total_mib(hm_host_label)
+hm_b2_calc = hm_b1_gib + 0.12 * hm_host_mib / 1024
+@assert isapprox(hm_b2_calc, hm_b2_gib; rtol = 1e-9)
 @printf("B1 (measured lower bound): %d kB = %.3f GiB\n", hm_b1_kb, hm_b1_gib)
 @printf(
-    "B2 (estimate, earlyoom-dependent): %.3f GiB = B1 + 0.12 x %.3f GiB host total\n",
-    hm_b2_gib,
-    (hm_b2_gib - hm_b1_gib) / 0.12
+    "B2 (estimate, earlyoom-dependent): %.3f GiB = B1 + 0.12 x %d MiB = %.3f GiB host total (free -m, %s)\n",
+    hm_b2_calc,
+    hm_host_mib,
+    hm_host_mib / 1024,
+    hm_host_label
 )
-@printf(
-    "host total from free -m at the T = 10 launch: %d MiB = %.3f GiB\n",
-    hm_free_total_mib,
-    hm_free_total_mib / 1024
-)
+## The total `free -m` reported was not constant across the runs on this host; both are printed.
+for lbl in ("p35-head-d0.1-T24", "p46-scn-ieee8500-d10-T10")
+    @printf("  free -m total at %s: %d MiB\n", lbl, hm_free_total_mib(lbl))
+end
 
 # **Counter-fact, stated with the bound.** The point completed on this host twice:
 # - the earlier full-solve run `p35-head-d0.1-T24`;

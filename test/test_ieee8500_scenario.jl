@@ -287,6 +287,19 @@ end
     @test occursin("Counter-fact", row.note)
     @test !occursin('\n', row.note)
 
+    # Without `host_total_kb`, B2's host total is the measurement host's evidence (the `free -m`
+    # snapshot of the attribution run), never the machine running the derivation.
+    @test free_total_kb(joinpath(dir, "runs", "p39-attr-d0.1-T24.free_before")) == 15_396 * 1024
+    dflt = derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = joinpath(dir, "point_resources.csv"),
+    )
+    @test dflt.b2_gib_estimate == dflt.b1_gib + 0.12 * (15_396 * 1024) / 1024^2
+    @test occursin("free -m total in runs/p39-attr-d0.1-T24.free_before", dflt.note)
+    nofree = joinpath(mktempdir(), "free_before")
+    write(nofree, "              total        used\nSwap:   10239   1553\n")
+    @test_throws ArgumentError free_total_kb(nofree)
+
     # The counter-fact is derived from the rows: both runs completed, with the head run's
     # launch-time MemAvailable below B1, and the mechanism is not asserted as measured.
     @test occursin("completed on this host twice", row.note)
