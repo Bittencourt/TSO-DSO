@@ -532,3 +532,476 @@ hl = only(filter(r -> r.fixture == "ieee8500" && r.density == 1.0, sweep_rows))
 # captured before it. The full T = 24 point needs a host with ~12 GiB genuinely available at launch;
 # on this 15.5 GiB host that means closing other work first — and if earlyoom kills it anyway, the kill
 # is the recorded outcome.
+
+# ## Headline measurement and go/no-go
+#
+# *(Appended 2026-11-05. Records the go/no-go decision for the `ieee8500` headline point (density
+# 0.1, ADMM only, T = 24) and the measured T = 10 point run through `Scenario`. Older text above is
+# kept as history. Where it disagrees with this section, the supersession notes at the end of this
+# section say which statement stands. Nothing above was edited.)*
+#
+# **Units.** All memory figures are binary: 1 GiB = 2^30 bytes = 1,048,576 KiB. The raw KiB value
+# (called kB in the CSV headers, as `/proc` and `/usr/bin/time` name it) is printed beside every GiB
+# value.
+#
+# **Method.** Every number in this section is computed below from committed rows in four files under
+# `results/ieee8500_benchmark/`:
+# - `scenario_table.csv`: the `recorded_no_go` row and the `measured` row;
+# - `memory_attribution.csv`: row key (fixture, density, T, stage, name);
+# - `point_resources.csv`: wrapper rows by `run_label`;
+# - `density_sweep.csv`: the earlier harness comparators.
+#
+# Hand-typed results are not used. The few figures quoted in the prose are old labels that this
+# section corrects. The files are read with `Base` only. `memory_attribution.csv` and
+# `density_sweep.csv` carry quoted free text in columns that are not last, so a split on commas
+# limited to the column count is not enough. The reader below is therefore a small quote-aware
+# splitter, and it checks the field count of every row against the header.
+
+function hm_split_csv_line(ln::AbstractString)
+    fields = String[]
+    buf = IOBuffer()
+    inq = false
+    chars = collect(ln)
+    i = 1
+    while i <= length(chars)
+        c = chars[i]
+        if inq && c == '"' && i < length(chars) && chars[i+1] == '"'
+            print(buf, '"')
+            i += 1
+        elseif c == '"'
+            inq = !inq
+        elseif c == ',' && !inq
+            push!(fields, String(take!(buf)))
+        else
+            print(buf, c)
+        end
+        i += 1
+    end
+    push!(fields, String(take!(buf)))
+    return fields
+end
+
+function hm_read_rows(file)
+    path = joinpath(pkgdir(TSODSO), "results", "ieee8500_benchmark", file)
+    lines = filter(!isempty, readlines(path))
+    header = strip.(hm_split_csv_line(first(lines)))
+    return map(lines[2:end]) do ln
+        f = hm_split_csv_line(ln)
+        length(f) == length(header) ||
+            error("$file: a row has $(length(f)) fields, the header has $(length(header))")
+        Dict(String(h) => String(strip(v)) for (h, v) in zip(header, f))
+    end
+end
+
+hm_num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+hm_gib(kb) = kb / 1024^2
+hm_ratio(msg) = (m = match(r"=([0-9.]+) > 1", msg); m === nothing ? NaN : parse(Float64, m[1]))
+
+hm_scn = hm_read_rows("scenario_table.csv")
+hm_res = hm_read_rows("point_resources.csv")
+hm_attr = hm_read_rows("memory_attribution.csv")
+hm_sweep = hm_read_rows("density_sweep.csv")
+hm_wrappers(label) = filter(r -> r["run_label"] == label, hm_res)
+hm_attr_at(T) =
+    filter(r -> r["fixture"] == "ieee8500" && hm_num(r["density"]) == 0.1 && r["T"] == T, hm_attr)
+hm_attr_row(rows, stage, name) = only(filter(r -> r["stage"] == stage && r["name"] == name, rows))
+hm_nogo = only(filter(r -> r["row_kind"] == "recorded_no_go", hm_scn))
+hm_attr24 = hm_attr_at("24")
+println("rows read: scenario_table ", length(hm_scn), ", point_resources ", length(hm_res),
+    ", memory_attribution ", length(hm_attr), ", density_sweep ", length(hm_sweep))
+
+# ### The decision and its threshold
+#
+# The headline point was to be a GO if its peak resident memory stayed below the threshold recorded
+# in the `recorded_no_go` row. The point is not re-run for this decision. Two independent
+# observations of its peak exist:
+# - the in-process high-water mark (`VmHWM`) of the earlier attribution run, the maximum over the
+#   `memory_attribution.csv` rows with fixture `ieee8500`, density 0.1 and T 24;
+# - the wrapper's `/usr/bin/time` MaxRSS of the earlier full-solve run, `point_resources.csv` row
+#   `p35-head-d0.1-T24`.
+#
+# The check below also confirms that the committed decision row matches these sources.
+
+hm_threshold_gib = hm_num(hm_nogo["threshold_gib"])
+hm_hwm_kb = maximum(parse(Int, r["VmHWM_kB"]) for r in hm_attr24 if !isempty(r["VmHWM_kB"]))
+hm_head24 = only(hm_wrappers("p35-head-d0.1-T24"))
+hm_maxrss_kb = parse(Int, hm_head24["peak_rss_kb"])
+@assert hm_num(hm_nogo["vmhwm_kb"]) == hm_hwm_kb
+@assert hm_num(hm_nogo["p35_maxrss_kb"]) == hm_maxrss_kb
+hm_verdict =
+    min(hm_gib(hm_hwm_kb), hm_gib(hm_maxrss_kb)) > hm_threshold_gib ? "NO-GO" : "GO"
+@printf("GO threshold (recorded_no_go row):           %.1f GiB\n", hm_threshold_gib)
+@printf(
+    "in-process peak VmHWM (memory_attribution):   %d kB = %.3f GiB\n",
+    hm_hwm_kb,
+    hm_gib(hm_hwm_kb)
+)
+@printf(
+    "wrapper MaxRSS (p35-head-d0.1-T24, rc %s):     %d kB = %.3f GiB\n",
+    hm_head24["rc"],
+    hm_maxrss_kb,
+    hm_gib(hm_maxrss_kb)
+)
+println("verdict: ", hm_verdict, " (recorded status: ", hm_nogo["status"], ")")
+
+# **What the verdict means.** NO-GO is a threshold verdict: both observed peaks are above the GO
+# threshold, so the headline point is not declared feasible on this host. It does **not** mean the
+# point cannot run. The next subsection shows that it completed on this host, and states the
+# conditions under which it did.
+
+# ### The lower-bounded requirement
+#
+# Two quantities bound what the point needs, and they are of different kinds:
+# - **B1 is a measured lower bound.** The point's peak resident set is at least the larger of the
+#   two observed peaks. B1 uses measured numbers only.
+# - **B2 is an estimate, not a bound.** B2 = B1 + 12 percent of the host's total memory. The
+#   12 percent comes from this host's earlyoom configuration: it sends SIGTERM when available
+#   memory and free swap both fall to 12 percent. B2 is the available memory the process needs so
+#   that the host stays above that limit at the peak without relying on swap. It depends on the
+#   earlyoom setting, and the swap condition makes it inexact.
+#
+# The requirement is on **MemAvailable at the peak**, not on installed RAM. The page cache, the
+# operating system and every other process share the same physical memory.
+
+hm_b1_kb = max(hm_hwm_kb, hm_maxrss_kb)
+hm_b1_gib = hm_gib(hm_b1_kb)
+@assert isapprox(hm_b1_gib, hm_num(hm_nogo["b1_gib"]); rtol = 1e-12)
+hm_b2_gib = hm_num(hm_nogo["b2_gib_estimate"])
+hm_free_total_mib = let
+    fb = joinpath(
+        pkgdir(TSODSO),
+        "results",
+        "ieee8500_benchmark",
+        "runs",
+        "p46-scn-ieee8500-d10-T10.free_before",
+    )
+    parse(Int, split(only(filter(l -> startswith(l, "Mem:"), readlines(fb))))[2])
+end
+@printf("B1 (measured lower bound): %d kB = %.3f GiB\n", hm_b1_kb, hm_b1_gib)
+@printf(
+    "B2 (estimate, earlyoom-dependent): %.3f GiB = B1 + 0.12 x %.3f GiB host total\n",
+    hm_b2_gib,
+    (hm_b2_gib - hm_b1_gib) / 0.12
+)
+@printf(
+    "host total from free -m at the T = 10 launch: %d MiB = %.3f GiB\n",
+    hm_free_total_mib,
+    hm_free_total_mib / 1024
+)
+
+# **Counter-fact, stated with the bound.** The point completed on this host twice:
+# - the earlier full-solve run `p35-head-d0.1-T24`;
+# - the earlier attribution run, whose `anchor_after` row records a full production solve.
+#
+# The full-solve run started with less available memory than B1. It completed because the kernel
+# reclaimed page cache and swap absorbed the overflow. The neighbouring point at density 0.25 was
+# killed by earlyoom at its measured peak. The rows:
+
+hm_anchor24 = hm_attr_row(hm_attr24, "1", "anchor_after")
+hm_kill25 = only(hm_wrappers("p35-head-d0.25-T24"))
+@printf(
+    "p35-head-d0.1-T24:  rc %s, MemAvailable before launch %s MiB = %.3f GiB (B1 = %.3f GiB)\n",
+    hm_head24["rc"],
+    hm_head24["mem_avail_before_mb"],
+    hm_num(hm_head24["mem_avail_before_mb"]) / 1024,
+    hm_b1_gib
+)
+@printf(
+    "attribution anchor_after (T 24): %s after %s iterations, loop delta %.4f GiB, gap ratio %.2f\n",
+    hm_anchor24["anchor_status"],
+    hm_anchor24["anchor_iters"],
+    hm_num(hm_anchor24["anchor_delta_gib"]),
+    hm_ratio(hm_anchor24["note"])
+)
+@printf(
+    "p35-head-d0.25-T24: rc %s, oom_source %s, MaxRSS %s kB = %.3f GiB\n",
+    hm_kill25["rc"],
+    hm_kill25["oom_source"],
+    hm_kill25["peak_rss_kb"],
+    hm_gib(hm_num(hm_kill25["peak_rss_kb"]))
+)
+
+# What the T = 24 peak is made of: the staged components of the earlier attribution run
+# (stage-9 `reconciliation:` rows, `gib` column):
+
+function hm_print_components(rows)
+    for (name, what) in (
+        ("comp_agr_builds", "122 AgrOpt builds"),
+        ("comp_dso_build", "DSO build"),
+        ("comp_first_iter_retained", "first iterate retained"),
+        ("comp_iter_retained", "later iterates retained"),
+    )
+        r = hm_attr_row(rows, "9", "reconciliation:" * name)
+        @printf("  %-26s %-25s %.3f GiB\n", name, what, hm_num(r["gib"]))
+    end
+end
+hm_print_components(hm_attr24)
+
+# No memory lever is claimed. The two largest components are the JuMP models themselves and their
+# first solves, and the algorithm cannot run without them. Possible levers, such as splitting the DSO
+# model by hour or pooling solver state, are future work, unmeasured here.
+
+# ### The Scenario-path measured table at T = 10
+#
+# The largest point measured as feasible earlier, `ieee8500` at density 0.1 and T = 10, was run once
+# through the `Scenario` path. It used the population selector `:default_10pct`, the ADMM strategy,
+# and `scripts/ieee8500_scenario_point.jl` under the per-point wrapper. The script times four steps
+# separately: materialize, build, solve (the ADMM loop) and certify. It reads `VmHWM` after each
+# step. The run's status is its measured outcome: a refusal, a convergence error, a budget exit, a
+# pre-flight refusal or a killed run is printed as such and is not retuned. The six numbers are
+# size, build time, solve time, iterations, peak memory and the exactness verdict.
+
+hm_label = "p46-scn-ieee8500-d10-T10"
+hm_meas = filter(r -> r["row_kind"] == "measured" && r["run_label"] == hm_label, hm_scn)
+
+function hm_status_sentence(status)
+    status == "ok" && return "converged and certified exact; prices are reported."
+    status == "refused_certificate" && return "converged, then refused by the SOCP exactness " *
+           "certificate (CertificateError): prices are withheld. This refusal is the measured " *
+           "outcome and is accepted as is; no tolerance, tau, epsilon or floor was changed."
+    status == "convergence_error" &&
+        return "maxiter reached without consensus; no certificate was attempted."
+    status == "budget_exceeded" &&
+        return "stopped at the wall-clock cap before consensus; certify was skipped."
+    status == "preflight_refused" && return "refused by the MemAvailable pre-flight before " *
+           "anything was materialized: the host did not have the memory at launch."
+    status == "started" && return "only the started row exists: the process died before writing " *
+           "its final row; the wrapper row below (rc, oom_source) is the measured outcome."
+    startswith(status, "error:") && return "ended in a solver-layer error of the named type."
+    return "unrecognized status."
+end
+
+function hm_print_measured(rows, label)
+    if isempty(rows)
+        println("no measured row for run label $label: the point was not launched")
+        return nothing
+    end
+    r = only(rows)
+    println("run label ", label, ": feeder ", r["feeder"], ", population ", r["population"],
+        ", T ", r["T"], ", strategy ", r["strategy"])
+    @printf(
+        "  size:   %s buses, %s branches, %s load buses; %s aggregators (%s capacitor), %s AgrOpt models\n",
+        r["n_buses"],
+        r["n_branches"],
+        r["n_load_buses"],
+        r["n_aggregators"],
+        r["n_cap_aggregators"],
+        r["n_agr_models"]
+    )
+    @printf(
+        "          DSO %s vars / %s cons; AgrOpt (summed) %s vars / %s cons\n",
+        r["dso_vars"],
+        r["dso_cons"],
+        r["agr_vars"],
+        r["agr_cons"]
+    )
+    @printf("  build:  %.2f s\n", hm_num(r["build_s"]))
+    @printf("  solve:  %.2f s (ADMM loop)\n", hm_num(r["solve_s"]))
+    @printf("  iters:  %s\n", r["iters"])
+    @printf(
+        "  peak:   VmHWM %s kB = %.3f GiB; process MaxRSS %.3f GiB\n",
+        r["vmhwm_kb"],
+        hm_num(r["vmhwm_gib"]),
+        hm_num(r["maxrss_gib"])
+    )
+    @printf("  status: %s, gap ratio %.2f\n", r["status"], hm_num(r["gap_ratio"]))
+    @printf(
+        "  also:   materialize %.2f s, certify %.2f s\n",
+        hm_num(r["materialize_s"]),
+        hm_num(r["certify_s"])
+    )
+    println(
+        "  provenance: seed ",
+        r["seed"],
+        " (population sub-seed ",
+        r["sub_seed_population"],
+        "), julia ",
+        r["julia_version"],
+        ", git ",
+        r["git_head"],
+        ", threads ",
+        r["threads"],
+        ", heap hint ",
+        r["heap_size_hint"],
+    )
+    println("  outcome: ", hm_status_sentence(r["status"]))
+    return nothing
+end
+hm_print_measured(hm_meas, hm_label)
+
+# **Wrapper rows and the pre-flight.** `point_resources.csv` is append-only, and it holds two rows
+# for this label. Both were launched with the user's explicit approval at about 7.1 GiB
+# MemAvailable. The planned 8 GiB launch gate could not be reached on this host even after other
+# work was closed.
+#
+# The script reads MemAvailable *after* Julia has started and loaded the package. That reading is
+# lower than the wrapper's pre-launch reading by the process's own startup footprint. The first
+# attempt asked for 7 GiB at that point and was refused by the script's own gate, so nothing was
+# materialized. Its `preflight_refused` row was then replaced by the second attempt's final row
+# under the same key, and only its wrapper row remains. The second attempt lowered the in-script
+# floor to the post-load equivalent of the approved level and ran to completion. The last wrapper
+# row joins the measured row. The startup footprint is computed below, from the second attempt's
+# two readings, together with the launch level that the default 8 GiB in-script gate implies on
+# this host.
+
+function hm_print_wrappers(wrappers, rows)
+    for (k, w) in enumerate(wrappers)
+        m = match(r"--min-mem-avail-gib ([0-9.]+)", w["args"])
+        @printf(
+            "attempt %d (%s): in-script floor %s GiB; wrapper MemAvailable before %s MiB = %.3f GiB, swap used %s MiB; rc %s, MaxRSS %s kB = %.3f GiB, oom_source %s\n",
+            k,
+            w["started_at"],
+            m === nothing ? "8 (default)" : m[1],
+            w["mem_avail_before_mb"],
+            hm_num(w["mem_avail_before_mb"]) / 1024,
+            w["swap_used_before_mb"],
+            w["rc"],
+            w["peak_rss_kb"],
+            hm_gib(hm_num(w["peak_rss_kb"])),
+            w["oom_source"]
+        )
+    end
+    isempty(rows) && return nothing
+    r = only(rows)
+    last_w = last(wrappers)
+    @assert hm_num(last_w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"])
+    footprint_kb = hm_num(last_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
+    @printf(
+        "in-script MemAvailable (measured row) %s kB = %.3f GiB; startup footprint %.0f kB = %.3f GiB\n",
+        r["mem_avail_before_kb"],
+        hm_gib(hm_num(r["mem_avail_before_kb"])),
+        footprint_kb,
+        hm_gib(footprint_kb)
+    )
+    @printf(
+        "the default 8 GiB in-script gate therefore implies about %.2f GiB MemAvailable at launch\n",
+        8 + hm_gib(footprint_kb)
+    )
+    return nothing
+end
+hm_print_wrappers(hm_wrappers(hm_label), hm_meas)
+
+# ### Path-divergence label: not comparable 1:1 with the harness numbers
+#
+# These T = 10 numbers come from the `Scenario` path. The earlier T = 10 numbers come from the
+# benchmark harness (`scripts/benchmark_ieee8500.jl`). The two points have the same feeder, the
+# same sampling rule, the same density, the same ADMM knobs and the same exactness gate. They differ
+# in the following ways:
+#
+# | item | harness path | `Scenario` path |
+# |---|---|---|
+# | population seed | literal harness seed | sub-seed of `Scenario.seed` (the `sub_seed_population` column), so different house draws |
+# | bus sample | same rule, harness seed | same rule, sub-seed, so a different set of sampled buses |
+# | wall-clock cap | 1200 s | the library path has none; this script passes the harness's 1200 s and records it |
+# | certificate refusal | caught into a row | propagates in the library path; this script records it as a row |
+# | timing scope | one figure for build, loop and certify | separate materialize, build, solve and certify figures |
+# | process baseline | `GC.gc()` before ADMM, no heap hint | no forced collection; heap-size hint recorded in the row |
+# | seed hashing | version-stable generator | `Base.hash`, so it depends on the Julia version (recorded) |
+#
+# If the two are compared, the reading is "same size and structure, different seed draws". The
+# harness comparators are printed below by row key. They are not a re-measurement of the row
+# above, and no difference between the two paths is computed.
+
+hm_h10 = only(
+    filter(r -> r["run_label"] == "p35-head-d0.1-T10" && r["solver"] == "admm", hm_sweep),
+)
+hm_a10 = hm_attr_row(hm_attr_at("10"), "1", "anchor_after")
+@printf(
+    "harness density_sweep.csv p35-head-d0.1-T10: %s, ADMM time %.1f s, gap ratio %.2f\n",
+    hm_h10["admm_status"],
+    hm_num(hm_h10["admm_time_s"]),
+    hm_ratio(hm_h10["admm_error_msg"])
+)
+@printf(
+    "harness memory_attribution.csv (ieee8500, 0.1, 10, 1, anchor_after): %s after %s iterations\n",
+    hm_a10["anchor_status"],
+    hm_a10["anchor_iters"]
+)
+function hm_print_harness_peaks(labels)
+    for lbl in labels
+        w = only(hm_wrappers(lbl))
+        @printf(
+            "harness point_resources.csv %s: MaxRSS %s kB = %.3f GiB\n",
+            lbl,
+            w["peak_rss_kb"],
+            hm_gib(hm_num(w["peak_rss_kb"]))
+        )
+    end
+end
+hm_print_harness_peaks(("p35-head-d0.1-T10", "p39-attr-d0.1-T10"))
+
+# ### Supersession notes
+#
+# These notes correct statements in the older text above. The older text itself is not edited.
+#
+# - **The T = 24 loop attribution now exists.** The earlier attribution section says the T = 24
+#   loop attribution was "NOT ESTABLISHED" because the full run was "earlyoom-killed". That is
+#   superseded: `memory_attribution.csv` now carries a completed later run at T = 24, with an
+#   `anchor_after` row, loop rows and stage-9 components (counted below). Its kill row is kept as
+#   history.
+# - **Build components.** The T = 24 build components quoted there (4.024 GiB for the AgrOpt builds
+#   and 0.922 GiB for the DSO build) came from a build-only run. The completed run's components,
+#   printed below, replace them.
+# - **The "11.75 GiB" label.** A peak written as "11.75 GiB" elsewhere is a decimal division of the
+#   raw kB value. The binary value is printed below.
+# - **The bus count.** The "4,875 buses / 4,874 branches" in the older prose is stale. The fixture
+#   as built measures the counts printed below.
+
+function hm_print_supersessions(rows24, nogo, meas)
+    loop_rows = count(r -> r["stage"] in ("3", "4", "5"), rows24)
+    a = hm_attr_row(rows24, "1", "anchor_after")
+    @printf(
+        "T = 24 rows: anchor_after %s after %s iterations; %d loop/certify rows (stages 3-5)\n",
+        a["anchor_status"],
+        a["anchor_iters"],
+        loop_rows
+    )
+    @printf(
+        "T = 24 build components now: AgrOpt builds %.3f GiB, DSO build %.3f GiB\n",
+        hm_num(hm_attr_row(rows24, "9", "reconciliation:comp_agr_builds")["gib"]),
+        hm_num(hm_attr_row(rows24, "9", "reconciliation:comp_dso_build")["gib"])
+    )
+    kb = hm_num(nogo["vmhwm_kb"])
+    @printf(
+        "peak %.0f kB: / 10^6 = %.2f (decimal label), / 1024^2 = %.3f GiB (binary)\n",
+        kb,
+        kb / 1e6,
+        hm_gib(kb)
+    )
+    if isempty(meas)
+        f = build_feeder(:ieee8500)
+        @printf(
+            "ieee8500 as built: %d buses, %d branches\n",
+            length(f.buses),
+            length(f.branches)
+        )
+    else
+        r = only(meas)
+        println("ieee8500 as built (measured row): ", r["n_buses"], " buses, ",
+            r["n_branches"], " branches")
+    end
+    return nothing
+end
+hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
+
+# ### Reproducing this
+#
+# The measured point needs a quiet host. Run one point at a time, detached, with no other Julia
+# process running. The script's pre-flight refuses below its floor (default 8 GiB MemAvailable)
+# and writes a `preflight_refused` row; it then exits 0. That reading is taken after package load,
+# so on this host the default floor needs about one more GiB at launch, as printed above.
+# `--record-nogo` reads only the committed CSVs and rewrites the decision row:
+#
+# ```
+# JULIA_HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl nohup setsid \
+#     scripts/run_ieee8500_point.sh p46-scn-ieee8500-d10-T10 -- \
+#     --feeder ieee8500 --T 10 --seed 1 --run-label p46-scn-ieee8500-d10-T10
+# julia --project=. scripts/ieee8500_scenario_point.jl --record-nogo
+# ```
+#
+# Both commands upsert keyed rows into `results/ieee8500_benchmark/scenario_table.csv`. The key is
+# row kind, feeder, population, T and strategy. A `started` row is replaced by the final row, and a
+# killed run leaves its `started` row as the trace. The wrapper appends one row per launch to
+# `point_resources.csv` and keeps its evidence files under `results/ieee8500_benchmark/runs/`. The
+# draws depend on the Julia version through `Base.hash`. The measured row was produced on the Julia
+# version recorded in it.
