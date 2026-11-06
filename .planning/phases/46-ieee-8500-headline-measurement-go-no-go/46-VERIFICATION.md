@@ -1,9 +1,14 @@
 ---
 phase: 46-ieee-8500-headline-measurement-go-no-go
 verified: 2026-11-06T14:22:27Z
-status: human_needed
-score: 12/12 must-haves verified (one carries a user-approved deviation pending a formal override)
-overrides_applied: 0
+status: passed
+score: 12/12 must-haves verified (one via a user-approved override)
+overrides_applied: 1
+overrides:
+  - must_have: "The orchestrator launches the T = 10 IEEE-8500 point detached and alone only when pgrep -x julia is empty and MemAvailable >= 8 GiB"
+    reason: "Host could not reach 8 GiB MemAvailable; user approved launches at ~7.1 GiB (2026-11-05, in-script floor 5.5 GiB post-load) and an in-script pre-load floor of 6.5 GiB (2026-11-06). Run stayed alone (other_julia_procs = 0), completed rc 0 with no OOM (peak 5.738 GiB), and the deviation is recorded in the docs and asserted against point_resources.csv."
+    accepted_by: "Pedro (researcher)"
+    accepted_at: "2026-11-06T14:40:00Z"
 human_verification:
   - test: "Accept or reject the two deferred code-review warnings (deferred-items.md items 5-7: iteration-3 WR-01 REPLACE_LABEL=1 overwrites runs/ evidence before the keep/replace decision; WR-02 an OutOfMemoryError in materialize/build loses that phase's timing, VmHWM sample and sizes; plus IN-01..IN-03)"
     expected: "The developer confirms they may stay open past Phase 46 because they affect only future re-runs of scripts/ieee8500_scenario_point.jl and scripts/run_ieee8500_point.sh, not the committed rows, the docs numbers or src/"
@@ -176,3 +181,22 @@ One unexplained count, for information only: the targeted test file reports 315 
 
 _Verified: 2026-11-06T14:22:27Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Human Verification Outcome (2026-11-06)
+
+The researcher answered all four human-verification items. None is a gap.
+
+1. **Deferred review warnings (deferred-items.md items 5–7):** **Accept + backlog.** WR-01 (`REPLACE_LABEL=1`
+   evidence overwrite) and WR-02 (lost phase timing on an OOM during materialize or build) stay open, along
+   with IN-01..03. They are carried into the milestone backlog. They affect only future re-runs of the
+   measurement scripts.
+2. **Launch-floor deviations:** **Record override.** The override in the frontmatter above records the
+   researcher's approval of both launches below the planned 8 GiB MemAvailable gate.
+3. **Full docs build:** **Defer to the milestone audit.** `docs/make.jl` will run once during the v5.0 audit,
+   covering both Phase 45 and Phase 46. The appended section already passes standalone.
+4. **Docs prose (lines 536–1249):** **Accept as written.**
+
+Info, not a gap: the test count. The full suite at a124d5c gave 36,980/0/0/7. The previous baseline was
+36,668/0/0/7, so the suite grew by 312, while the targeted test file reports 315. There are no failures
+either way.
+
