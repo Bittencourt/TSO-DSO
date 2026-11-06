@@ -10,3 +10,5 @@ p35-prof-ieee8500-s3,0,2515692,none,10565,2418,0,2026-10-05 00:15:48,"--fixture 
 p39-attr-d0.1-T10,0,5969080,none,5734,8956,0,2026-10-24 05:50:21,"--fixture ieee8500 --density 0.1 --t-horizon 10"
 p39-attr-d0.1-T24,143,7820096,earlyoom,6307,10057,0,2026-10-24 06:06:06,"--fixture ieee8500 --density 0.1 --t-horizon 24"
 p39-attr-d0.1-T24-s2,0,6366664,none,6805,10227,0,2026-10-24 06:23:59,"--fixture ieee8500 --density 0.1 --t-horizon 24 --stage 2"
+p46-scn-ieee8500-d10-T10,0,1371524,none,7243,8988,0,2026-11-05 21:11:31,"--feeder ieee8500 --T 10 --seed 1 --run-label p46-scn-ieee8500-d10-T10 --min-mem-avail-gib 7"
+p46-scn-ieee8500-d10-T10,0,6059204,none,7247,8986,0,2026-11-05 21:12:27,"--feeder ieee8500 --T 10 --seed 1 --run-label p46-scn-ieee8500-d10-T10 --min-mem-avail-gib 5.5"
