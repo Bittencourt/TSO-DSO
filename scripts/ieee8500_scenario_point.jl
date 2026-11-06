@@ -607,9 +607,10 @@ function derive_nogo_row(;
         "oom_source $(k.oom_source), at $(k.peak_rss_kb) kB = $(_fmt(kb_to_gib(k.peak_rss_kb))) GiB."
 
     # The counter-fact is derived from the rows, never assumed: a run counts as completed only
-    # with rc 0 (head run) or a recorded anchor_after solve with at least one iteration.
+    # with rc 0 (head run) or a recorded anchor_after solve with at least one iteration that did
+    # not stop at the wall-clock budget.
     head_done = p35_rc == 0
-    anchor_done = anchor_iters > 0
+    anchor_done = anchor_iters > 0 && !occursin("budget", lowercase(anchor_status))
     n_done = Int(head_done) + Int(anchor_done)
     avail_gib = p35_avail_mib / 1024
     head_txt = if head_done
@@ -627,8 +628,8 @@ function derive_nogo_row(;
         "the attribution run whose anchor_after row is cited above ran its production solve to " *
         "the end ($(anchor_status) after $(anchor_iters) iterations)"
     else
-        "the attribution anchor_after row records no iteration, so no completed run is claimed " *
-        "from it"
+        "the attribution anchor_after row records $(anchor_status) after $(anchor_iters) " *
+        "iterations, not a solve run to the end, so no completed run is claimed from it"
     end
     counter_txt = if n_done > 0
         " Counter-fact: this d = 0.1 T = 24 point completed on this host " *

@@ -341,6 +341,30 @@ end
         resources_csv = nokill,
         host_total_kb = host_kb,
     )
+    # An anchor that stopped at the wall-clock budget did not run its solve to the end, whatever
+    # its iteration count.
+    att_lines = readlines(joinpath(dir, "memory_attribution.csv"))
+    budget = joinpath(tmpd, "anchor_budget.csv")
+    write(
+        budget,
+        join(
+            map(
+                l ->
+                    startswith(l, "ieee8500,0.1,24,1,anchor_after,") ?
+                    replace(l, "\",ERROR:CertificateError,7," => "\",budget_exceeded,7,") : l,
+                att_lines,
+            ),
+            "\n",
+        ) * "\n",
+    )
+    br = derive_nogo_row(;
+        attribution_csv = budget,
+        resources_csv = joinpath(dir, "point_resources.csv"),
+        host_total_kb = host_kb,
+    )
+    @test br.anchor_iters == 7
+    @test occursin("completed on this host once", br.note)
+    @test occursin("budget_exceeded after 7 iterations, not a solve run to the end", br.note)
 
     # The verdict uses the LARGER peak: a threshold between the two peaks (11.209 and 11.520 GiB)
     # is still a NO-GO.

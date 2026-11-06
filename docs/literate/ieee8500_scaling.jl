@@ -732,7 +732,9 @@ hm_anchor24 = hm_attr_row(hm_attr24, "1", "anchor_after")
 hm_kill25 = only(hm_wrappers("p35-head-d0.25-T24"))
 @assert hm_head24["rc"] == "0"
 @assert hm_num(hm_head24["mem_avail_before_mb"]) / 1024 < hm_b1_gib
-@assert parse(Int, hm_anchor24["anchor_iters"]) > 0
+## "Ran to the end": at least one iteration, and not stopped by the wall-clock budget.
+@assert parse(Int, hm_anchor24["anchor_iters"]) > 0 &&
+        !occursin("budget", lowercase(hm_anchor24["anchor_status"]))
 @assert hm_kill25["oom_source"] == "earlyoom"
 @printf(
     "p35-head-d0.1-T24:  rc %s, MemAvailable before launch %s MiB = %.3f GiB (B1 = %.3f GiB)\n",
