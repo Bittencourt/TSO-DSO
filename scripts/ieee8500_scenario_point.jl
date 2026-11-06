@@ -298,6 +298,10 @@ const SCENARIO_TABLE_COLUMNS = (
     :build_s,
     :solve_s,
     :certify_s,
+    :materialize_compile_s,
+    :build_compile_s,
+    :solve_compile_s,
+    :certify_compile_s,
     :iters,
     :gap_ratio,
     :vmhwm_kb,
@@ -663,6 +667,10 @@ Run the ADMM `Scenario` `s` phase by phase, in the order of `TSODSO.run(::ADMM, 
 
 No explicit garbage-collection call runs between phases. With `sample_mem`, VmHWM (kB) is read after every phase.
 
+The point runs in one process with no warm-up, so every phase time includes first-call
+compilation. The compilation part is measured with `Base.cumulative_compile_time_ns()` (timing is
+switched on for the call and off again) and returned as `<phase>_compile_s`.
+
 Returns row-ready fields (`status`, timings, sizes, `iters`, `gap_ratio`, `vmhwm_kb`,
 `hwm_by_phase`, `message`, ...) and `result`: on `status == "ok"` the certified result
 NamedTuple with `welfare`, `dadp`, `exact_maxgap` and `iters` converted exactly as
@@ -675,6 +683,8 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
     hwm() = sample_mem ? proc_status_kb("VmHWM") : missing
     hwm_by_phase = Pair{Symbol, Any}[]
     t = Dict{Symbol, Float64}()
+    tc = Dict{Symbol, Float64}()   # compilation time inside each phase
+    cns() = Int(first(Base.cumulative_compile_time_ns()))
     sizes = Dict{Symbol, Any}()
     local feeder, λ₀, aggs, pf, mode, rmode, st
     have_st = false
@@ -684,7 +694,9 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
     gap_ratio = missing
     message = ""
     result = nothing
+    Base.cumulative_compile_timing(true)
     try
+        c0 = cns()
         t[:materialize] = @elapsed begin
             feeder, λ₀, aggs = TSODSO._materialize(s)
             pf = TSODSO.build_powerflow(s)
@@ -692,6 +704,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             mode = TSODSO.normalize_reactive_mode(TSODSO._default_reactive_consensus(aggs))
             rmode = TSODSO._react_mode(mode)
         end
+        tc[:materialize] = (cns() - c0) / 1e9
         push!(hwm_by_phase, :materialize => hwm())
         sizes[:n_buses] = length(feeder.buses)
         sizes[:n_branches] = length(feeder.branches)
@@ -702,6 +715,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             count(a -> any(d -> d isa TSODSO.FixedCapacitor, a.devices), aggs)
 
         ρf = Float64(A.ρ)
+        c0 = cns()
         t[:build] = @elapsed begin
             st = TSODSO._admm_build(
                 feeder,
@@ -716,6 +730,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
                 agr_optimizer = TSODSO.select_optimizer(TSODSO.QP()),
             )
         end
+        tc[:build] = (cns() - c0) / 1e9
         have_st = true
         push!(hwm_by_phase, :build => hwm())
         # Sizes from the models the run already holds (no extra build).
@@ -729,6 +744,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             m in values(st.agr_by_bus)
         )
 
+        c0 = cns()
         t[:solve] = @elapsed begin
             TSODSO._admm_iterate!(
                 st,
@@ -744,6 +760,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
                 false,
             )
         end
+        tc[:solve] = (cns() - c0) / 1e9
         push!(hwm_by_phase, :solve => hwm())
         loop_done = true
         iters = Int(st.residuals.iters)
@@ -764,6 +781,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             # certify (for example a SolveFailedError in a certify re-solve) keeps its timing and
             # its high-water-mark sample.
             t0 = time_ns()
+            c0 = cns()
             r = try
                 TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, nothing, 1e-4, false)
             catch err
@@ -771,6 +789,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
                 err
             finally
                 t[:certify] = (time_ns() - t0) / 1e9
+                tc[:certify] = (cns() - c0) / 1e9
                 push!(hwm_by_phase, :certify => hwm())
             end
             if r isa CertificateError
@@ -810,6 +829,8 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             -1
         end
         message = first(string(err.msg), 400)
+    finally
+        Base.cumulative_compile_timing(false)
     end
     phase_s(k) = get(t, k, missing)
     return (;
@@ -820,6 +841,10 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
         build_s = phase_s(:build),
         solve_s = phase_s(:solve),
         certify_s = phase_s(:certify),
+        materialize_compile_s = get(tc, :materialize, missing),
+        build_compile_s = get(tc, :build, missing),
+        solve_compile_s = get(tc, :solve, missing),
+        certify_compile_s = get(tc, :certify, missing),
         n_buses = get(sizes, :n_buses, missing),
         n_branches = get(sizes, :n_branches, missing),
         n_load_buses = get(sizes, :n_load_buses, missing),
@@ -979,6 +1004,10 @@ function run_measured_point(opts; phases = scenario_admm_phases)
         build_s = ph.build_s,
         solve_s = ph.solve_s,
         certify_s = ph.certify_s,
+        materialize_compile_s = ph.materialize_compile_s,
+        build_compile_s = ph.build_compile_s,
+        solve_compile_s = ph.solve_compile_s,
+        certify_compile_s = ph.certify_compile_s,
         iters = ph.iters,
         gap_ratio = ph.gap_ratio,
         vmhwm_kb = ph.vmhwm_kb,

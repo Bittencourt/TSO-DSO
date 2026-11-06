@@ -463,6 +463,12 @@ end
     @test ph.result.dadp isa Matrix{Float64}
     @test ph.n_buses == 11
     @test ph.n_aggregators == 10
+    # Every phase time includes compilation; the recorded compile part fits inside it.
+    for k in (:materialize, :build, :solve, :certify)
+        c = getproperty(ph, Symbol(k, "_compile_s"))
+        w = getproperty(ph, Symbol(k, "_s"))
+        @test 0 <= c <= w + 1e-3
+    end
 end
 
 @testitem "ieee8500 scenario: provenance records the effective heap-size hint" begin

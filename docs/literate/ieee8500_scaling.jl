@@ -776,6 +776,11 @@ hm_print_components(hm_attr24)
 # step. The run's status is its measured outcome: a refusal, a convergence error, a budget exit, a
 # pre-flight refusal or a killed run is printed as such and is not retuned. The six numbers are
 # size, build time, solve time, iterations, peak memory and the exactness verdict.
+#
+# **The times include compilation.** The point runs in one cold Julia process with no warm-up, so
+# each phase time includes the first-call compilation of JuMP, MathOptInterface, Clarabel and the
+# package's own kernels. Where the row records it, the compilation part of each phase and its share
+# of the four phase times are printed beside them.
 
 hm_label = "p46-scn-ieee8500-d10-T10"
 # The intended row is selected by its full key (row kind, feeder, population, T, strategy, seed,
@@ -841,6 +846,31 @@ function hm_heap_txt(s)
     return @sprintf("%d bytes = %.3f GiB (--heap-size-hint)", b, b / 1024^3)
 end
 
+# Every phase time includes first-call compilation (one cold process, no warm-up). Rows written
+# since 2026-11-06 carry the measured compilation time of each phase (`*_compile_s`); older rows do
+# not, and that is printed instead of a share.
+function hm_print_compile(r)
+    phases = ("materialize", "build", "solve", "certify")
+    cs = [hm_num(get(r, p * "_compile_s", "")) for p in phases]
+    ts = [hm_num(r[p * "_s"]) for p in phases]
+    if any(isnan, cs)
+        println(
+            "  compile: not recorded on this row (the compile columns were added on 2026-11-06); ",
+            "the times above include first-call compilation",
+        )
+    else
+        @printf(
+            "  compile: materialize %.2f s, build %.2f s, solve %.2f s, certify %.2f s; %.1f %% of the four phase times\n",
+            cs[1],
+            cs[2],
+            cs[3],
+            cs[4],
+            100 * sum(cs) / sum(ts)
+        )
+    end
+    return nothing
+end
+
 function hm_print_measured(rows, label)
     if isempty(rows)
         println("no measured row for run label $label: the point was not launched")
@@ -890,6 +920,7 @@ function hm_print_measured(rows, label)
         hm_num(r["materialize_s"]),
         hm_num(r["certify_s"])
     )
+    hm_print_compile(r)
     println(
         "  provenance: seed ",
         r["seed"],
@@ -984,6 +1015,7 @@ hm_print_wrappers(hm_wrappers(hm_label), hm_meas)
 # | wall-clock cap | 1200 s | the library path has none; this script passes the harness's 1200 s and records it |
 # | certificate refusal | caught into a row | propagates in the library path; this script records it as a row |
 # | timing scope | one figure for build, loop and certify | separate materialize, build, solve and certify figures |
+# | compilation | included (cold process), not separated | included (cold process); the compile part is recorded per phase on rows since 2026-11-06 |
 # | process baseline | `GC.gc()` before ADMM | no forced collection |
 # | heap-size hint | none (the wrapper passed no `--heap-size-hint` flag) | the effective hint of the process, printed in the provenance line above (none on the 2026-11-05 row, see the correction note) |
 # | seed hashing | version-stable generator | `Base.hash`, so it depends on the Julia version (recorded) |
