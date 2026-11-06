@@ -783,7 +783,7 @@ hm_print_components(hm_attr24)
 #
 # The largest point measured as feasible earlier, `ieee8500` at density 0.1 and T = 10, was run
 # through the `Scenario` path: first on 2026-11-05, then re-run on 2026-11-06 with the
-# review-fixed script. The row below is the latest final row of its key, which as of 2026-11-06 is
+# corrected script. The row below is the latest final row of its key, which as of 2026-11-06 is
 # the re-run (attempt 3 in the wrapper rows further down). It used the population selector
 # `:default_10pct`, the ADMM strategy, and `scripts/ieee8500_scenario_point.jl` under the
 # per-point wrapper. The script times four steps
@@ -967,7 +967,7 @@ hm_print_measured(hm_meas, hm_label)
 # passes the flag only when `HEAP_SIZE_HINT` is set.
 #
 # **Re-run (2026-11-06).** The measured row above is attempt 3, launched on 2026-11-06 with the
-# review-fixed script and `HEAP_SIZE_HINT=8G`, so julia ran with an applied `--heap-size-hint=8G`.
+# corrected script and `HEAP_SIZE_HINT=8G`, so julia ran with an applied `--heap-size-hint=8G`.
 # The provenance line above prints the row's effective hint, and the current `runs/` command line
 # is checked below. Its final row replaced attempt 2's under the same key. The `runs/` evidence
 # files of this label now belong to attempt 3; the 2026-11-05 copies (attempt 2's) are at commit
@@ -997,7 +997,7 @@ println("runs/", hm_label, ".time command line: ", hm_time_heap_flag(hm_label))
 #   equivalent of the approved level, and ran with no heap-size hint in effect to a certificate
 #   refusal: 5 iterations and ratio 309.67, the same as attempt 3. Its row is no longer in the
 #   table; it is at commit f60857e (`git show f60857e:results/ieee8500_benchmark/scenario_table.csv`).
-# - **Attempt 3 (2026-11-06).** The re-run with the review-fixed script, which reads MemAvailable
+# - **Attempt 3 (2026-11-06).** The re-run with the corrected script, which reads MemAvailable
 #   on its first lines, before any package load. The host again had less than 8 GiB available,
 #   and the user explicitly approved an in-script floor of 6.5 GiB for this launch, also below
 #   the planned 8 GiB gate. Julia ran with `--heap-size-hint=8G`. Its final row is the measured
