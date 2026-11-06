@@ -531,8 +531,9 @@ headline point (feeder ieee8500, density 0.1, ADMM only), computed ONLY from the
   evidence); the machine running the derivation is never read.
 
 The verdict compares the LARGER measured peak (B1) with `threshold_gib`: GO needs the point's
-peak below the threshold, so one observation above it is enough for NO-GO. It throws (never
-records) if no measured peak exceeds the threshold, because then the row would misstate the data.
+peak below the threshold, so one observation at or above it is enough for NO-GO. It throws
+(never records) if no measured peak reaches the threshold, because then the row would misstate
+the data.
 """
 function derive_nogo_row(;
     attribution_csv::AbstractString,
@@ -594,9 +595,10 @@ function derive_nogo_row(;
     total_kb > 0 || throw(ArgumentError("derive_nogo_row: host total memory unavailable"))
     total_gib = kb_to_gib(total_kb)
     b2 = b1 + EARLYOOM_SIGTERM_FRACTION * total_gib
-    b1 > threshold_gib || throw(
+    # GO needs the peak strictly below the threshold, so a peak equal to it is a NO-GO.
+    b1 >= threshold_gib || throw(
         ArgumentError(
-            "derive_nogo_row: no measured peak exceeds the $(threshold_gib) GiB threshold " *
+            "derive_nogo_row: no measured peak reaches the $(threshold_gib) GiB threshold " *
             "(larger peak $(_fmt(b1)) GiB); the memory_infeasible verdict would misstate the data",
         ),
     )

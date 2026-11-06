@@ -377,6 +377,16 @@ end
     @test between.status == "memory_infeasible"
     @test between.threshold_gib == 11.3
 
+    # GO needs the peak strictly below the threshold: a threshold equal to B1 is a NO-GO.
+    at_b1 = derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = joinpath(dir, "point_resources.csv"),
+        host_total_kb = host_kb,
+        threshold_gib = 12_079_316 / 1024^2,
+    )
+    @test at_b1.status == "memory_infeasible"
+    @test at_b1.b1_gib == at_b1.threshold_gib
+
     # The verdict is refused (not recorded) when the threshold is above the measured peaks.
     @test_throws ArgumentError derive_nogo_row(;
         attribution_csv = joinpath(dir, "memory_attribution.csv"),

@@ -643,9 +643,10 @@ hm_head24 = only(hm_wrappers("p35-head-d0.1-T24"))
 hm_maxrss_kb = parse(Int, hm_head24["peak_rss_kb"])
 @assert hm_num(hm_nogo["vmhwm_kb"]) == hm_hwm_kb
 @assert hm_num(hm_nogo["p35_maxrss_kb"]) == hm_maxrss_kb
-## GO needs the point's peak below the threshold, so the LARGER observed peak decides.
+## GO needs the point's peak below the threshold, so the LARGER observed peak decides, and a
+## peak equal to the threshold is a NO-GO.
 hm_verdict =
-    max(hm_gib(hm_hwm_kb), hm_gib(hm_maxrss_kb)) > hm_threshold_gib ? "NO-GO" : "GO"
+    max(hm_gib(hm_hwm_kb), hm_gib(hm_maxrss_kb)) >= hm_threshold_gib ? "NO-GO" : "GO"
 @assert (hm_verdict == "NO-GO") == (hm_nogo["status"] == "memory_infeasible")
 @printf("GO threshold (recorded_no_go row):           %.1f GiB\n", hm_threshold_gib)
 @printf(
