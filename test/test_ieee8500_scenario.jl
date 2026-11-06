@@ -289,7 +289,8 @@ end
 
     # Without `host_total_kb`, B2's host total is the measurement host's evidence (the `free -m`
     # snapshot of the attribution run), never the machine running the derivation.
-    @test free_total_kb(joinpath(dir, "runs", "p39-attr-d0.1-T24.free_before")) == 15_396 * 1024
+    @test free_total_kb(joinpath(dir, "runs", "p39-attr-d0.1-T24.free_before")) ==
+          15_396 * 1024
     dflt = derive_nogo_row(;
         attribution_csv = joinpath(dir, "memory_attribution.csv"),
         resources_csv = joinpath(dir, "point_resources.csv"),
@@ -331,7 +332,10 @@ end
     @test occursin("completed on this host once", fr.note)
     @test occursin("ended with rc 143, so no completed run is claimed from it", fr.note)
     nokill = joinpath(tmpd, "no_kill.csv")
-    write(nokill, join(filter(l -> !startswith(l, "p35-head-d0.25-T24,"), res_lines), "\n") * "\n")
+    write(
+        nokill,
+        join(filter(l -> !startswith(l, "p35-head-d0.25-T24,"), res_lines), "\n") * "\n",
+    )
     @test_throws ArgumentError derive_nogo_row(;
         attribution_csv = joinpath(dir, "memory_attribution.csv"),
         resources_csv = nokill,
@@ -530,7 +534,10 @@ end
 
     # Another seed or another run label is another row.
     upsert_rows!(path, [scenario_row(; key..., seed = 2, status = "started")])
-    upsert_rows!(path, [scenario_row(; key..., run_label = "p-b", status = "preflight_refused")])
+    upsert_rows!(
+        path,
+        [scenario_row(; key..., run_label = "p-b", status = "preflight_refused")],
+    )
     d = CSV.read(path, DataFrame)
     @test nrow(d) == 3
     @test count(==("ok"), d.status) == 1
@@ -577,8 +584,14 @@ end
 
     dir = mktempdir()
     path = joinpath(dir, "scenario_table.csv")
-    upsert_rows!(path, [scenario_row(; row_kind = "measured", feeder = "ieee13", status = "ok")])
-    upsert_rows!(path, [scenario_row(; row_kind = "measured", feeder = "ieee123", status = "ok")])
+    upsert_rows!(
+        path,
+        [scenario_row(; row_kind = "measured", feeder = "ieee13", status = "ok")],
+    )
+    upsert_rows!(
+        path,
+        [scenario_row(; row_kind = "measured", feeder = "ieee123", status = "ok")],
+    )
     # Only the table remains: the temporary file was renamed over it, not left beside it.
     @test readdir(dir) == ["scenario_table.csv"]
     @test nrow(CSV.read(path, DataFrame)) == 2
@@ -635,7 +648,13 @@ end
     # IEEE-13 only. The production outcome at 8500 scale is `refused_certificate`; here it is
     # forced with a flat floor far below any solver residual, passed ONLY in this test (the
     # library defaults and the command line are unchanged).
-    s = Scenario(; name = "status-branches", feeder = :ieee13, strategy = ADMM(), T = 10, seed = 3)
+    s = Scenario(;
+        name = "status-branches",
+        feeder = :ieee13,
+        strategy = ADMM(),
+        T = 10,
+        seed = 3,
+    )
     atol_force, rtol_force = 1e-300, 0.0
     ph = scenario_admm_phases(
         s;
@@ -761,7 +780,10 @@ end
         run_label = "007",
     )
     upsert_rows!(path, [r])
-    upsert_rows!(path, [scenario_row(; row_kind = "measured", feeder = "ieee123", status = "ok")])
+    upsert_rows!(
+        path,
+        [scenario_row(; row_kind = "measured", feeder = "ieee123", status = "ok")],
+    )
     txt = read(path, String)
     @test occursin(",0123456,", txt)
     @test occursin(",007,", txt)

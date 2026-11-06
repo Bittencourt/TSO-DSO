@@ -692,7 +692,13 @@ hm_b2_gib = hm_num(hm_nogo["b2_gib_estimate"])
 ## `free -m` total of the attribution run of this point (whose earlyoom log gives the 12 percent).
 ## B2 is recomputed from it here and checked against the row.
 function hm_free_total_mib(label)
-    fb = joinpath(pkgdir(TSODSO), "results", "ieee8500_benchmark", "runs", label * ".free_before")
+    fb = joinpath(
+        pkgdir(TSODSO),
+        "results",
+        "ieee8500_benchmark",
+        "runs",
+        label * ".free_before",
+    )
     return parse(Int, split(only(filter(l -> startswith(l, "Mem:"), readlines(fb))))[2])
 end
 hm_host_label = "p39-attr-d0.1-T24"
@@ -796,12 +802,12 @@ hm_is_transient(status) =
 hm_meas_all = filter(
     r ->
         r["row_kind"] == "measured" &&
-            r["feeder"] == "ieee8500" &&
-            r["population"] == "default_10pct" &&
-            r["T"] == "10" &&
-            r["strategy"] == "ADMM" &&
-            r["seed"] == "1" &&
-            r["run_label"] == hm_label,
+        r["feeder"] == "ieee8500" &&
+        r["population"] == "default_10pct" &&
+        r["T"] == "10" &&
+        r["strategy"] == "ADMM" &&
+        r["seed"] == "1" &&
+        r["run_label"] == hm_label,
     hm_scn,
 )
 hm_meas_final = filter(r -> !hm_is_transient(r["status"]), hm_meas_all)
@@ -844,7 +850,8 @@ end
 # the script recorded; see the correction note below.
 function hm_heap_txt(s)
     b = tryparse(Int, s)
-    b === nothing && return "$(s) (legacy environment-variable value, never applied: none in effect)"
+    b === nothing &&
+        return "$(s) (legacy environment-variable value, never applied: none in effect)"
     b == 0 && return "none (no --heap-size-hint)"
     return @sprintf("%d bytes = %.3f GiB (--heap-size-hint)", b, b / 1024^3)
 end
