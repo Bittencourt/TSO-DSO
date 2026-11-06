@@ -1,336 +1,289 @@
 ---
 phase: 46-ieee-8500-headline-measurement-go-no-go
-reviewed: 2026-11-06T00:38:10Z
+reviewed: 2026-11-06T11:45:24Z
+iteration: 2
 depth: standard
-files_reviewed: 8
+files_reviewed: 11
 files_reviewed_list:
-  - src/experiments/Scenario.jl
-  - src/experiments/materialize.jl
   - scripts/ieee8500_scenario_point.jl
-  - test/test_ieee8500_scenario.jl
-  - test/test_flex_population.jl
-  - docs/literate/ieee8500_scaling.jl
+  - scripts/run_ieee8500_point.sh
   - scripts/README.md
+  - test/test_ieee8500_scenario.jl
+  - docs/literate/ieee8500_scaling.jl
+  - src/experiments/materialize.jl
+  - .planning/research/STACK.md
   - results/ieee8500_benchmark/scenario_table.csv
+  - results/ieee8500_benchmark/point_resources.csv
+  - results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.time
+  - results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.free_before
 findings:
-  critical: 2
-  warning: 9
-  info: 8
-  total: 19
+  critical: 1
+  warning: 4
+  info: 6
+  total: 11
 status: issues_found
 ---
 
-# Phase 46: Code Review Report
+# Phase 46: Code Review Report (iteration 2)
 
-**Reviewed:** 2026-11-06T00:38:10Z
-**Depth:** standard
-**Files Reviewed:** 8
+**Reviewed:** 2026-11-06T11:45:24Z
+**Iteration:** 2 (iteration 1 is kept as `46-REVIEW.iter1.md`)
+**Depth:** standard, plus cross-file checks:
+- `src/core/errors.jl` and `src/admm/` catch sites;
+- `scripts/profile_ieee8500_memory_attribution.jl` anchor logic;
+- the docs section `## Headline measurement and go/no-go` executed standalone against the committed CSVs.
+
+**Files Reviewed:** 11
 **Status:** issues_found
 
 ## Summary
 
-Scope: `git diff 7f13ec4..HEAD`, limited to the eight files listed above. Known and out of scope: formatter drift in 22 unrelated files, and the 2 pre-existing script-API-lint findings in `scripts/profile_ieee8500_memory_attribution.jl`.
+Scope: `git diff f60857e..HEAD`, which covers the iteration-1 fix commits plus the orchestrator's 2026-11-06 re-run of the T = 10 point (commit `02d8857`). Known and out of scope: repo-wide formatter drift, and the 2 pre-existing script-API-lint findings in `scripts/profile_ieee8500_memory_attribution.jl`.
 
-**What is sound.**
-- **The `:default_10pct` selector.**
-  - It reuses the `:default` branch, which is unchanged.
-  - It uses the same `clamp(round(Int, 0.1*n), 1, n)` / `randperm(LehmerRNG(seed))` / sorted / keep-capacitors rule as `sample_density_buses` + `density_filtered_population`.
-  - At a fixed seed and Julia version it is deterministic.
-- **The `Scenario` widening.**
-  - No field was added, so the default construction, `==`, `hash` and `savename` stay as they were.
-  - All four new guards are in the inner constructor, so `with_strategy` and the keyword paths cannot bypass them.
-- **The ADMM phase composition.** It matches `solve_admm` for `run(::ADMM)`:
-  - same `ρ`/`ρ_q`, `ρ_min = 1e-2`, `ρ_max = 1e4`, `rtol_exact = 1e-4`, `atol_exact = nothing`;
-  - the same `ConvergenceError` iteration count (`maxiter`);
-  - the `CertificateError` iteration count is taken from `st.residuals.iters`, which is equivalent to the re-wrap.
+### Verification of the iteration-1 findings
 
-**Two blockers.**
-1. **False provenance.** The committed measured row and the docs record a heap-size hint of `8G`, but the run had none. Julia ignores `JULIA_HEAP_SIZE_HINT` and the wrapper never passes `--heap-size-hint`. I checked this on the same Julia 1.12.5 and confirmed it from the run's own `.time` command line.
-2. **Lossy upsert key.** The key does not include the seed or the run label. A later `started` or `preflight_refused` row therefore silently replaces a completed measurement. This already happened twice during the phase.
+| ID | Verdict | Basis |
+|---|---|---|
+| CR-01 heap hint | **Resolved in code and data; the docs regressed (see CR-01 below)** | The row records `Int(Base.JLOptions().heap_size_hint)` = 8589934592. The new `.time` command line shows `julia --heap-size-hint=8G`. On Julia 1.12.5 I checked that `--heap-size-hint=8GB/8.5G/50%` parse as expected. |
+| CR-02 key/attempt | **Resolved as specified; residual risk WR-01** | Traced the `upsert_rows!` rules. A transient row replaces only older transient rows. A final row replaces every row of its key. Old-schema tables key on `"missing"` consistently. The `_key` stringification agrees between Int and CSV-read values. |
+| WR-01 atomic write | **Resolved** | Same-directory temp file, then `Base.Filesystem.rename`, which exists on 1.10, 1.11 and 1.12. The test does not exercise the cleanup path (IN-04). |
+| WR-02 in-process failures | **Resolved; residual WR-04** | `OutOfMemoryError` is final. `crashed:*` is transient. No TSODSO catch site wraps an OOM into a `TSODSOError`: `admm_phases.jl:306` rethrows the original, and `solve_admm.jl:549` re-wraps only `CertificateError`. |
+| WR-03 certify iters/timing | **Resolved for certify; the same defect remains in the solve phase (WR-03)** | Reasoning below. |
+| WR-04 B2 host total | **Resolved** | B2 is recomputed from `runs/p39-attr-d0.1-T24.free_before` (15396 MiB) and asserted at rtol 1e-9. The page prints 13.324 GiB. |
+| WR-05 verdict uses max | **Resolved; a boundary nit remains (IN-03)** | Reasoning below. |
+| WR-06 counter-fact | **Resolved; predicate nit (IN-02)** | Head run: `rc == 0`. Anchor: `iters > 0`. A missing killed row throws. |
+| WR-07 compile time | **Resolved** | `cumulative_compile_timing` is a re-entrant counter (enable increments, disable decrements), so the on/off pair is safe under nested `@time`. The page prints a 15.3 % compile share. |
+| WR-08 status branches | **Resolved except `error:<Type>` (IN-05)** | `refused_certificate` is pinned to `solve_admm`'s own `CertificateError.iterations` and ratio. `convergence_error` is pinned to `run_scenario`. `budget_exceeded` is covered. |
+| WR-09 pre-flight before load | **Resolved in code; the docs prose regressed (CR-01)** | `MEMAVAIL_AT_START_KB` is read with Base only, before `using DrWatson`. There is no `~/.julia/config/startup.jl` on the host, so the claim "before any package load" holds. |
 
-**Warnings.**
-- The CSV rewrite is not atomic.
-- The NO-GO verdict uses `min` where it should use `max`, and the docs never assert the verdict against the recorded status.
-- B2 depends on whichever host runs `--record-nogo`, and the docs back-derive its "host total" from B2 itself.
-- Hard-coded counter-fact prose in the NO-GO note.
-- Expected memory outcomes (`OutOfMemoryError`) leave a misleading `started` row.
-- Status-row information is lost on non-certificate certify errors.
-- The phase timings include JIT compilation but are not labelled as such.
-- Every non-`ok` status branch is untested, and that includes the branch that produced the committed row.
+#### WR-03: certify iterations and timing
+
+**How the certify path behaves now.** Take a non-certificate `TSODSOError` raised inside `_admm_certify`:
+1. The inner `catch` rethrows it.
+2. Before the rethrow reaches the outer `catch`, the inner `finally` (`:829-833`) records `t[:certify]`, `tc[:certify]` and the `:certify` VmHWM sample.
+3. `loop_done` was set at `:805`, only after `_admm_iterate!` returned. So the outer `catch` (`:864-870`) takes `st.residuals.iters`, which is the converged count, not -1.
+4. `hasproperty(err, :iterations)` comes first. A `CertificateError` or `ConvergenceError` that carries its own count therefore keeps it.
+
+**Correct for certify.** The same reasoning shows the fix was not applied to the solve phase (WR-03 below).
+
+#### WR-05: the verdict uses the larger peak
+
+- **Script.** `b1 = kb_to_gib(max(vmhwm_kb, p35_kb))`, then `b1 > threshold_gib || throw` (`:554-570`).
+- **Docs.** The docs use the same `max` (`:647-648`) and `@assert (verdict == "NO-GO") == (status == "memory_infeasible")` (`:649`).
+- **Split peaks.** If the two peaks straddle the threshold, both sides now say NO-GO. The 11.3 GiB test pins this.
+- **Consistency.** The verdict uses the same quantity as B1.
+- **Correct.** The only gap left is the equality boundary (IN-03).
+
+### Wrapper backward compatibility
+
+With `HEAP_SIZE_HINT` unset, `HEAP_ARGS=()`. The expansion `"${HEAP_ARGS[@]}"` is safe under `set -u` on bash 5.3, which the host runs; bash ≥ 4.4 is required for that, and `LABEL_ARGS` already relied on it.
+
+The julia command line for `benchmark_ieee8500.jl`, `profile_ieee8500_memory.jl` and `profile_ieee8500_memory_attribution.jl` is therefore byte-identical to before. No other script, doc or CI file sets or reads `JULIA_HEAP_SIZE_HINT`.
+
+### Re-run data
+
+- **Row consistency.** The regenerated measured row is internally consistent:
+  - VmHWM 6,016,952 kB equals the wrapper's MaxRSS;
+  - the ratio 309.6735071222779 and 5 iterations are byte-identical to the 2026-11-05 run (deterministic);
+  - the sub-seed is unchanged.
+- **Docs run.** The docs section runs to completion against the committed CSVs.
+- **The problem.** Some of its prose no longer describes what it prints (CR-01).
 
 ## Critical Issues
 
-### CR-01: Committed measured row and docs claim an 8G heap-size hint that was never applied
+### CR-01: After the re-run, the committed docs page contradicts its own cited evidence and its printed numbers, and it omits the 2026-11-06 gate override
 
-**File:** `scripts/ieee8500_scenario_point.jl:707` (also `:10`, `:105`; `scripts/README.md:34`; `docs/literate/ieee8500_scaling.jl:851`, `:925`, `:1028`; `results/ieee8500_benchmark/scenario_table.csv:3`)
+**File:** `docs/literate/ieee8500_scaling.jl:953-959`, `:961-977`, `:1139-1141`, `:1041`; `.planning/research/STACK.md:63-69`; root cause in `results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.time:1`
 
-**Issue:** `_provenance_fields` records `heap_size_hint = get(ENV, "JULIA_HEAP_SIZE_HINT", missing)`. Julia does not read that variable:
-- `JULIA_HEAP_SIZE_HINT=1G julia -e 'print(Base.JLOptions().heap_size_hint)'` prints `0` on 1.12.5;
-- `julia --heap-size-hint=1G ...` prints `1073741824`.
+**Issue:** The fixes were written before the re-run. Commit `02d8857` then replaced the measured row and overwrote the label's `runs/` evidence files. The page is the committed go/no-go decision record, and it now makes four claims that the committed tree contradicts.
 
-`scripts/run_ieee8500_point.sh` runs `julia --project=. "$SCRIPT" ...` without the flag. The run's evidence file `runs/p46-scn-ieee8500-d10-T10.time` confirms the command line had no `--heap-size-hint`.
+1. **The heap-hint correction note cites evidence that now shows the opposite (`:953-957`).**
+   - The note says the 2026-11-05 run had no hint, because "the run's `runs/p46-scn-ieee8500-d10-T10.time` command line has no such flag".
+   - The committed file now reads `... julia --heap-size-hint=8G --project=. scripts/ieee8500_scenario_point.jl ... --min-mem-avail-gib 6.5`.
+   - The evidence the note relies on exists only in history (`git show f60857e:results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.time`, which shows no flag).
+   - A reader who checks the cited file will conclude that the correction itself is false. That is the same false-provenance class as iteration-1 CR-01.
+   - `STACK.md:66-67` ("No IEEE-8500 run ... up to and including the Phase-46 T = 10 point had a heap-size hint") is now wrong for the T = 10 point that is committed, which did have one.
+   - The divergence-table row at `:1041` says "(none on the 2026-11-05 row, see the correction note)". That row is no longer in the CSV.
+2. **The prose and the printed footprint disagree (`:972-976`, `:1139-1141`).**
+   - The prose says the startup footprint "is computed below from that attempt's two readings", meaning attempt 2, which was read after package load.
+   - The Reproducing section says that on 2026-11-05 "the default floor needed about one more GiB at launch (printed above)".
+   - The page actually prints the following (I executed the section): `in-script MemAvailable (measured row, read before package load) 7482696 kB = 7.136 GiB; startup footprint 77496 kB = 0.074 GiB` and `the default 8 GiB in-script gate therefore implies about 8.07 GiB`.
+   - The ~0.92 GiB package-load footprint, which justified the 2026-11-05 floor override, can no longer be derived from committed rows: attempt 2's final row was replaced.
+3. **The 2026-11-06 launch override is not recorded.**
+   - CONTEXT requires a pre-flight of at least 8 GiB.
+   - Attempt 3 ran with `--min-mem-avail-gib 6.5` on a pre-load reading of 7.136 GiB. The default gate would have refused that reading.
+   - The commit message says the floor was user-approved on 2026-11-06. The page says only that attempts 1 and 2 were "launched with the user's explicit approval at about 7.1 GiB". The approval behind the row it actually reports is not stated.
+   - Plan 05 set the precedent that the docs state the override.
+4. **The section narrative (`:961-977`) still describes attempt 2 as the run that "ran to completion" and joins the measured row.** The printed join is attempt 3. A reader cannot tell from the prose which launch produced the six numbers, or that it ran with an 8 GiB heap hint, unlike every harness comparator.
 
-The consequences:
-- The committed measured row says `heap_size_hint = 8G`. That is false provenance.
-- The docs divergence table (line 925) lists the heap hint as a difference between the harness path and the Scenario path. That difference does not exist.
-- The run did not meet the CONTEXT hygiene requirement (`--heap-size-hint`).
-- The README and docs reproduce commands keep giving the same no-op instruction.
-
-**Fix:**
-1. Record the hint the process actually has, not the environment variable:
-   ```julia
-   heap_size_hint = let h = Base.JLOptions().heap_size_hint
-       h == 0 ? "none" : string(h ÷ 1024^2, "M")
-   end,
-   ```
-2. Make the wrapper (or the documented launch) pass the hint for real, for example `julia --project=. ${JULIA_HEAP_SIZE_HINT:+--heap-size-hint=$JULIA_HEAP_SIZE_HINT} "$SCRIPT" ...`.
-3. Correct the committed row's `heap_size_hint` to `none`, with a dated note.
-4. In the docs, fix the line-925 table row (both paths ran without a hint) and the line-1028 / README commands.
-
-### CR-02: The upsert key omits seed and run_label, so a later attempt silently replaces a completed measurement
-
-**File:** `scripts/ieee8500_scenario_point.jl:301`, `:319`, `:724-732`, `:739-766`
-
-**Issue:** `ROW_KEY = (:row_kind, :feeder, :population, :T, :strategy)`. The `key` NamedTuple built in `run_measured_point` also carries `seed` and `sub_seed_population`, but neither is part of the identity. So any re-launch of the same point removes the existing completed row (for example `refused_certificate` or `ok`), whatever its seed or label:
-- the `preflight_refused` row at line 750 replaces it;
-- the `started` row at line 755 replaces it before any work runs. If that relaunch is then OOM-killed, the only measurement on disk is gone.
-
-A run with `--seed 2` also overwrites the seed-1 measurement. This is not hypothetical:
-- In plan 02, a `preflight_refused` row replaced the `ok` smoke row.
-- In plan 04, attempt 1's `preflight_refused` row was lost, so the docs had to reconstruct the footprint from attempt 2 only (46-05 deviation 2).
-
-This is a data-loss path in a measurement script whose purpose is to preserve outcomes.
-
-**Fix:** Key measured rows on the attempt identity, and never let a non-final row replace a final one:
+**Fix:** Add a dated paragraph and adjust the existing prose. The page should compute numbers and must not quote them:
 ```julia
-const ROW_KEY = (:row_kind, :feeder, :population, :T, :strategy, :seed, :run_label)
-# in upsert_rows!: refuse to replace a final row with a transient one
-const TRANSIENT = ("started", "preflight_refused")
-function _replace_ok(old, new)
-    string(new.status) in TRANSIENT && !(string(old.status) in TRANSIENT) && return false
-    return true
-end
+# **Re-run (2026-11-06).** The measured row above is attempt 3: launched with
+# `HEAP_SIZE_HINT=8G` (an applied `--heap-size-hint=8G`, visible in the run's `.time`
+# command line) and `--min-mem-avail-gib 6.5` on the pre-load reading, a floor below the
+# 8 GiB gate that the user approved on 2026-11-06. It replaced the 2026-11-05 final row
+# (attempt 2) under the same key. The runs/ evidence files now belong to attempt 3; the
+# 2026-11-05 evidence is at commit f60857e (`git show f60857e:results/ieee8500_benchmark/runs/
+# p46-scn-ieee8500-d10-T10.time`).
 ```
-Alternatively, write the `started` and `preflight_refused` rows under a distinct `row_kind` (`attempt`), so that only final rows ever share the `measured` key. Add a test in which a `preflight_refused` upsert does not displace an existing `refused_certificate` row.
+- Change the correction note at `:956` to cite `f60857e:` and not the working-tree file.
+- Make the footprint sentence conditional on `when`. For example, print "package-load footprint (2026-11-05, attempt 2): not derivable from committed rows; 965,724 kB recorded at commit f60857e". Alternatively, drop the "about one more GiB (printed above)" clause.
+- Change `:1041` to say "8 GiB on the current row; none on the replaced 2026-11-05 row".
+- Add a dated line to `STACK.md` saying that the 2026-11-06 re-run did apply the hint.
 
 ## Warnings
 
-### WR-01: `upsert_rows!` rewrites the committed CSV in place (not atomic)
+### WR-01: Reusing a run label, as the documented reproduce command does, overwrites the `runs/` evidence and lets any final outcome replace the committed measurement
 
-**File:** `scripts/ieee8500_scenario_point.jl:329-346` (write at `:344`)
+**File:** `scripts/run_ieee8500_point.sh:57`, `:65-67` (evidence paths keyed only by `$LABEL`); `docs/literate/ieee8500_scaling.jl:1148-1150`; `scripts/README.md:34`; `scripts/ieee8500_scenario_point.jl:348`
 
-**Issue:** `CSV.write(csv_path, df)` truncates the file and then streams the rows into it. The final upsert runs right after certify, which is when the process sits at its high-water mark and is most likely to receive earlyoom's SIGTERM. A kill or crash during the write leaves `scenario_table.csv` truncated or partial, and that loses the committed `recorded_no_go` row along with the new one. Two concurrent invocations would also lose each other's updates, because there is no lock.
+**Issue:** CR-02 made `run_label` part of the attempt identity, so a "re-run of the same attempt identity replaces its own row". Three facts work against that:
+- **Nothing makes labels unique per launch.**
+- **The reproduce command reuses the committed label.** Both the docs and the README hard-code `p46-scn-ieee8500-d10-T10`.
+- **The wrapper overwrites the evidence of every earlier launch of a label.** It writes `free -m > runs/$LABEL.free_before`, `rm -f runs/$LABEL.pid`, and `time -o runs/$LABEL.time`.
 
-**Fix:** Write to a temporary file in the same directory and rename it over the target:
-```julia
-tmp = csv_path * ".tmp." * string(getpid())
-CSV.write(tmp, df)
-mv(tmp, csv_path; force = true)   # atomic rename on the same filesystem
-```
-
-### WR-02: Expected memory outcomes and validation errors leave a `started` row that the docs read as "process died"
-
-**File:** `scripts/ieee8500_scenario_point.jl:659-660`, `:755-776`; `docs/literate/ieee8500_scaling.jl:782-784`
-
-**Issue:** Only a `TSODSOError` becomes a status. Anything else is rethrown after the `started` row has been written, and that row has already replaced any earlier completed row (see CR-02). This covers:
-- Julia's `OutOfMemoryError`, which is a plausible outcome at 8500 scale and is exactly the kind of result this phase exists to record;
-- an `ArgumentError` from `_check_admm_pair!` or from Population;
-- a `SystemError` from reading `/proc`.
-
-The table then holds `started`. `hm_status_sentence` turns that into "the process died before writing its final row; the wrapper row … is the measured outcome", but the wrapper row will show `rc 1, oom_source none`. The record is wrong either way: a Julia OOM is misfiled as a non-outcome, and a programming error looks like a kill.
-
-**Fix:** In `run_measured_point`, wrap the phases so the outcome is written before the rethrow:
-```julia
-ph = try
-    scenario_admm_phases(s; ...)
-catch err
-    st = err isa OutOfMemoryError ? "memory_infeasible_inprocess" : "crashed:" * string(nameof(typeof(err)))
-    upsert_rows!(path, [scenario_row(; key..., prov..., status = st, mem_avail_before_kb = avail_kb,
-                                     note = first(sprint(showerror, err), 400))])
-    rethrow()
-end
-```
-Add the new statuses to the docs status vocabulary.
-
-### WR-03: The iteration count and certify timing are discarded when certify throws a non-certificate `TSODSOError`
-
-**File:** `scripts/ieee8500_scenario_point.jl:616`, `:630-637`, `:659-673`
-
-**Issue:** `iters` is set from `st.residuals.iters` at line 616. Then, if `_admm_certify` throws, for example a `SolveFailedError` from a certify AgrOpt re-solve:
-- the inner `catch` rethrows it, because it is not a `CertificateError`;
-- the `@elapsed` aborts, so `t[:certify]` and the `:certify` HWM sample are never recorded;
-- the outer `catch` sets `iters = -1`, because `SolveFailedError` has no `iterations` and the `have_st && status == "refused_certificate"` branch does not apply.
-
-The row then reports a `-1` sentinel and a missing certify time for a loop that converged in a known number of iterations.
-
-**Fix:** Keep the iteration count once the loop has finished, and time certify with explicit `time_ns`:
-```julia
-iters = if hasproperty(err, :iterations) && err.iterations !== nothing
-    Int(err.iterations)
-elseif have_st && st.residuals.iters > 0
-    Int(st.residuals.iters)
-else
-    -1
-end
-```
-For the timing, wrap certify with `t0 = time_ns(); try … finally t[:certify] = (time_ns()-t0)/1e9 end`.
-
-### WR-04: B2 depends on the host that runs `--record-nogo`, and the docs back-derive its "host total" from B2
-
-**File:** `scripts/ieee8500_scenario_point.jl:427`; `docs/literate/ieee8500_scaling.jl:681-702`
-
-**Issue:** `derive_nogo_row` defaults `host_total_kb` to the MemTotal of the machine running the derivation. B2 is meant to describe *this host's* earlyoom limit at the measured peak. Re-running `--record-nogo` on a CI runner or a larger workstation silently rewrites `b2_gib_estimate` (and `git_head` and `julia_version`), while the note still says "on this host". The test pins `host_total_kb` explicitly, but the CLI does not.
-
-In the docs:
-- B2 is read from the row and is never recomputed.
-- The printed "host total" is `(B2 - B1) / 0.12`, which is circular.
-- The `free -m` cross-check (`hm_free_total_mib`) is printed and not asserted.
+The consequences:
+- **This already happened.** After `02d8857`, `point_resources.csv` holds three rows for the label (attempts 1-3), but the `runs/` files describe only attempt 3. Attempt 2's row (MaxRSS 6,059,204 kB, floor 5.5) has no evidence in the tree, and that is how CR-01 item 1 arose.
+- **A failed reproduction can replace the committed measurement.** Suppose a later reproduction with this label ends in a final but different outcome: `memory_infeasible_inprocess` on a busier host, `budget_exceeded` on a slower one, or `error:SolveFailedError`. That outcome silently replaces the committed `refused_certificate` row, which is the scenario CR-02 was raised to prevent.
+- **The transient-row protection does not help here.** It covers only `started`, `preflight_refused` and `crashed:*`.
 
 **Fix:**
-1. Take MemTotal from the measurement host's evidence: the `Mem:` total in `runs/<label>.free_before`, or a named constant citing it. Make the CLI pass it, and do not read `/proc/meminfo`.
-2. In the docs, recompute B2 and assert it:
+1. **Wrapper.** Refuse to reuse a label whose evidence already exists, unless `FORCE_RELABEL=1` is set:
+   ```bash
+   if [ -e "$RUNS/$LABEL.time" ] && [ "${FORCE_RELABEL:-0}" != 1 ]; then
+     echo "label $LABEL already has evidence in $RUNS; use a new label (e.g. ${LABEL}-r2)" >&2
+     exit 2
+   fi
+   ```
+2. **Commands.** Change the docs and README reproduce commands to use a fresh label, for example `<label>-$(date +%Y%m%d)`, and say so.
+3. **Optional.** Record the wrapper's `started_at`, or the child pid, in the scenario row. The docs could then join on it instead of on the MaxRSS == VmHWM coincidence (see WR-02).
+
+### WR-02: The docs page crashes on exactly the outcomes its status prose promises to describe (`started`, `preflight_refused`)
+
+**File:** `docs/literate/ieee8500_scaling.jl:1001-1003` (and `:839-842`, `:830-832`)
+
+**Issue:** `hm_print_wrappers` filters the wrapper rows on `hm_num(w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"])` and then runs `@assert !isempty(joined)`.
+- A `started` row (process killed by a signal) has an empty `vmhwm_kb`, and so does a `preflight_refused` row. `hm_num("")` is `NaN`, and `NaN == x` is never true, so the assert fires and the docs build fails.
+- `hm_status_sentence("started")` says "the wrapper row below (rc, oom_source) is the measured outcome". That branch can never render, and neither can the pre-flight one. The 46-05 summary's claim that "a refusal, a kill or a not-launched run each read plainly" is therefore false for two of the three cases.
+- Before the fix, the last-wrapper assert had the same flaw. The CR-02 fix rewrote this join and kept the hard assert.
+- The join on MaxRSS == VmHWM is also a numeric coincidence, not a key. `/usr/bin/time` MaxRSS can exceed the VmHWM read before the final upsert and exit, and then the assert also fails for a final row.
+
+**Fix:** Join only when the row carries a peak, and print instead of asserting:
 ```julia
-hm_b2_calc = hm_b1_gib + 0.12 * hm_free_total_mib / 1024
-@assert isapprox(hm_b2_calc, hm_b2_gib; rtol = 1e-3)   # free -m truncates to MiB
-```
-
-### WR-05: The verdict compares the smaller peak with the threshold, and the docs never check the verdict against the recorded status
-
-**File:** `scripts/ieee8500_scenario_point.jl:431`; `docs/literate/ieee8500_scaling.jl:643-644`, `:657`
-
-**Issue:** GO requires the point's peak to stay below the threshold. B1 is defined as the larger observation. Both sites test `min(peaks) > threshold`, which gives the wrong answer when the two peaks fall on opposite sides of the threshold (say 9.9 and 11.5 GiB):
-- the script throws and refuses to record a NO-GO that the data supports (max = 11.5 > 10);
-- the docs print `verdict: GO` next to a row whose status is `memory_infeasible`.
-
-Line 657 prints both values without an `@assert`, so the contradiction would render silently. Today's data has both peaks above 10 GiB, so the current output is correct by luck.
-
-**Fix:** Use `max(...) > threshold_gib` for NO-GO in both places, which is consistent with B1. In the docs, add `@assert (hm_verdict == "NO-GO") == (hm_nogo["status"] == "memory_infeasible")`.
-
-### WR-06: The NO-GO note hard-codes the "completed twice" counter-fact instead of deriving it
-
-**File:** `scripts/ieee8500_scenario_point.jl:438-444`, `:465-468`
-
-**Issue:** The note always states "this d = 0.1 T = 24 point completed on this host twice … by evicting page cache and using swap". It says so whatever `p35_rc` is and whatever the anchor row shows. If the head row had `rc != 0`, the note would interpolate `rc 143` into a sentence that says the point completed. The "evicting page cache and using swap" mechanism is asserted and not taken from any row. Separately, if the d = 0.25 row is missing or duplicated, `killed_txt` is silently dropped.
-
-**Fix:** Before emitting the sentence, check `p35_rc == 0` and that the anchor row exists. Otherwise throw, or emit a different sentence. Require `nrow(killed) == 1`, because a silent omission changes the record. Attribute the mechanism to a cited source: the `free_before` swap and cache columns, or the Phase-39 docs section.
-
-### WR-07: Phase timings include JIT compilation, and the docs present them as the measured build and solve times
-
-**File:** `scripts/ieee8500_scenario_point.jl:556`, `:573`, `:600`, `:630`; `docs/literate/ieee8500_scaling.jl:756-764`, `:824-825`
-
-**Issue:** The point runs in one cold process with no warm-up. `materialize_s`, `build_s` (27.48 s), `solve_s` (151.99 s) and `certify_s` therefore each include first-call compilation of JuMP/MOI/Clarabel and the TSODSO kernels. The IEEE-13 smoke run shows the scale: 14.2 s of "build" for a 740-variable DSO model. The docs print these as the "six numbers" with no compile caveat. The divergence table does not mention compilation either, although the harness numbers it is set beside have their own compile profile.
-
-**Fix:** Record `Base.cumulative_compile_time_ns()` before and after each phase, either by enabling `Base.cumulative_compile_timing(true)` or with `@timed`'s `compile_time`. Store `*_compile_s` columns (or put them in the note). In the docs, add one line stating that the times include compilation, with the measured compile share.
-
-### WR-08: Only the `ok` path of the phase composition is tested; the branch that produced the committed row is not
-
-**File:** `test/test_ieee8500_scenario.jl:376-404`
-
-**Issue:** The parity item checks `status == "ok"` on IEEE-13 and nothing else. No committed test exercises:
-- `refused_certificate`, the actual production outcome, including the iteration count and the gap-ratio parse from a real `CertificateError`;
-- `convergence_error`, where iters should be `maxiter`;
-- `budget_exceeded`;
-- `error:<Type>`.
-
-The plan-02 scratch checks for `time_limit_s = 1e-6` and `maxiter = 3` were never committed. A regression in the status mapping or in the iteration logic would ship unnoticed. The `solve_admm` re-wrap equivalence for `CertificateError` iterations is also unpinned.
-
-**Fix:** Add cheap IEEE-13 items. Each should also compare against `run_scenario`'s thrown error, for example via `@test_throws ConvergenceError run_scenario(...)` and its `.iterations`:
-```julia
-ph = scenario_admm_phases(Scenario(; name="x", strategy=ADMM(; maxiter=3), T=10, seed=3);
-                          time_limit_s=nothing, sample_mem=false)
-@test ph.status == "convergence_error" && ph.iters == 3 && ph.result === nothing
-ph = scenario_admm_phases(s; time_limit_s=1e-6, sample_mem=false)
-@test ph.status == "budget_exceeded" && ismissing(ph.certify_s)
-```
-
-### WR-09: The pre-flight measures MemAvailable after package load, so the documented 8 GiB gate is about 8.9 GiB in practice
-
-**File:** `scripts/ieee8500_scenario_point.jl:57-59`, `:737-739`; `scripts/README.md:34`
-
-**Issue:** The comment says the gate runs "first thing … before any materialization". It actually runs after `using DrWatson`, `@quickactivate`, `using TSODSO, JuMP, CSV, DataFrames, StableRNGs` and argument parsing, so it measures the process's own startup footprint (about 0.92 GiB). That footprint is why attempt 1 was refused, and why the floor was hand-lowered to 5.5 for attempt 2. The README still says the run "needs >= 8 GiB MemAvailable".
-
-**Fix:** Read `/proc/meminfo` with Base only, at the top of the script before any `using`, and keep the value:
-```julia
-const _MEMAVAIL_AT_START_KB = let v = -1
-    isfile("/proc/meminfo") && for l in eachline("/proc/meminfo")
-        startswith(l, "MemAvailable:") && (v = parse(Int, split(l)[2]); break)
-    end
-    v
+joined = isnan(hm_num(r["vmhwm_kb"])) ? typeof(wrappers)() :
+         filter(w -> hm_num(w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"]), wrappers)
+if isempty(joined)
+    println("no wrapper row joins this row by peak; the last wrapper row (rc ",
+            last(wrappers)["rc"], ", oom_source ", last(wrappers)["oom_source"],
+            ") is the launch outcome")
+    return nothing
 end
 ```
-Use it in `run_measured_point`. Alternatively, keep the current gate and change the README and `--help` text to say "post-load MemAvailable".
+Better still, use an explicit join key (WR-01, fix 3).
+
+### WR-03: A solver-layer error inside the ADMM loop still discards the solve time and the iterations already run
+
+**File:** `scripts/ieee8500_scenario_point.jl:787-806`, `:864-870`
+
+**Issue:** The WR-03 fix moved certify to `time_ns` + `finally`. The solve phase still uses `t[:solve] = @elapsed begin _admm_iterate!(...) end`. If `_admm_iterate!` raises a `TSODSOError` mid-loop, for example a `SolveFailedError` from a Clarabel subproblem at 8500 scale:
+- `@elapsed` aborts, so `t[:solve]`, `tc[:solve]` and the `:solve` VmHWM sample are never recorded;
+- `loop_done` stays `false`, so the outer catch writes `iters = -1`, although `st.residuals.iters` holds the number of completed iterations (`have_st` is true).
+
+The resulting `error:SolveFailedError` row has `solve_s` missing and `-1` iterations. For a plausible large-scale failure, that is the same information loss iteration-1 WR-03 described.
+
+**Fix:** Use the same pattern as certify:
+```julia
+t0 = time_ns(); c0 = cns()
+try
+    TSODSO._admm_iterate!(st, rmode, A.maxiter, A.ε_abs, A.ε_rel, A.τ_ratio, A.μ,
+                          1e-2, 1e4, time_limit_s, false)
+finally
+    t[:solve] = (time_ns() - t0) / 1e9
+    tc[:solve] = (cns() - c0) / 1e9
+    push!(hwm_by_phase, :solve => hwm())
+end
+```
+In the outer catch, use `have_st ? Int(st.residuals.iters) : -1` after the `err.iterations` check. Note in the row that this is a partial count when `!loop_done`, for example as `iters_partial` in the message.
+
+### WR-04: A `memory_infeasible_inprocess` row cannot say which phase ran out of memory
+
+**File:** `scripts/ieee8500_scenario_point.jl:855-856`, `:1005-1035`
+
+**Issue:** An `OutOfMemoryError` is not a `TSODSOError`, so `scenario_admm_phases` rethrows it (`:856`). Every partial result lives in that function's locals: `t`, `tc`, `sizes`, `hwm_by_phase`, `iters` and `loop_done`. All of it is discarded.
+
+The row written by `run_measured_point` holds only:
+- the VmHWM at catch time;
+- `sprint(showerror, err)`, which for an OOM is the uninformative `OutOfMemoryError()`.
+
+This status is the one WR-02 introduced as "a measured outcome" of the memory study. The row cannot say whether the failure came during the AgrOpt builds, the DSO build or iterate k, or what sizes were reached. That decomposition is exactly what the T = 24 attribution needed.
+
+**Fix:** Catch `OutOfMemoryError` inside `scenario_admm_phases` and return a status, as is done for `TSODSOError`. Keep every partial field:
+```julia
+catch err
+    if err isa OutOfMemoryError
+        status = "memory_infeasible_inprocess"
+        message = "OutOfMemoryError after phases " * join(first.(hwm_by_phase), ",")
+        iters = have_st ? Int(st.residuals.iters) : -1
+    else
+        err isa TSODSOError || rethrow()
+        ...
+    end
+```
+After that, `run_measured_point` writes the full row and can still rethrow, or exit nonzero, if a nonzero exit code is wanted.
 
 ## Info
 
-### IN-01: Stale docstring for the column order
+### IN-01: `HEAP_SIZE_HINT` validation accepts values that silently mean bytes
 
-**File:** `scripts/ieee8500_scenario_point.jl:253-256`
+**File:** `scripts/run_ieee8500_point.sh:46-50`
 
-**Issue:** The docstring says the docs page "splits each line with `limit = ncols`, so only the last field may contain commas". The docs reader is quote-aware (46-05 deviation 3).
+**Issue:** The regex `^[0-9]+([.][0-9]+)?[KMGTkmgt%]?$` accepts a bare number: `HEAP_SIZE_HINT=8` gives an 8-byte hint, which I verified (`JLOptions().heap_size_hint == 8`). It also accepts `%`, which the error message advertises (`50%`). On Julia 1.10.11, the project's compat floor, `--heap-size-hint=50%` silently yields **50 bytes**. The `point_resources.csv` `args` column does not record the hint either; only the `.time` file does.
 
-**Fix:** Reword it: "`note` is last by convention; the docs reader is quote-aware."
+**Fix:** Require a unit, and reject `%` unless `julia --version` is at least 1.11. Alternatively, accept only `[0-9]+[MG]`. Append `heap=$HEAP_SIZE_HINT` to `ARGS_STR`.
 
-### IN-02: Dead code in the certify branch
+### IN-02: The counter-fact's "ran its production solve to the end" accepts a budget-exceeded anchor
 
-**File:** `scripts/ieee8500_scenario_point.jl:629`, `:646-647`
+**File:** `scripts/ieee8500_scenario_point.jl:580`, `:594-596`; `docs/literate/ieee8500_scaling.jl:735`
 
-**Issue:**
-- `certified = false` is never read.
-- `get(st.dso.ctx.meta, :socp_maxratio, missing)` is always `missing`, because the ADMM certify path never sets that key (46-02 summary).
-- The `ratio === nothing` test then checks for a value that cannot occur.
+**Issue:** `anchor_done = anchor_iters > 0`. The attribution script (`profile_ieee8500_memory_attribution.jl:372`) writes `iters = r.iters` for any returned result, including `status = "budget_exceeded"`. Such an anchor would be reported as having run "to the end". The current data (`ERROR:CertificateError`, 7 iterations) is correct.
 
-**Fix:** Remove the variable. Either set `gap_ratio = missing` with a comment, or expose the ratio from `_admm_certify`.
+**Fix:** `anchor_done = anchor_iters > 0 && !occursin("budget", lowercase(anchor_status))`. Mirror the check in the docs assert.
 
-### IN-03: The meaning of `n_load_buses` is inconsistent
+### IN-03: The verdict at exactly the threshold is undefined
 
-**File:** `scripts/ieee8500_scenario_point.jl:566-567`
+**File:** `scripts/ieee8500_scenario_point.jl:565`; `docs/literate/ieee8500_scaling.jl:648`
 
-**Issue:** `n_load_buses` is the total number of load buses on the feeder (1,177), not the 118 sampled houses. It is `missing` on non-8500 feeders, even though `_load_buses` works for every feeder.
+**Issue:** GO needs the peak *below* the threshold, so NO-GO is `peak >= threshold`. With `>`, a peak equal to the threshold makes the script throw ("no measured peak exceeds"), while the docs print `GO`.
 
-**Fix:** Compute it for every feeder. Either add `n_sampled_houses = n_aggregators - n_cap_aggregators`, or say in the docs that it is the pre-sampling count.
+**Fix:** Use `>=` in both places, and reword the throw message to "no measured peak reaches".
 
-### IN-04: CSV round-trip re-infers the provenance column types
+### IN-04: The atomic-write test does not exercise the cleanup path, and a SIGKILL leaves an unignored temp file
 
-**File:** `scripts/ieee8500_scenario_point.jl:333`
+**File:** `test/test_ieee8500_scenario.jl:596-600`; `scripts/ieee8500_scenario_point.jl:440-446`
 
-**Issue:** `CSV.read(csv_path, DataFrame)` infers column types on every upsert. If every `git_head` value happened to look numeric (for example `0123456` or `1234e56`), the column would be parsed as `Int` or `Float64` and rewritten without its leading zeros, or in exponent form.
+**Issue:** `CSV.write(tmp, :not_a_table)` throws `ArgumentError` *before* it creates the file (verified: `isfile` is false afterwards). So "no temporary file behind" holds vacuously, and the `finally rm` is never tested. Separately, a SIGKILL during the write, such as earlyoom's escalation, leaves `.scenario_table.csv.tmp.<pid>` in `results/ieee8500_benchmark/`. That file is not covered by `.gitignore` and could be committed with the directory.
 
-**Fix:** Use `CSV.read(csv_path, DataFrame; types = Dict(:git_head => String, :run_label => String, :heap_size_hint => String))`.
+**Fix:** Test with a table whose write fails mid-stream, for example a column whose `string` method throws. Add `/results/**/.*.tmp.*` to `.gitignore`.
 
-### IN-05: The harness-equivalence test reuses the implementation's bus list, and the docstring overstates equivalence
+### IN-05: The `error:<Type>` branch is still untested
 
-**File:** `test/test_ieee8500_scenario.jl:189`; `src/experiments/materialize.jl:1046`
+**File:** `scripts/ieee8500_scenario_point.jl:855-871`
 
-**Issue:** The inline "harness" copy calls `TSODSO._load_buses`, which is the same function the selector uses. The harness's own `_harness_load_buses` mirror is therefore not pinned. Also, the harness shares one `LehmerRNG(_SWEEP_SEED)` across all densities in a sweep (`benchmark_ieee8500.jl:977`). The two rules agree only for the first density drawn in a process, but the docstring says "at an equal `seed` the two give the same aggregators" without that qualifier.
+**Issue:** The branch has no test (the fixer acknowledged this), so the WR-03 iteration logic for a non-certificate error has no regression guard.
 
-**Fix:** Copy the harness's explicit per-feeder bus lists into the test. Qualify the docstring: "equal to a single-density harness invocation at an equal seed".
+**Fix:** Inject the failure. For example, give `scenario_admm_phases` an internal `certify = TSODSO._admm_certify` keyword, used only by tests, and pass a stub that throws `SolveFailedError(...)`. Then assert `status == "error:SolveFailedError"`, `iters == <converged count>` and `!ismissing(certify_s)`.
 
-### IN-06: The docs ratio regex diverges from the script's parser
+### IN-06: Iteration-1 IN-07 and IN-08 are still open (the fixer deferred them)
 
-**File:** `docs/literate/ieee8500_scaling.jl:598-599`
+**File:** `src/experiments/Scenario.jl:181` (no IEEE-8500 T < 9 guard); `scripts/ieee8500_scenario_point.jl:92-93` (`@quickactivate` runs inside test items)
 
-**Issue:** `hm_ratio` uses `r"=([0-9.]+) > 1"`, which returns `NaN` for exponent-formatted ratios such as `=1.2e3 > 1`. The script uses the anchored `GAP_RATIO_RX`, which accepts `eE+-`.
+**Issue:** The fixer's reasons were recorded and are reasonable. The findings still stand.
 
-**Fix:** Use the same pattern: `r"worst gap/\(atol_b\+rtol·\|cone\|\)=([0-9.eE+-]+)"`.
-
-### IN-07: The IEEE-8500 horizon floor lives only in the script
-
-**File:** `scripts/ieee8500_scenario_point.jl:108-110`; `src/experiments/Scenario.jl:181`, `:236-267`
-
-**Issue:** `Scenario(feeder = :ieee8500, T = 5)` constructs fine. It then fails at materialization with the Deferrable energy-budget `ArgumentError`: the window collapses below T = 9, as `benchmark_ieee8500.jl:752-760` explains. The phase's policy is that "combinations 8500 cannot support get an ArgumentError guard", but here the knowledge is duplicated as `T_MIN_8500` in the script.
-
-**Fix:** Add a construction guard `feeder ∈ _SCENARIO_8500_FEEDERS && T < 9`, with a message citing the Deferrable window. Drop the script constant, or derive it from the guard.
-
-### IN-08: Test items that include the script run `@quickactivate` inside the test process
-
-**File:** `test/test_ieee8500_scenario.jl:246`, `:301`, `:327`, `:378` (script `:57-58`)
-
-**Issue:** Each `include` runs `using DrWatson; @quickactivate "TSODSO"`. That can switch the active project away from the `Pkg.test` sandbox in the middle of the run. `test_case_a_magnitude.jl` already does the same, so this follows precedent. It is still a latent cause of order-dependent `using` failures in later test items, for packages that are only test dependencies.
-
-**Fix:** Guard the activation in the script, for example `isinteractive() || abspath(PROGRAM_FILE) == @__FILE__ ? @quickactivate("TSODSO") : nothing`. Alternatively, move the helpers into a small module file that both the script and the tests include.
+**Fix:** As in iteration 1, or move them to the deferred-items list explicitly.
 
 ---
 
-_Reviewed: 2026-11-06T00:38:10Z_
+_Reviewed: 2026-11-06T11:45:24Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Iteration: 2_
