@@ -520,3 +520,41 @@ end
     @test read(path, String) == before
     @test readdir(dir) == ["scenario_table.csv"]
 end
+
+@testitem "ieee8500 scenario: in-process failures are recorded, then propagate" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # A stub phase runner stands in for the solve, so nothing is materialized or solved.
+    dir = mktempdir()
+    path = joinpath(dir, "scenario_table.csv")
+    opts = (;
+        feeder = :ieee13,
+        T = 10,
+        seed = 3,
+        time_limit = 1200.0,
+        min_gib = 0.0,
+        run_label = "stub",
+        results_dir = dir,
+    )
+    oom_phases(s; kw...) = throw(OutOfMemoryError())
+    bug_phases(s; kw...) = throw(ArgumentError("stub misuse"))
+    row_status(p) = string.(CSV.read(p, DataFrame).status)
+
+    @test_throws OutOfMemoryError run_measured_point(opts; phases = oom_phases)
+    @test row_status(path) == ["memory_infeasible_inprocess"]
+    @test !is_transient_status("memory_infeasible_inprocess")
+
+    # A crash is transient: recorded, but it never displaces the final row of its key.
+    @test_throws ArgumentError run_measured_point(opts; phases = bug_phases)
+    @test sort(row_status(path)) == ["crashed:ArgumentError", "memory_infeasible_inprocess"]
+    d = CSV.read(path, DataFrame)
+    @test occursin("stub misuse", only(d.note[d.status .== "crashed:ArgumentError"]))
+
+    # On a fresh key the crash row replaces the `started` row (no misleading "process died").
+    opts2 = merge(opts, (; run_label = "stub2"))
+    @test_throws ArgumentError run_measured_point(opts2; phases = bug_phases)
+    d = CSV.read(path, DataFrame)
+    @test only(d.status[d.run_label .== "stub2"]) == "crashed:ArgumentError"
+end

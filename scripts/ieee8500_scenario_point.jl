@@ -55,8 +55,14 @@
 #   error:<TypeName>     any other TSODSOError (for example error:SolveFailedError)
 #   preflight_refused    MemAvailable below --min-mem-avail-gib; nothing was materialized
 #   memory_infeasible    the recorded T = 24 NO-GO row (--record-nogo)
+#   memory_infeasible_inprocess
+#                        Julia raised OutOfMemoryError during the phases (a measured outcome);
+#                        the row is written, then the error propagates (nonzero exit)
+#   crashed:<TypeName>   any other non-TSODSOError during the phases (misuse or a bug, not a
+#                        measured outcome); the row is written, then the error propagates
 #   started              written before the heavy work; still present means the process died
-# Any other exception (misuse, a bug) propagates: it is not an outcome to record.
+#                        without raising (for example killed by a signal)
+# `started`, `preflight_refused` and `crashed:*` are transient: they never replace a final row.
 #
 # Honesty policy: refusals, nulls and infeasible outcomes are rows, stated plainly. Nothing is
 # retuned to make a point fit or pass: no tolerance, tau, epsilon or exactness floor is exposed,
@@ -322,12 +328,14 @@ const ROW_KEY = (:row_kind, :feeder, :population, :T, :strategy, :seed, :run_lab
 """
 Statuses of a row that is not a final outcome of its attempt: `started` (the run is under way, or
 the process died) and `preflight_refused` (nothing was materialized). Such a row never replaces a
-final row of the same key.
+final row of the same key. A `crashed:<TypeName>` row (a non-solver exception, see
+`run_measured_point`) is transient too.
 """
 const TRANSIENT_STATUSES = ("started", "preflight_refused")
 
-"""`is_transient_status(status)`: true for a status in `TRANSIENT_STATUSES`."""
-is_transient_status(status) = string(status) in TRANSIENT_STATUSES
+"""`is_transient_status(status)`: true for a status in `TRANSIENT_STATUSES` or `crashed:*`."""
+is_transient_status(status) =
+    (st = string(status); st in TRANSIENT_STATUSES || startswith(st, "crashed:"))
 
 """
     scenario_row(; kwargs...) -> NamedTuple
@@ -785,13 +793,18 @@ function _provenance_fields(opts)
 end
 
 """
-    run_measured_point(opts) -> NamedTuple
+    run_measured_point(opts; phases = scenario_admm_phases) -> NamedTuple
 
 validate (done by `parse_options`) -> pre-flight -> `started` row -> phases -> final row. A
 pre-flight refusal writes one `preflight_refused` row and returns normally (exit 0); nothing is
 retried or retuned.
+
+An exception that `phases` lets through (anything that is not a `TSODSOError`) is recorded before
+it propagates: `OutOfMemoryError` as `memory_infeasible_inprocess` (a measured outcome), any other
+type as the transient `crashed:<TypeName>`. `phases` is the phase runner (the default is the real
+one; tests pass a stub so that no solve runs).
 """
-function run_measured_point(opts)
+function run_measured_point(opts; phases = scenario_admm_phases)
     pop = population_for(opts.feeder)
     key = (;
         row_kind = "measured",
@@ -824,6 +837,16 @@ function run_measured_point(opts)
         return row
     end
 
+    # Constructed before the `started` row: an invalid combination is an ArgumentError with no row.
+    s = Scenario(;
+        name = "ieee8500-scn",
+        feeder = opts.feeder,
+        population = pop,
+        strategy = ADMM(),
+        T = opts.T,
+        seed = opts.seed,
+    )
+
     upsert_rows!(
         path,
         [
@@ -837,15 +860,37 @@ function run_measured_point(opts)
         ],
     )
 
-    s = Scenario(;
-        name = "ieee8500-scn",
-        feeder = opts.feeder,
-        population = pop,
-        strategy = ADMM(),
-        T = opts.T,
-        seed = opts.seed,
-    )
-    ph = scenario_admm_phases(s; time_limit_s = opts.time_limit, sample_mem = true)
+    ph = try
+        phases(s; time_limit_s = opts.time_limit, sample_mem = true)
+    catch err
+        # Not a solver-layer outcome: record it (best effort), then let it propagate.
+        st = if err isa OutOfMemoryError
+            "memory_infeasible_inprocess"
+        else
+            "crashed:" * string(nameof(typeof(err)))
+        end
+        try
+            vm = isfile("/proc/self/status") ? proc_status_kb("VmHWM") : -1
+            upsert_rows!(
+                path,
+                [
+                    scenario_row(;
+                        key...,
+                        prov...,
+                        status = st,
+                        vmhwm_kb = vm,
+                        vmhwm_gib = vm < 0 ? missing : kb_to_gib(vm),
+                        mem_avail_before_kb = avail_kb,
+                        note = "$(cap_txt); raised $(nameof(typeof(err))) during the phases: " *
+                               first(sprint(showerror, err), 400),
+                    ),
+                ],
+            )
+        catch werr
+            @warn "could not record the in-process failure row" exception = werr
+        end
+        rethrow()
+    end
 
     hwm_txt = join(("$(k)=$(v)" for (k, v) in ph.hwm_by_phase), " ")
     row = scenario_row(;

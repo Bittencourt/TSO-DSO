@@ -766,9 +766,11 @@ hm_print_components(hm_attr24)
 hm_label = "p46-scn-ieee8500-d10-T10"
 # The intended row is selected by its full key (row kind, feeder, population, T, strategy, seed,
 # run label). A key holds at most one final row and at most one transient row (`started` or
-# `preflight_refused`, which never displaces a final row). The final row is the measurement; a
-# transient row beside it is a later attempt that did not finish, and it is printed as such.
-hm_is_transient(status) = status in ("started", "preflight_refused")
+# `preflight_refused` or `crashed:<Type>`, which never displaces a final row). The final row is the
+# measurement; a transient row beside it is a later attempt that did not finish, and it is printed
+# as such.
+hm_is_transient(status) =
+    status in ("started", "preflight_refused") || startswith(status, "crashed:")
 hm_meas_all = filter(
     r ->
         r["row_kind"] == "measured" &&
@@ -800,9 +802,16 @@ function hm_status_sentence(status)
     status == "preflight_refused" &&
         return "refused by the MemAvailable pre-flight before " *
                "anything was materialized: the host did not have the memory at launch."
+    status == "memory_infeasible_inprocess" &&
+        return "Julia raised OutOfMemoryError during the run: memory-infeasible in process, " *
+               "a measured outcome; the row records the high-water mark at that moment."
+    startswith(status, "crashed:") &&
+        return "raised a non-solver exception (misuse or a bug, named in the status and the " *
+               "note); this is not a measured outcome."
     status == "started" &&
-        return "only the started row exists: the process died before writing " *
-               "its final row; the wrapper row below (rc, oom_source) is the measured outcome."
+        return "only the started row exists: the process died without raising (for example " *
+               "killed by a signal) before writing its final row; the wrapper row below (rc, " *
+               "oom_source) is the measured outcome."
     startswith(status, "error:") &&
         return "ended in a solver-layer error of the named type."
     return "unrecognized status."
