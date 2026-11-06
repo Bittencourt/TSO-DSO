@@ -832,6 +832,7 @@ end
 
 @testitem "ieee8500 scenario: ieee13 errors inside the loop or certify keep their partial fields" begin
     using TSODSO
+    using CSV, DataFrames
     include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
 
     # IEEE-13 only. Stubs stand in for the loop or certify call and raise there; the real loop
@@ -863,6 +864,46 @@ end
     @test !ismissing(ph.solve_compile_s)
     @test ismissing(ph.certify_s)
     @test phase_names(ph) == [:materialize, :build, :solve]
+
+    # Out of memory inside the loop: a measured outcome that keeps every partial field.
+    function one_then_oom(st, rmode, maxiter, rest...)
+        TSODSO._admm_iterate!(st, rmode, 1, rest...)
+        throw(OutOfMemoryError())
+    end
+    pho = scenario_admm_phases(
+        s;
+        time_limit_s = nothing,
+        sample_mem = false,
+        iterate_fn = one_then_oom,
+    )
+    @test pho.status == "memory_infeasible_inprocess"
+    @test pho.iters == 1
+    @test occursin("during phase solve", pho.message)
+    @test !ismissing(pho.build_s) && !ismissing(pho.solve_s)
+    @test pho.dso_vars > 0 && pho.n_agr_models > 0
+    @test phase_names(pho) == [:materialize, :build, :solve]
+
+    # Through run_measured_point (VmHWM is read from /proc): the full row is written, then the
+    # error still propagates.
+    if isfile("/proc/self/status")
+        dir = mktempdir()
+        opts = (;
+            feeder = :ieee13,
+            T = 10,
+            seed = 3,
+            time_limit = 1200.0,
+            min_gib = 0.0,
+            run_label = "oom",
+            results_dir = dir,
+        )
+        oom_run(sc; kw...) = scenario_admm_phases(sc; kw..., iterate_fn = one_then_oom)
+        @test_throws OutOfMemoryError run_measured_point(opts; phases = oom_run)
+        d = CSV.read(joinpath(dir, "scenario_table.csv"), DataFrame)
+        @test only(d.status) == "memory_infeasible_inprocess"
+        @test only(d.iters) == 1
+        @test !ismissing(only(d.build_s)) && only(d.dso_vars) > 0
+        @test occursin("during phase solve", only(d.note))
+    end
 end
 
 @testitem "ieee8500 scenario: the pre-flight judges the reading taken before package load" begin

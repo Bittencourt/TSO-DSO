@@ -62,7 +62,8 @@
 #   memory_infeasible    the recorded T = 24 NO-GO row (--record-nogo)
 #   memory_infeasible_inprocess
 #                        Julia raised OutOfMemoryError during the phases (a measured outcome);
-#                        the row is written, then the error propagates (nonzero exit)
+#                        the row keeps the phase under way and the partial timings, sizes and
+#                        iterations, then the error propagates (nonzero exit)
 #   crashed:<TypeName>   any other non-TSODSOError during the phases (misuse or a bug, not a
 #                        measured outcome); the row is written, then the error propagates
 #   started              written before the heavy work; still present means the process died
@@ -747,8 +748,10 @@ then starts with `iters_partial:`).
 Returns row-ready fields (`status`, timings, sizes, `iters`, `gap_ratio`, `vmhwm_kb`,
 `hwm_by_phase`, `message`, ...) and `result`: on `status == "ok"` the certified result
 NamedTuple with `welfare`, `dadp`, `exact_maxgap` and `iters` converted exactly as
-`run(::ADMM, s)` converts them, else `nothing`. Expected solver outcomes become statuses; any
-exception that is not a `TSODSOError` propagates.
+`run(::ADMM, s)` converts them, else `nothing`. Expected solver outcomes become statuses. An
+`OutOfMemoryError` becomes `memory_infeasible_inprocess` with every partial field kept (the
+message names the phase under way and the phases whose VmHWM was sampled); the caller re-raises
+it after writing the row. Any other exception that is not a `TSODSOError` propagates.
 """
 function scenario_admm_phases(
     s::Scenario;
@@ -770,6 +773,7 @@ function scenario_admm_phases(
     local feeder, λ₀, aggs, pf, mode, rmode, st
     have_st = false
     loop_done = false
+    phase = :none   # the phase under way, named in an out-of-memory row
     status = "started"
     iters = missing
     gap_ratio = missing
@@ -777,6 +781,7 @@ function scenario_admm_phases(
     result = nothing
     Base.cumulative_compile_timing(true)
     try
+        phase = :materialize
         c0 = cns()
         t[:materialize] = @elapsed begin
             feeder, λ₀, aggs = TSODSO._materialize(s)
@@ -797,6 +802,7 @@ function scenario_admm_phases(
             count(a -> any(d -> d isa TSODSO.FixedCapacitor, a.devices), aggs)
 
         ρf = Float64(A.ρ)
+        phase = :build
         c0 = cns()
         t[:build] = @elapsed begin
             st = TSODSO._admm_build(
@@ -829,6 +835,7 @@ function scenario_admm_phases(
         # Timed with time_ns and recorded in `finally`, as certify is: an error raised inside the
         # loop (for example a SolveFailedError of one subproblem) keeps the solve time, its
         # compilation part and its high-water-mark sample.
+        phase = :solve
         t0 = time_ns()
         c0 = cns()
         try
@@ -864,6 +871,7 @@ function scenario_admm_phases(
             message = "wall-clock cap time_limit_s=$(time_limit_s) reached; certify skipped, no welfare"
         else
             local r
+            phase = :certify
             # Timed with time_ns and recorded in `finally`, so a non-certificate error raised by
             # certify (for example a SolveFailedError in a certify re-solve) keeps its timing and
             # its high-water-mark sample.
@@ -901,29 +909,41 @@ function scenario_admm_phases(
             end
         end
     catch err
-        err isa TSODSOError || rethrow()
-        status = "error:" * string(nameof(typeof(err)))
-        if err isa CertificateError
-            status = "refused_certificate"
-            gap_ratio = parse_gap_ratio(err.msg)
-        end
-        # An error's own iteration count comes first. Otherwise, once the ADMM state exists, its
-        # counter holds the iterations completed so far: the converged count when the loop has
-        # finished (certify raised), a partial count when the loop itself raised. -1 is kept for
-        # failures before the loop started.
-        own_iters = hasproperty(err, :iterations) && err.iterations !== nothing
-        iters = if own_iters
-            Int(err.iterations)
-        elseif have_st
-            Int(st.residuals.iters)
-        else
-            -1
-        end
-        message = first(string(err.msg), 400)
-        if have_st && !loop_done && !own_iters
+        if err isa OutOfMemoryError
+            # A measured outcome of the memory study, not a crash: every partial field (phase
+            # times, sizes, VmHWM samples, completed iterations) is kept in the returned row
+            # fields. The caller writes the row and then still ends with an OutOfMemoryError.
+            status = "memory_infeasible_inprocess"
+            iters = have_st ? Int(st.residuals.iters) : -1
+            sampled = isempty(hwm_by_phase) ? "none" : join(string.(first.(hwm_by_phase)), ",")
             message =
-                "iters_partial: the ADMM loop raised after $(iters) completed iterations; " *
-                message
+                "OutOfMemoryError during phase $(phase); VmHWM sampled after: $(sampled)" *
+                (have_st ? "; $(iters) ADMM iterations completed" : "")
+        else
+            err isa TSODSOError || rethrow()
+            status = "error:" * string(nameof(typeof(err)))
+            if err isa CertificateError
+                status = "refused_certificate"
+                gap_ratio = parse_gap_ratio(err.msg)
+            end
+            # An error's own iteration count comes first. Otherwise, once the ADMM state exists,
+            # its counter holds the iterations completed so far: the converged count when the
+            # loop has finished (certify raised), a partial count when the loop itself raised.
+            # -1 is kept for failures before the loop started.
+            own_iters = hasproperty(err, :iterations) && err.iterations !== nothing
+            iters = if own_iters
+                Int(err.iterations)
+            elseif have_st
+                Int(st.residuals.iters)
+            else
+                -1
+            end
+            message = first(string(err.msg), 400)
+            if have_st && !loop_done && !own_iters
+                message =
+                    "iters_partial: the ADMM loop raised after $(iters) completed iterations; " *
+                    message
+            end
         end
     finally
         Base.cumulative_compile_timing(false)
@@ -996,7 +1016,9 @@ counts as `false`.
 
 An exception that `phases` lets through (anything that is not a `TSODSOError`) is recorded before
 it propagates: `OutOfMemoryError` as `memory_infeasible_inprocess` (a measured outcome), any other
-type as the transient `crashed:<TypeName>`. `phases` is the phase runner (the default is the real
+type as the transient `crashed:<TypeName>`. The real phase runner returns an out-of-memory outcome
+as a status with its partial fields instead; that row is written in full and an
+`OutOfMemoryError` is then raised, so the process still ends nonzero. `phases` is the phase runner (the default is the real
 one; tests pass a stub so that no solve runs).
 
 The pre-flight judges `avail_kb`, by default `MEMAVAIL_AT_START_KB`: MemAvailable read on the
@@ -1151,6 +1173,9 @@ function run_measured_point(
         "certify_s=$(row.certify_s) vmhwm_kb=$(row.vmhwm_kb) maxrss_gib=$(row.maxrss_gib) " *
         "gap_ratio=$(row.gap_ratio) -> $path",
     )
+    # An out-of-memory outcome is recorded with its partial fields above; the process still ends
+    # with the error, as the status vocabulary documents.
+    row.status == "memory_infeasible_inprocess" && throw(OutOfMemoryError())
     return row
 end
 
