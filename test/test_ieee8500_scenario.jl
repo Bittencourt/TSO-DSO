@@ -744,3 +744,24 @@ end
     @test nrow(d) == 1
     @test d.status[1] == "preflight_refused"
 end
+
+@testitem "ieee8500 scenario: text columns survive a rewrite" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # An all-digit git hash and run label keep their leading zeros across upserts.
+    path = joinpath(mktempdir(), "scenario_table.csv")
+    r = scenario_row(;
+        row_kind = "measured",
+        feeder = "ieee13",
+        status = "ok",
+        git_head = "0123456",
+        run_label = "007",
+    )
+    upsert_rows!(path, [r])
+    upsert_rows!(path, [scenario_row(; row_kind = "measured", feeder = "ieee123", status = "ok")])
+    txt = read(path, String)
+    @test occursin(",0123456,", txt)
+    @test occursin(",007,", txt)
+end

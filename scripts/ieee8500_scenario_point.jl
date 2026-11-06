@@ -374,6 +374,13 @@ function scenario_row(; kwargs...)
     return ismissing(nt.note) ? nt : merge(nt, (; note = one_line(nt.note)))
 end
 
+const TEXT_COLUMN_TYPES = Dict(
+    :git_head => String,
+    :run_label => String,
+    :julia_version => String,
+    :heap_size_hint => String,
+)
+
 # A key column absent from an older table (written before it joined the key) reads as missing.
 _key(r) = Tuple(string(hasproperty(r, k) ? getproperty(r, k) : missing) for k in ROW_KEY)
 
@@ -391,7 +398,9 @@ function upsert_rows!(csv_path::AbstractString, rows)
     mkpath(dirname(abspath(csv_path)))
     new = reduce((a, b) -> vcat(a, b; cols = :union), (DataFrame([r]) for r in rows))
     df = if isfile(csv_path)
-        old = CSV.read(csv_path, DataFrame)
+        # Text columns are read as text: an all-digit git hash such as 0123456 must not be
+        # re-inferred as a number and rewritten without its leading zero.
+        old = CSV.read(csv_path, DataFrame; types = TEXT_COLUMN_TYPES, validate = false)
         okeys = [_key(r) for r in eachrow(old)]
         otrans = [hasproperty(r, :status) && is_transient_status(r.status) for r in eachrow(old)]
         keep = trues(nrow(old))
