@@ -565,7 +565,7 @@ function hm_split_csv_line(ln::AbstractString)
     i = 1
     while i <= length(chars)
         c = chars[i]
-        if inq && c == '"' && i < length(chars) && chars[i+1] == '"'
+        if inq && c == '"' && i < length(chars) && chars[i + 1] == '"'
             print(buf, '"')
             i += 1
         elseif c == '"'
@@ -595,20 +595,32 @@ end
 
 hm_num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
 hm_gib(kb) = kb / 1024^2
-hm_ratio(msg) = (m = match(r"=([0-9.]+) > 1", msg); m === nothing ? NaN : parse(Float64, m[1]))
+hm_ratio(msg) =
+    (m = match(r"=([0-9.]+) > 1", msg); m === nothing ? NaN : parse(Float64, m[1]))
 
 hm_scn = hm_read_rows("scenario_table.csv")
 hm_res = hm_read_rows("point_resources.csv")
 hm_attr = hm_read_rows("memory_attribution.csv")
 hm_sweep = hm_read_rows("density_sweep.csv")
 hm_wrappers(label) = filter(r -> r["run_label"] == label, hm_res)
-hm_attr_at(T) =
-    filter(r -> r["fixture"] == "ieee8500" && hm_num(r["density"]) == 0.1 && r["T"] == T, hm_attr)
-hm_attr_row(rows, stage, name) = only(filter(r -> r["stage"] == stage && r["name"] == name, rows))
+hm_attr_at(T) = filter(
+    r -> r["fixture"] == "ieee8500" && hm_num(r["density"]) == 0.1 && r["T"] == T,
+    hm_attr,
+)
+hm_attr_row(rows, stage, name) =
+    only(filter(r -> r["stage"] == stage && r["name"] == name, rows))
 hm_nogo = only(filter(r -> r["row_kind"] == "recorded_no_go", hm_scn))
 hm_attr24 = hm_attr_at("24")
-println("rows read: scenario_table ", length(hm_scn), ", point_resources ", length(hm_res),
-    ", memory_attribution ", length(hm_attr), ", density_sweep ", length(hm_sweep))
+println(
+    "rows read: scenario_table ",
+    length(hm_scn),
+    ", point_resources ",
+    length(hm_res),
+    ", memory_attribution ",
+    length(hm_attr),
+    ", density_sweep ",
+    length(hm_sweep),
+)
 
 # ### The decision and its threshold
 #
@@ -756,18 +768,22 @@ hm_meas = filter(r -> r["row_kind"] == "measured" && r["run_label"] == hm_label,
 
 function hm_status_sentence(status)
     status == "ok" && return "converged and certified exact; prices are reported."
-    status == "refused_certificate" && return "converged, then refused by the SOCP exactness " *
-           "certificate (CertificateError): prices are withheld. This refusal is the measured " *
-           "outcome and is accepted as is; no tolerance, tau, epsilon or floor was changed."
+    status == "refused_certificate" &&
+        return "converged, then refused by the SOCP exactness " *
+               "certificate (CertificateError): prices are withheld. This refusal is the measured " *
+               "outcome and is accepted as is; no tolerance, tau, epsilon or floor was changed."
     status == "convergence_error" &&
         return "maxiter reached without consensus; no certificate was attempted."
     status == "budget_exceeded" &&
         return "stopped at the wall-clock cap before consensus; certify was skipped."
-    status == "preflight_refused" && return "refused by the MemAvailable pre-flight before " *
-           "anything was materialized: the host did not have the memory at launch."
-    status == "started" && return "only the started row exists: the process died before writing " *
-           "its final row; the wrapper row below (rc, oom_source) is the measured outcome."
-    startswith(status, "error:") && return "ended in a solver-layer error of the named type."
+    status == "preflight_refused" &&
+        return "refused by the MemAvailable pre-flight before " *
+               "anything was materialized: the host did not have the memory at launch."
+    status == "started" &&
+        return "only the started row exists: the process died before writing " *
+               "its final row; the wrapper row below (rc, oom_source) is the measured outcome."
+    startswith(status, "error:") &&
+        return "ended in a solver-layer error of the named type."
     return "unrecognized status."
 end
 
@@ -777,8 +793,18 @@ function hm_print_measured(rows, label)
         return nothing
     end
     r = only(rows)
-    println("run label ", label, ": feeder ", r["feeder"], ", population ", r["population"],
-        ", T ", r["T"], ", strategy ", r["strategy"])
+    println(
+        "run label ",
+        label,
+        ": feeder ",
+        r["feeder"],
+        ", population ",
+        r["population"],
+        ", T ",
+        r["T"],
+        ", strategy ",
+        r["strategy"],
+    )
     @printf(
         "  size:   %s buses, %s branches, %s load buses; %s aggregators (%s capacitor), %s AgrOpt models\n",
         r["n_buses"],
@@ -865,7 +891,8 @@ function hm_print_wrappers(wrappers, rows)
     r = only(rows)
     last_w = last(wrappers)
     @assert hm_num(last_w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"])
-    footprint_kb = hm_num(last_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
+    footprint_kb =
+        hm_num(last_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
     @printf(
         "in-script MemAvailable (measured row) %s kB = %.3f GiB; startup footprint %.0f kB = %.3f GiB\n",
         r["mem_avail_before_kb"],
@@ -977,8 +1004,13 @@ function hm_print_supersessions(rows24, nogo, meas)
         )
     else
         r = only(meas)
-        println("ieee8500 as built (measured row): ", r["n_buses"], " buses, ",
-            r["n_branches"], " branches")
+        println(
+            "ieee8500 as built (measured row): ",
+            r["n_buses"],
+            " buses, ",
+            r["n_branches"],
+            " branches",
+        )
     end
     return nothing
 end
