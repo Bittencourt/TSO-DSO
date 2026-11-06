@@ -953,15 +953,17 @@ hm_print_measured(hm_meas, hm_label)
 # MemAvailable. The planned 8 GiB launch gate could not be reached on this host even after other
 # work was closed.
 #
-# The script reads MemAvailable *after* Julia has started and loaded the package. That reading is
-# lower than the wrapper's pre-launch reading by the process's own startup footprint. The first
-# attempt asked for 7 GiB at that point and was refused by the script's own gate, so nothing was
-# materialized. Its `preflight_refused` row was then replaced by the second attempt's final row
+# On 2026-11-05 the script read MemAvailable *after* Julia had started and loaded the package.
+# That reading is lower than the wrapper's pre-launch reading by the process's own startup
+# footprint. (Since 2026-11-06 the script reads MemAvailable on its first lines, before any package
+# is loaded, so only the bare Julia runtime's footprint remains; the row's note says which reading
+# it carries.) The first attempt asked for 7 GiB at that point and was refused by the script's own
+# gate, so nothing was materialized. Its `preflight_refused` row was then replaced by the second attempt's final row
 # under the same key, and only its wrapper row remains. The second attempt lowered the in-script
 # floor to the post-load equivalent of the approved level and ran to completion. The last wrapper
-# row joins the measured row. The startup footprint is computed below, from the second attempt's
+# row joins the measured row. The startup footprint is computed below, from the last attempt's
 # two readings, together with the launch level that the default 8 GiB in-script gate implies on
-# this host.
+# this host. Any later row for this label is a later launch of the same point.
 
 function hm_print_wrappers(wrappers, rows)
     for (k, w) in enumerate(wrappers)
@@ -986,8 +988,12 @@ function hm_print_wrappers(wrappers, rows)
     @assert hm_num(last_w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"])
     footprint_kb =
         hm_num(last_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
+    when =
+        occursin("before any package load", r["note"]) ? "before package load" :
+        "after package load"
     @printf(
-        "in-script MemAvailable (measured row) %s kB = %.3f GiB; startup footprint %.0f kB = %.3f GiB\n",
+        "in-script MemAvailable (measured row, read %s) %s kB = %.3f GiB; startup footprint %.0f kB = %.3f GiB\n",
+        when,
         r["mem_avail_before_kb"],
         hm_gib(hm_num(r["mem_avail_before_kb"])),
         footprint_kb,
@@ -1115,11 +1121,13 @@ hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
 #
 # The measured point needs a quiet host. Run one point at a time, detached, with no other Julia
 # process running. The script's pre-flight refuses below its floor (default 8 GiB MemAvailable)
-# and writes a `preflight_refused` row; it then exits 0. `HEAP_SIZE_HINT` makes the wrapper pass
-# julia's `--heap-size-hint=` flag (julia reads no environment variable for it); drop it to run
-# without a hint. That reading is taken after package load,
-# so on this host the default floor needs about one more GiB at launch, as printed above.
-# `--record-nogo` reads only the committed CSVs and rewrites the decision row:
+# and writes a `preflight_refused` row; it then exits 0. On 2026-11-05 that reading was taken after
+# package load, so the default floor needed about one more GiB at launch (printed above); since
+# 2026-11-06 it is taken on the script's first lines, before any package load. `HEAP_SIZE_HINT`
+# makes the wrapper pass julia's `--heap-size-hint=` flag (julia reads no environment variable
+# for it); drop it to run without a hint.
+# `--record-nogo` reads only the committed CSVs and the measurement host's `runs/` evidence, and
+# rewrites the decision row:
 #
 # ```
 # HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl nohup setsid \

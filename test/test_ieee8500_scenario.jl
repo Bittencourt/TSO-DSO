@@ -714,3 +714,33 @@ end
     @test ismissing(phb.certify_s)
     @test phb.iters >= 1
 end
+
+@testitem "ieee8500 scenario: the pre-flight judges the reading taken before package load" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # Read on the script's first lines (Base only); -1 only without /proc/meminfo.
+    @test MEMAVAIL_AT_START_KB isa Int
+    @test isfile("/proc/meminfo") ? MEMAVAIL_AT_START_KB > 0 : MEMAVAIL_AT_START_KB == -1
+
+    # A refused pre-flight writes one row and runs nothing (the stub would throw if called).
+    dir = mktempdir()
+    opts = (;
+        feeder = :ieee13,
+        T = 10,
+        seed = 3,
+        time_limit = 1200.0,
+        min_gib = 8.0,
+        run_label = "preflight",
+        results_dir = dir,
+    )
+    never(s; kw...) = error("phases must not run after a refused pre-flight")
+    row = run_measured_point(opts; phases = never, avail_kb = 1024)
+    @test row.status == "preflight_refused"
+    @test row.mem_avail_before_kb == 1024
+    @test occursin("before any package load", row.note)
+    d = CSV.read(joinpath(dir, "scenario_table.csv"), DataFrame)
+    @test nrow(d) == 1
+    @test d.status[1] == "preflight_refused"
+end

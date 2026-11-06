@@ -40,8 +40,8 @@
 # strategy is the wall-clock cap `--time-limit` (default 1200 s, the benchmark harness default),
 # recorded in the row's note; the library path runs without a cap.
 #
-# Sequence: validate flags -> pre-flight (MemAvailable from /proc/meminfo, before any
-# materialization) -> upsert a `started` row -> run the phases -> upsert the final row (same key,
+# Sequence: read MemAvailable from /proc/meminfo on the script's first lines (before any package
+# load) -> validate flags -> pre-flight on that reading -> upsert a `started` row -> run the phases -> upsert the final row (same key,
 # so it replaces `started`, and any earlier final row of the same seed and label). A process
 # killed mid-run therefore leaves its `started` row (beside an earlier completed row of the same
 # key, which it never replaces), and the wrapper's point_resources.csv row (joined by run_label)
@@ -71,6 +71,22 @@
 # Units: every memory figure is binary GiB (1 GiB = 2^30 bytes = 1,048,576 kB); the raw kB
 # counters (/proc/self/status VmHWM, /proc/meminfo MemAvailable, /usr/bin/time MaxRSS) are kept
 # beside the GiB conversions.
+
+# MemAvailable for the pre-flight, read with Base only BEFORE any package is loaded: a reading
+# taken after `using TSODSO` would include this process's own package-load footprint (about
+# 0.9 GiB on the measurement host), so the gate would demand that much more at launch than it
+# states. -1 when /proc/meminfo or the field is absent.
+const MEMAVAIL_AT_START_KB = let v = -1
+    if isfile("/proc/meminfo")
+        for line in eachline("/proc/meminfo")
+            if startswith(line, "MemAvailable:")
+                v = parse(Int, split(line)[2])
+                break
+            end
+        end
+    end
+    v
+end
 
 using DrWatson
 @quickactivate "TSODSO"
@@ -116,6 +132,7 @@ Measured-run flags:
   --run-label <str>          label column, [A-Za-z0-9._-]+ (join key with point_resources.csv)
   --time-limit <s>           ADMM wall-clock cap in seconds, default 1200 (recorded in the note)
   --min-mem-avail-gib <f>    pre-flight MemAvailable floor in binary GiB, default 8; 0 disables
+                             (MemAvailable is read at script start, before any package load)
   --results-dir <path>       output directory (or env TSODSO_IEEE8500_RESULTS_DIR),
                              default results/ieee8500_benchmark under the project
 
@@ -908,8 +925,15 @@ An exception that `phases` lets through (anything that is not a `TSODSOError`) i
 it propagates: `OutOfMemoryError` as `memory_infeasible_inprocess` (a measured outcome), any other
 type as the transient `crashed:<TypeName>`. `phases` is the phase runner (the default is the real
 one; tests pass a stub so that no solve runs).
+
+The pre-flight judges `avail_kb`, by default `MEMAVAIL_AT_START_KB`: MemAvailable read on the
+script's first lines, before any package load.
 """
-function run_measured_point(opts; phases = scenario_admm_phases)
+function run_measured_point(
+    opts;
+    phases = scenario_admm_phases,
+    avail_kb::Integer = MEMAVAIL_AT_START_KB,
+)
     pop = population_for(opts.feeder)
     key = (;
         row_kind = "measured",
@@ -922,10 +946,11 @@ function run_measured_point(opts; phases = scenario_admm_phases)
     )
     path = joinpath(opts.results_dir, "scenario_table.csv")
     prov = _provenance_fields(opts)
-    cap_txt = "wall-clock cap time_limit_s=$(opts.time_limit) (harness default; the library path has none)"
+    cap_txt =
+        "wall-clock cap time_limit_s=$(opts.time_limit) (harness default; the library path has " *
+        "none); pre-flight MemAvailable read at script start, before any package load"
 
-    # Pre-flight: first thing after argument validation, before any materialization.
-    avail_kb = mem_available_kb()
+    # Pre-flight on the reading taken before any package load; nothing is materialized yet.
     if !preflight_ok(avail_kb, opts.min_gib)
         need_kb = round(Int, opts.min_gib * 1024^2)
         row = scenario_row(;
@@ -933,7 +958,8 @@ function run_measured_point(opts; phases = scenario_admm_phases)
             prov...,
             status = "preflight_refused",
             mem_avail_before_kb = avail_kb,
-            note = "pre-flight refused: MemAvailable $(avail_kb) kB = " *
+            note = "pre-flight refused: MemAvailable (read at script start, before any package " *
+                   "load) $(avail_kb) kB = " *
                    "$(_fmt(kb_to_gib(avail_kb))) GiB is below --min-mem-avail-gib " *
                    "$(opts.min_gib) ($(need_kb) kB); nothing was materialized, not retried",
         )
