@@ -500,3 +500,23 @@ end
     @test nrow(d) == 3
     @test only(d.note[d.row_kind .== "recorded_no_go"]) == "re-derived"
 end
+
+@testitem "ieee8500 scenario: the table is rewritten atomically" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    dir = mktempdir()
+    path = joinpath(dir, "scenario_table.csv")
+    upsert_rows!(path, [scenario_row(; row_kind = "measured", feeder = "ieee13", status = "ok")])
+    upsert_rows!(path, [scenario_row(; row_kind = "measured", feeder = "ieee123", status = "ok")])
+    # Only the table remains: the temporary file was renamed over it, not left beside it.
+    @test readdir(dir) == ["scenario_table.csv"]
+    @test nrow(CSV.read(path, DataFrame)) == 2
+
+    # A failed write leaves the previous table intact and no temporary file behind.
+    before = read(path, String)
+    @test_throws Exception write_table_atomic(path, :not_a_table)
+    @test read(path, String) == before
+    @test readdir(dir) == ["scenario_table.csv"]
+end

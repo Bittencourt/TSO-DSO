@@ -27,7 +27,8 @@
 # A transient row (`started`, `preflight_refused`) never displaces a final row of the same key:
 # it is kept beside it until that attempt's final row replaces both. `cols = :union` lets the
 # schema grow (rows written before a column existed read as missing). The free-text `note`
-# column is always LAST.
+# column is always LAST. The file is rewritten atomically (temp file in the same directory, then
+# rename).
 #
 # Measured mode. The `Scenario` is materialized exactly as `TSODSO.run(::ADMM, s)` does
 # (`_materialize`, `build_powerflow`), then the `solve_admm` plumbing is composed phase by phase
@@ -382,8 +383,29 @@ function upsert_rows!(csv_path::AbstractString, rows)
     extra = [c for c in propertynames(df) if !(c in SCENARIO_TABLE_COLUMNS)]
     order = vcat(known, extra, (:note in present ? [:note] : Symbol[]))
     select!(df, order)
-    CSV.write(csv_path, df)
+    write_table_atomic(csv_path, df)
     return df
+end
+
+"""
+    write_table_atomic(csv_path, df)
+
+Write `df` to a temporary file in the SAME directory as `csv_path`, then rename it over
+`csv_path`. A rename within one filesystem is atomic (POSIX `rename(2)`), so a kill or crash
+mid-write leaves either the old table or the new one, never a truncated file. `Base.mv(...;
+force = true)` is not used, because it deletes the target before renaming. There is no lock:
+concurrent writers can still lose each other's update, so measured runs stay one at a time.
+"""
+function write_table_atomic(csv_path::AbstractString, df)
+    dir = dirname(abspath(csv_path))
+    tmp = joinpath(dir, "." * basename(csv_path) * ".tmp." * string(getpid()))
+    try
+        CSV.write(tmp, df)
+        Base.Filesystem.rename(tmp, csv_path)
+    finally
+        isfile(tmp) && rm(tmp; force = true)
+    end
+    return csv_path
 end
 
 # ---------------------------------------------------------------------------- NO-GO record
