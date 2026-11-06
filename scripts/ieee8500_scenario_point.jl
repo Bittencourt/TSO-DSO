@@ -618,6 +618,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
     sizes = Dict{Symbol, Any}()
     local feeder, λ₀, aggs, pf, mode, rmode, st
     have_st = false
+    loop_done = false
     status = "started"
     iters = missing
     gap_ratio = missing
@@ -684,6 +685,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             )
         end
         push!(hwm_by_phase, :solve => hwm())
+        loop_done = true
         iters = Int(st.residuals.iters)
 
         if !st.converged_flag && !st.budget_exceeded_flag
@@ -698,15 +700,19 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
         else
             local r
             certified = false
-            t[:certify] = @elapsed begin
-                r = try
-                    TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, nothing, 1e-4, false)
-                catch err
-                    err isa CertificateError || rethrow()
-                    err
-                end
+            # Timed with time_ns and recorded in `finally`, so a non-certificate error raised by
+            # certify (for example a SolveFailedError in a certify re-solve) keeps its timing and
+            # its high-water-mark sample.
+            t0 = time_ns()
+            r = try
+                TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, nothing, 1e-4, false)
+            catch err
+                err isa CertificateError || rethrow()
+                err
+            finally
+                t[:certify] = (time_ns() - t0) / 1e9
+                push!(hwm_by_phase, :certify => hwm())
             end
-            push!(hwm_by_phase, :certify => hwm())
             if r isa CertificateError
                 status = "refused_certificate"
                 iters = Int(st.residuals.iters)
@@ -734,9 +740,11 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             status = "refused_certificate"
             gap_ratio = parse_gap_ratio(err.msg)
         end
+        # Once the loop has finished, its iteration count is known whatever certify raised; -1 is
+        # kept for failures before the loop ended.
         iters = if hasproperty(err, :iterations) && err.iterations !== nothing
             Int(err.iterations)
-        elseif have_st && status == "refused_certificate"
+        elseif have_st && loop_done
             Int(st.residuals.iters)
         else
             -1
