@@ -893,7 +893,7 @@ function hm_print_measured(rows, label)
         r["strategy"],
     )
     @printf(
-        "  size:   %s buses, %s branches, %s load buses; %s aggregators (%s capacitor), %s AgrOpt models\n",
+        "  size:   %s buses, %s branches, %s load buses (feeder total, before sampling); %s aggregators (%s capacitor), %s AgrOpt models\n",
         r["n_buses"],
         r["n_branches"],
         r["n_load_buses"],

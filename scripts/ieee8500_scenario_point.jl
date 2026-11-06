@@ -746,8 +746,9 @@ function scenario_admm_phases(
         push!(hwm_by_phase, :materialize => hwm())
         sizes[:n_buses] = length(feeder.buses)
         sizes[:n_branches] = length(feeder.branches)
-        sizes[:n_load_buses] =
-            s.feeder in FEEDERS_8500 ? length(TSODSO._load_buses(feeder, s.feeder)) : missing
+        # The feeder's total load-bus count BEFORE density sampling (1,177 on ieee8500), not the
+        # number of sampled houses (n_aggregators - n_cap_aggregators on the 8500 feeders).
+        sizes[:n_load_buses] = length(TSODSO._load_buses(feeder, s.feeder))
         sizes[:n_aggregators] = length(aggs)
         sizes[:n_cap_aggregators] =
             count(a -> any(d -> d isa TSODSO.FixedCapacitor, a.devices), aggs)

@@ -463,6 +463,7 @@ end
     @test ph.result.dadp isa Matrix{Float64}
     @test ph.n_buses == 11
     @test ph.n_aggregators == 10
+    @test ph.n_load_buses == 10   # the feeder's load-bus count, on every feeder
     # Every phase time includes compilation; the recorded compile part fits inside it.
     for k in (:materialize, :build, :solve, :certify)
         c = getproperty(ph, Symbol(k, "_compile_s"))
