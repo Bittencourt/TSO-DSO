@@ -628,8 +628,12 @@ end
     @test row_status(path) == ["memory_infeasible_inprocess"]
     @test !is_transient_status("memory_infeasible_inprocess")
 
-    # A crash is transient: recorded, but it never displaces the final row of its key.
-    @test_throws ArgumentError run_measured_point(opts; phases = bug_phases)
+    # A crash is transient: recorded, but it never displaces the final row of its key. The key
+    # already holds a final row, so this relaunch needs `replace` (else it is refused unrun).
+    @test_throws ArgumentError run_measured_point(
+        merge(opts, (; replace = true));
+        phases = bug_phases,
+    )
     @test sort(row_status(path)) == ["crashed:ArgumentError", "memory_infeasible_inprocess"]
     d = CSV.read(path, DataFrame)
     @test occursin("stub misuse", only(d.note[d.status .== "crashed:ArgumentError"]))
@@ -639,6 +643,97 @@ end
     @test_throws ArgumentError run_measured_point(opts2; phases = bug_phases)
     d = CSV.read(path, DataFrame)
     @test only(d.status[d.run_label .== "stub2"]) == "crashed:ArgumentError"
+end
+
+@testitem "ieee8500 scenario: a reused key or label is refused before anything is written" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    @test parse_options(["--feeder", "ieee13", "--replace"]).replace
+    @test !parse_options(["--feeder", "ieee13"]).replace
+
+    # Script: a key that holds a FINAL row is refused unless `replace`; nothing runs or is written.
+    dir = mktempdir()
+    path = joinpath(dir, "scenario_table.csv")
+    opts = (;
+        feeder = :ieee13,
+        T = 10,
+        seed = 3,
+        time_limit = 1200.0,
+        min_gib = 0.0,
+        run_label = "lbl",
+        results_dir = dir,
+    )
+    calls = Ref(0)
+    oom_phases(s; kw...) = (calls[] += 1; throw(OutOfMemoryError()))
+    @test_throws OutOfMemoryError run_measured_point(opts; phases = oom_phases)
+    @test calls[] == 1
+    keyed(label) = scenario_row(;
+        row_kind = "measured",
+        feeder = "ieee13",
+        population = "default",
+        T = 10,
+        strategy = "ADMM",
+        seed = 3,
+        run_label = label,
+    )
+    @test final_status_for_key(path, keyed("lbl")) == "memory_infeasible_inprocess"
+    @test final_status_for_key(path, keyed("other")) === nothing
+    before = read(path, String)
+    err = try
+        run_measured_point(opts; phases = oom_phases)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("--replace", sprint(showerror, err))
+    @test calls[] == 1
+    @test read(path, String) == before
+    # A pre-flight refusal on that key is refused too (it is checked first).
+    @test_throws ArgumentError run_measured_point(
+        merge(opts, (; min_gib = 8.0));
+        phases = oom_phases,
+        avail_kb = 1024,
+    )
+    @test read(path, String) == before
+    # A fresh label is a new key and runs; `replace` lets the same key run again.
+    @test_throws OutOfMemoryError run_measured_point(
+        merge(opts, (; run_label = "lbl-r2"));
+        phases = oom_phases,
+    )
+    @test_throws OutOfMemoryError run_measured_point(
+        merge(opts, (; replace = true));
+        phases = oom_phases,
+    )
+    @test calls[] == 3
+    d = CSV.read(path, DataFrame; types = Dict(:run_label => String))
+    @test sort(d.run_label) == ["lbl", "lbl-r2"]
+
+    # Wrapper: a label with runs/ evidence or a point_resources.csv row is refused with exit 2
+    # before anything is written. SCRIPT points nowhere, so a missing guard would show as a
+    # julia failure (wrapper exit 0), never as a measurement.
+    wrapper = joinpath(@__DIR__, "..", "scripts", "run_ieee8500_point.sh")
+    function wrapper_rc(outdir, label; env...)
+        cmd = addenv(
+            `bash $wrapper $label -- --feeder ieee13`,
+            "OUTDIR" => outdir,
+            "SCRIPT" => joinpath(outdir, "no_such_script.jl"),
+            (string(k) => string(v) for (k, v) in env)...,
+        )
+        return run(pipeline(ignorestatus(cmd); stdout = devnull, stderr = devnull)).exitcode
+    end
+    if Sys.which("bash") !== nothing
+        out = mktempdir()
+        mkpath(joinpath(out, "runs"))
+        write(joinpath(out, "runs", "used.time"), "x")
+        @test wrapper_rc(out, "used") == 2
+        write(joinpath(out, "point_resources.csv"), "run_label,rc\nrowonly,0\n")
+        @test wrapper_rc(out, "rowonly") == 2
+        @test readdir(joinpath(out, "runs")) == ["used.time"]
+        @test read(joinpath(out, "point_resources.csv"), String) == "run_label,rc\nrowonly,0\n"
+    end
 end
 
 @testitem "ieee8500 scenario: ieee13 status branches (refusal, maxiter, budget)" begin

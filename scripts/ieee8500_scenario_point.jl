@@ -6,9 +6,11 @@
 #
 # Usage:
 #
-#   # measured run (launch through the per-point wrapper, detached and alone on the host;
-#   # HEAP_SIZE_HINT makes the wrapper pass julia's `--heap-size-hint=` flag, omit it for no hint):
-#   HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh <label> -- --feeder ieee8500 --T 10 --run-label <label>
+#   # measured run (launch through the per-point wrapper, detached and alone on the host, with a
+#   # FRESH label per launch; HEAP_SIZE_HINT makes the wrapper pass julia's `--heap-size-hint=`
+#   # flag, omit it for no hint):
+#   LABEL=<name>-$(date +%Y%m%d-%H%M)
+#   HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh "$LABEL" -- --feeder ieee8500 --T 10 --run-label "$LABEL"
 #
 #   # Julia reads NO environment variable for the heap-size hint (JULIA_HEAP_SIZE_HINT is ignored);
 #   # only the `--heap-size-hint=` command-line flag sets it. The row's `heap_size_hint` column is
@@ -22,8 +24,10 @@
 #
 # Both modes upsert rows into `<results-dir>/scenario_table.csv` (default
 # results/ieee8500_benchmark/, or env TSODSO_IEEE8500_RESULTS_DIR, or --results-dir), keyed by
-# (row_kind, feeder, population, T, strategy, seed, run_label): a re-run of the same attempt
-# identity replaces its own row and keeps every other row; another seed or label is another row.
+# (row_kind, feeder, population, T, strategy, seed, run_label): another seed or label is another
+# row, and every other row is kept. A measured run whose key already holds a FINAL row (a
+# completed or recorded outcome) is refused before anything is written, unless `--replace` is
+# given; use a fresh `--run-label` for every launch (the wrapper refuses a reused label too).
 # A transient row (`started`, `preflight_refused`) never displaces a final row of the same key:
 # it is kept beside it until that attempt's final row replaces both. `cols = :union` lets the
 # schema grow (rows written before a column existed read as missing). The free-text `note`
@@ -114,7 +118,7 @@ const VALUE_FLAGS = (
     "--min-mem-avail-gib",
     "--results-dir",
 )
-const BOOL_FLAGS = ("--record-nogo", "--help")
+const BOOL_FLAGS = ("--record-nogo", "--help", "--replace")
 
 const USAGE = """
 Usage: julia --project=. scripts/ieee8500_scenario_point.jl [mode] [flags]
@@ -136,10 +140,17 @@ Measured-run flags:
                              (MemAvailable is read at script start, before any package load)
   --results-dir <path>       output directory (or env TSODSO_IEEE8500_RESULTS_DIR),
                              default results/ieee8500_benchmark under the project
+  --replace                  allow this run to replace a FINAL row of the same key (feeder,
+                             population, T, seed, run label); without it such a run is refused
+                             before anything is written. Prefer a fresh --run-label instead.
 
-Launch the measured IEEE-8500 run through the wrapper, detached and alone (HEAP_SIZE_HINT makes
-the wrapper pass julia's --heap-size-hint= flag; julia ignores JULIA_HEAP_SIZE_HINT):
-  HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh <label> -- --feeder ieee8500 --T 10 --run-label <label>
+Launch the measured IEEE-8500 run through the wrapper, detached and alone, with a FRESH label
+for every launch (HEAP_SIZE_HINT makes the wrapper pass julia's --heap-size-hint= flag; julia
+ignores JULIA_HEAP_SIZE_HINT):
+  LABEL=<name>-\$(date +%Y%m%d-%H%M)
+  HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl scripts/run_ieee8500_point.sh "\$LABEL" -- --feeder ieee8500 --T 10 --run-label "\$LABEL"
+The wrapper refuses a label that was already launched (REPLACE_LABEL=1 overrides), and this
+script refuses to replace a final row of the same key (--replace overrides).
 The heap_size_hint column records the effective hint, Base.JLOptions().heap_size_hint, in bytes
 (0 = no hint).
 """
@@ -168,6 +179,7 @@ function parse_options(args)
     end
     help = has_flag(args, "--help")
     record_nogo = has_flag(args, "--record-nogo")
+    replace = has_flag(args, "--replace")
 
     feeder_str = parse_kv_flag(args, "--feeder", "ieee8500")
     feeder = Symbol(feeder_str)
@@ -216,6 +228,7 @@ function parse_options(args)
         min_gib,
         run_label = label,
         results_dir,
+        replace,
     )
 end
 
@@ -424,6 +437,24 @@ function upsert_rows!(csv_path::AbstractString, rows)
     select!(df, order)
     write_table_atomic(csv_path, df)
     return df
+end
+
+"""
+    final_status_for_key(csv_path, row) -> Union{Nothing, String}
+
+The status of a FINAL row (any status that is not `is_transient_status`) in `csv_path` with the
+same `ROW_KEY` as `row`; `nothing` when there is none or the table does not exist yet.
+"""
+function final_status_for_key(csv_path::AbstractString, row)
+    isfile(csv_path) || return nothing
+    old = CSV.read(csv_path, DataFrame; types = TEXT_COLUMN_TYPES, validate = false)
+    k = _key(row)
+    for r in eachrow(old)
+        _key(r) == k || continue
+        st = hasproperty(r, :status) ? string(r.status) : "missing"
+        is_transient_status(st) || return st
+    end
+    return nothing
 end
 
 """
@@ -928,9 +959,15 @@ end
 """
     run_measured_point(opts; phases = scenario_admm_phases) -> NamedTuple
 
-validate (done by `parse_options`) -> pre-flight -> `started` row -> phases -> final row. A
-pre-flight refusal writes one `preflight_refused` row and returns normally (exit 0); nothing is
-retried or retuned.
+validate (done by `parse_options`) -> reused-key check -> pre-flight -> `started` row -> phases
+-> final row. A pre-flight refusal writes one `preflight_refused` row and returns normally
+(exit 0); nothing is retried or retuned.
+
+When the table already holds a FINAL row with this run's key (feeder, population, T, seed, run
+label, ...), the run is refused with an `ArgumentError` before anything is written, so a
+reproduction that reuses a label can never replace a committed measurement by accident.
+`opts.replace = true` (the `--replace` flag) lifts that refusal; an `opts` without the field
+counts as `false`.
 
 An exception that `phases` lets through (anything that is not a `TSODSOError`) is recorded before
 it propagates: `OutOfMemoryError` as `memory_infeasible_inprocess` (a measured outcome), any other
@@ -960,6 +997,20 @@ function run_measured_point(
     cap_txt =
         "wall-clock cap time_limit_s=$(opts.time_limit) (harness default; the library path has " *
         "none); pre-flight MemAvailable read at script start, before any package load"
+
+    # A reused key never silently replaces a completed measurement: refused before any row is
+    # written, unless the caller asked for it explicitly (--replace).
+    if !get(opts, :replace, false)
+        prior = final_status_for_key(path, scenario_row(; key..., prov...))
+        prior === nothing || throw(
+            ArgumentError(
+                "$(path) already holds a final row (status $(prior)) for this key (feeder " *
+                "$(key.feeder), population $(key.population), T $(key.T), seed $(key.seed), " *
+                "run label $(something(opts.run_label, "none"))); use a fresh --run-label, or " *
+                "pass --replace to replace that row",
+            ),
+        )
+    end
 
     # Pre-flight on the reading taken before any package load; nothing is materialized yet.
     if !preflight_ok(avail_kb, opts.min_gib)

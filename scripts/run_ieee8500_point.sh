@@ -5,6 +5,10 @@
 #   SCRIPT=scripts/profile_ieee8500_memory.jl scripts/run_ieee8500_point.sh <label> -- <profiler args...>
 #   HEAP_SIZE_HINT=8G scripts/run_ieee8500_point.sh <label> -- <args...>   # julia --heap-size-hint=8G
 #
+# Use a FRESH label for every launch, for example <name>-$(date +%Y%m%d-%H%M). A label that already
+# has evidence (runs/<label>.time or .free_before) or a point_resources.csv row is refused with
+# exit 2 before anything is written; REPLACE_LABEL=1 overrides that and overwrites the evidence.
+#
 # Heap-size hint (opt-in, added 2026-11-06): julia reads NO environment variable for its heap-size
 # hint, so JULIA_HEAP_SIZE_HINT=... has never had any effect on a run. Only the command-line flag
 # `--heap-size-hint=` sets it. When HEAP_SIZE_HINT is set, the wrapper passes
@@ -51,6 +55,26 @@ if [ -n "${HEAP_SIZE_HINT:-}" ]; then
   HEAP_ARGS=("--heap-size-hint=$HEAP_SIZE_HINT")
 elif [ -n "${JULIA_HEAP_SIZE_HINT:-}" ]; then
   echo "run_ieee8500_point: warning: julia ignores JULIA_HEAP_SIZE_HINT; no heap-size hint is applied (set HEAP_SIZE_HINT to pass --heap-size-hint)" >&2
+fi
+
+# A label is one launch (added 2026-11-06). The evidence files below are keyed by the label alone,
+# so a reused label would overwrite an earlier launch's evidence (and, for the Scenario script,
+# compete for its result row). Refuse before anything is written, unless REPLACE_LABEL=1.
+# point_resources.csv stays append-only either way.
+CSV="$OUTDIR/point_resources.csv"
+if [ "${REPLACE_LABEL:-0}" != 1 ]; then
+  USED=""
+  for ext in time free_before; do
+    [ -e "$RUNS/$LABEL.$ext" ] && USED="runs/$LABEL.$ext"
+  done
+  if [ -z "$USED" ] && [ -f "$CSV" ] &&
+    awk -F, -v l="$LABEL" '$1 == l { f = 1 } END { exit !f }' "$CSV"; then
+    USED="a point_resources.csv row"
+  fi
+  if [ -n "$USED" ]; then
+    echo "run_ieee8500_point: label $LABEL was already launched ($USED exists); use a fresh label, for example $LABEL-$(date +%Y%m%d-%H%M), or set REPLACE_LABEL=1 to overwrite its runs/ evidence" >&2
+    exit 2
+  fi
 fi
 
 START="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -100,7 +124,6 @@ if [ "$RC" -ne 0 ]; then
   fi
 fi
 
-CSV="$OUTDIR/point_resources.csv"
 if [ ! -f "$CSV" ]; then
   echo "run_label,rc,peak_rss_kb,oom_source,mem_avail_before_mb,swap_used_before_mb,other_julia_procs,started_at,args" > "$CSV"
 fi

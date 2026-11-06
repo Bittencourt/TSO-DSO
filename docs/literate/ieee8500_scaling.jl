@@ -1197,12 +1197,21 @@ hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
 # makes the wrapper pass julia's `--heap-size-hint=` flag (julia reads no environment variable
 # for it); drop it to run without a hint.
 # `--record-nogo` reads only the committed CSVs and the measurement host's `runs/` evidence, and
-# rewrites the decision row:
+# rewrites the decision row.
+#
+# **Use a fresh label for every launch.** The committed measurement belongs to the label
+# `p46-scn-ieee8500-d10-T10`. A reproduction gets its own dated label, so it writes its own row,
+# its own wrapper row and its own `runs/` files, and the committed measurement and its evidence
+# stay as they are. Since 2026-11-06 a reused label is refused twice:
+# - the wrapper refuses a label that already has `runs/` evidence or a `point_resources.csv` row,
+#   unless `REPLACE_LABEL=1`;
+# - the script refuses a run whose key already holds a final row, unless `--replace`.
 #
 # ```
+# LABEL=p46-scn-ieee8500-d10-T10-$(date +%Y%m%d-%H%M)
 # HEAP_SIZE_HINT=8G SCRIPT=scripts/ieee8500_scenario_point.jl nohup setsid \
-#     scripts/run_ieee8500_point.sh p46-scn-ieee8500-d10-T10 -- \
-#     --feeder ieee8500 --T 10 --seed 1 --run-label p46-scn-ieee8500-d10-T10
+#     scripts/run_ieee8500_point.sh "$LABEL" -- \
+#     --feeder ieee8500 --T 10 --seed 1 --run-label "$LABEL"
 # julia --project=. scripts/ieee8500_scenario_point.jl --record-nogo
 # ```
 #
@@ -1210,7 +1219,8 @@ hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
 # 2026-11-06 the key is row kind, feeder, population, T, strategy, seed and run label (before, seed
 # and run label were not part of it, so a later `started` or `preflight_refused` row could replace
 # a completed measurement). A `started` or `preflight_refused` row never displaces a final row of
-# the same key; it sits beside it until that attempt's final row replaces both. A killed run leaves
+# the same key; it sits beside it until that attempt's final row replaces both (a launch on a key
+# that already holds a final row needs `--replace`, see above). A killed run leaves
 # its `started` row as the trace. The wrapper appends one row per launch to
 # `point_resources.csv` and keeps its evidence files under `results/ieee8500_benchmark/runs/`. The
 # draws depend on the Julia version through `Base.hash`. The measured row was produced on the Julia
