@@ -1043,8 +1043,10 @@ constructing `Aggregator`s or drawing profiles.
 population (unchanged), then keeps the aggregators at a seeded sample of
 `clamp(round(Int, 0.1 * n_load), 1, n_load)` load buses plus, unconditionally, the 4 capacitor
 aggregators. The sample is `sort(buses[randperm(LehmerRNG(seed), n_load)[1:n]])`, the same rule
-as the benchmark harness's density filter, so at an equal `seed` the two give the same
-aggregators. Sizes: `:ieee8500` 1,177 load buses -> 118 houses + 4 capacitors = 122
+as the benchmark harness's density filter, so at an equal `seed` it gives the same aggregators
+as a single-density harness invocation. (Within one harness sweep over several densities the
+harness draws every density from one shared generator, so only the first density drawn matches.)
+Sizes: `:ieee8500` 1,177 load buses -> 118 houses + 4 capacitors = 122
 aggregators; `:ieee8500_mv` 1,138 -> 114 + 4 = 118. When reached through a `Scenario`, `seed`
 is the population sub-seed `sub_seed(s.seed, :population)`, not the harness's literal seed, so
 the bus sample and the per-house profile draws differ from the harness runs (same size and
