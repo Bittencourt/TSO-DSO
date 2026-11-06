@@ -635,6 +635,19 @@ end
     @test_throws Exception write_table_atomic(path, :not_a_table)
     @test read(path, String) == before
     @test readdir(dir) == ["scenario_table.csv"]
+
+    # A write that fails MID-STREAM, after the temporary file exists: CSV.jl renders the cell
+    # with `string`, which records whether the temporary file is already on disk and then throws.
+    # The cleanup must remove it and keep the old table.
+    tmp = joinpath(dir, ".scenario_table.csv.tmp." * string(getpid()))
+    tmp_seen = Ref(false)
+    struct _FailsMidWrite end
+    Base.string(::_FailsMidWrite) = (tmp_seen[] = isfile(tmp); error("stub: write failed"))
+    bad = DataFrame(; row_kind = ["measured"], note = Any[_FailsMidWrite()])
+    @test_throws ErrorException write_table_atomic(path, bad)
+    @test tmp_seen[]
+    @test read(path, String) == before
+    @test readdir(dir) == ["scenario_table.csv"]
 end
 
 @testitem "ieee8500 scenario: in-process failures are recorded, then propagate" begin
