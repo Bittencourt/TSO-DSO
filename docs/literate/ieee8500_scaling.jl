@@ -708,12 +708,18 @@ end
 # - the earlier full-solve run `p35-head-d0.1-T24`;
 # - the earlier attribution run, whose `anchor_after` row records a full production solve.
 #
-# The full-solve run started with less available memory than B1. It completed because the kernel
-# reclaimed page cache and swap absorbed the overflow. The neighbouring point at density 0.25 was
-# killed by earlyoom at its measured peak. The rows:
+# The full-solve run started with less available memory than B1. MemAvailable already counts the
+# page cache the kernel can reclaim, so the rest of its peak came from memory released during the
+# run: swap-out of other pages, or other processes freeing memory. The wrapper did not measure
+# which. The neighbouring point at density 0.25 was killed by earlyoom at its measured peak. The
+# rows (the asserts keep these statements tied to them):
 
 hm_anchor24 = hm_attr_row(hm_attr24, "1", "anchor_after")
 hm_kill25 = only(hm_wrappers("p35-head-d0.25-T24"))
+@assert hm_head24["rc"] == "0"
+@assert hm_num(hm_head24["mem_avail_before_mb"]) / 1024 < hm_b1_gib
+@assert parse(Int, hm_anchor24["anchor_iters"]) > 0
+@assert hm_kill25["oom_source"] == "earlyoom"
 @printf(
     "p35-head-d0.1-T24:  rc %s, MemAvailable before launch %s MiB = %.3f GiB (B1 = %.3f GiB)\n",
     hm_head24["rc"],

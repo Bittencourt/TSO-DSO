@@ -287,6 +287,44 @@ end
     @test occursin("Counter-fact", row.note)
     @test !occursin('\n', row.note)
 
+    # The counter-fact is derived from the rows: both runs completed, with the head run's
+    # launch-time MemAvailable below B1, and the mechanism is not asserted as measured.
+    @test occursin("completed on this host twice", row.note)
+    @test occursin("10334 MiB", row.note)
+    @test occursin("which the wrapper did not measure", row.note)
+    @test occursin("rc 143, oom_source earlyoom", row.note)
+
+    # A head run that did not end with rc 0 is not claimed as completed; a missing killed row is
+    # an error, not a silent omission.
+    res_lines = readlines(joinpath(dir, "point_resources.csv"))
+    tmpd = mktempdir()
+    failed = joinpath(tmpd, "head_failed.csv")
+    write(
+        failed,
+        join(
+            map(
+                l -> replace(l, r"^p35-head-d0\.1-T24,0," => "p35-head-d0.1-T24,143,"),
+                res_lines,
+            ),
+            "\n",
+        ) * "\n",
+    )
+    fr = derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = failed,
+        host_total_kb = host_kb,
+    )
+    @test fr.status == "memory_infeasible"
+    @test occursin("completed on this host once", fr.note)
+    @test occursin("ended with rc 143, so no completed run is claimed from it", fr.note)
+    nokill = joinpath(tmpd, "no_kill.csv")
+    write(nokill, join(filter(l -> !startswith(l, "p35-head-d0.25-T24,"), res_lines), "\n") * "\n")
+    @test_throws ArgumentError derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = nokill,
+        host_total_kb = host_kb,
+    )
+
     # The verdict uses the LARGER peak: a threshold between the two peaks (11.209 and 11.520 GiB)
     # is still a NO-GO.
     between = derive_nogo_row(;

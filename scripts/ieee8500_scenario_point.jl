@@ -492,7 +492,14 @@ function derive_nogo_row(;
     )
     p35_kb = Int(head.peak_rss_kb[1])
     p35_rc = Int(head.rc[1])
+    p35_avail_mib = Int(head.mem_avail_before_mb[1])
     killed = filter(r -> string(r.run_label) == NOGO_KILLED_LABEL, res)
+    nrow(killed) == 1 || throw(
+        ArgumentError(
+            "derive_nogo_row: expected one $(NOGO_KILLED_LABEL) row in $resources_csv, " *
+            "got $(nrow(killed)); the record cites it and must not drop it silently",
+        ),
+    )
 
     peak_kb = max(vmhwm_kb, p35_kb)
     b1 = kb_to_gib(peak_kb)
@@ -507,12 +514,41 @@ function derive_nogo_row(;
         ),
     )
 
-    killed_txt = if nrow(killed) == 1
-        k = killed[1, :]
+    k = killed[1, :]
+    killed_txt =
         " Density 0.25 at T = 24 ($(NOGO_KILLED_LABEL)) ended with rc $(k.rc), " *
         "oom_source $(k.oom_source), at $(k.peak_rss_kb) kB = $(_fmt(kb_to_gib(k.peak_rss_kb))) GiB."
+
+    # The counter-fact is derived from the rows, never assumed: a run counts as completed only
+    # with rc 0 (head run) or a recorded anchor_after solve with at least one iteration.
+    head_done = p35_rc == 0
+    anchor_done = anchor_iters > 0
+    n_done = Int(head_done) + Int(anchor_done)
+    avail_gib = p35_avail_mib / 1024
+    head_txt = if head_done
+        "$(NOGO_HEAD_LABEL) ended with rc 0 after launching with MemAvailable $(p35_avail_mib) MiB " *
+        "= $(_fmt(avail_gib)) GiB (point_resources.csv mem_avail_before_mb), " *
+        (avail_gib < b1 ?
+         "below B1, so it used memory beyond what was available at launch (MemAvailable already " *
+         "counts reclaimable page cache; the rest came from swap-out or from memory other " *
+         "processes released, which the wrapper did not measure)" :
+         "at or above B1")
     else
-        ""
+        "$(NOGO_HEAD_LABEL) ended with rc $(p35_rc), so no completed run is claimed from it"
+    end
+    anchor_txt = if anchor_done
+        "the attribution run whose anchor_after row is cited above ran its production solve to " *
+        "the end ($(anchor_status) after $(anchor_iters) iterations)"
+    else
+        "the attribution anchor_after row records no iteration, so no completed run is claimed " *
+        "from it"
+    end
+    counter_txt = if n_done > 0
+        " Counter-fact: this d = 0.1 T = 24 point completed on this host " *
+        "$(n_done == 2 ? "twice" : "once"): $(head_txt); $(anchor_txt). NO-GO means the GO " *
+        "threshold is not met, not that the point cannot run."
+    else
+        " No completed run of this point is recorded: $(head_txt); $(anchor_txt)."
     end
     note =
         "T = 24 headline point (feeder ieee8500, benchmark-harness density 0.1, ADMM only) " *
@@ -534,10 +570,8 @@ function derive_nogo_row(;
         "iterations, gap ratio $(_fmt(gap_ratio; digits = 2)), maxrss delta " *
         "$(_fmt(anchor_delta_gib; digits = 4)) GiB." *
         killed_txt *
-        " Counter-fact: this d = 0.1 T = 24 point completed on this host twice " *
-        "($(NOGO_HEAD_LABEL) with rc $(p35_rc), and the attribution run whose anchor_after row is " *
-        "cited above) by evicting page cache and using swap; NO-GO means the GO threshold is not " *
-        "met, not that the point cannot run. No memory lever is claimed."
+        counter_txt *
+        " No memory lever is claimed."
 
     return scenario_row(;
         row_kind = "recorded_no_go",
