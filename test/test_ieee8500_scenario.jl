@@ -626,3 +626,91 @@ end
     d = CSV.read(path, DataFrame)
     @test only(d.status[d.run_label .== "stub2"]) == "crashed:ArgumentError"
 end
+
+@testitem "ieee8500 scenario: ieee13 status branches (refusal, maxiter, budget)" begin
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # IEEE-13 only. The production outcome at 8500 scale is `refused_certificate`; here it is
+    # forced with a flat floor far below any solver residual, passed ONLY in this test (the
+    # library defaults and the command line are unchanged).
+    s = Scenario(; name = "status-branches", feeder = :ieee13, strategy = ADMM(), T = 10, seed = 3)
+    atol_force, rtol_force = 1e-300, 0.0
+    ph = scenario_admm_phases(
+        s;
+        time_limit_s = nothing,
+        sample_mem = false,
+        atol_exact = atol_force,
+        rtol_exact = rtol_force,
+    )
+    @test ph.status == "refused_certificate"
+    @test ph.result === nothing
+    @test ph.iters > 0
+    @test isfinite(ph.gap_ratio) && ph.gap_ratio > 1
+    @test !ismissing(ph.certify_s)
+    @test occursin("kind=socp_exact", ph.message)
+
+    # The library path refuses the same point after the same number of iterations, with the same
+    # ratio (solve_admm called with run(::ADMM)'s arguments plus the same forcing floor).
+    function library_refusal(s, atol, rtol)
+        feeder, λ₀, aggs = TSODSO._materialize(s)
+        pf = TSODSO.build_powerflow(s)
+        A = s.strategy
+        try
+            TSODSO.solve_admm(
+                feeder,
+                pf,
+                aggs;
+                T = s.T,
+                λ₀ = λ₀,
+                ρ = A.ρ,
+                maxiter = A.maxiter,
+                ε_abs = A.ε_abs,
+                ε_rel = A.ε_rel,
+                τ = A.τ_ratio,
+                μ = A.μ,
+                allow_export = s.allow_export,
+                atol_exact = atol,
+                rtol_exact = rtol,
+            )
+        catch e
+            return e
+        end
+        return nothing
+    end
+    lib = library_refusal(s, atol_force, rtol_force)
+    @test lib isa CertificateError
+    @test lib.kind === :socp_exact
+    @test lib.iterations == ph.iters
+    @test parse_gap_ratio(lib.msg) == ph.gap_ratio
+
+    # convergence_error: maxiter reached, iters = maxiter, no certificate, as run_scenario's
+    # ConvergenceError reports.
+    s3 = Scenario(;
+        name = "status-maxiter",
+        feeder = :ieee13,
+        strategy = ADMM(; maxiter = 3),
+        T = 10,
+        seed = 3,
+    )
+    ph3 = scenario_admm_phases(s3; time_limit_s = nothing, sample_mem = false)
+    @test ph3.status == "convergence_error"
+    @test ph3.iters == 3
+    @test ph3.result === nothing
+    @test ismissing(ph3.certify_s)
+    err3 = try
+        TSODSO.run_scenario(s3)
+        nothing
+    catch e
+        e
+    end
+    @test err3 isa ConvergenceError
+    @test err3.iterations == ph3.iters
+
+    # budget_exceeded: a wall-clock cap that is already spent after the first iteration.
+    phb = scenario_admm_phases(s; time_limit_s = 1e-6, sample_mem = false)
+    @test phb.status == "budget_exceeded"
+    @test phb.result === nothing
+    @test ismissing(phb.certify_s)
+    @test phb.iters >= 1
+end

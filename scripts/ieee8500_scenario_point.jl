@@ -655,7 +655,8 @@ end
 # ---------------------------------------------------------------------------- measured run
 
 """
-    scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem = true) -> NamedTuple
+    scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem = true,
+                         atol_exact = nothing, rtol_exact = 1e-4) -> NamedTuple
 
 Run the ADMM `Scenario` `s` phase by phase, in the order of `TSODSO.run(::ADMM, s)` plus
 `solve_admm` (same calls, same arguments), each phase timed with `@elapsed`:
@@ -671,13 +672,24 @@ The point runs in one process with no warm-up, so every phase time includes firs
 compilation. The compilation part is measured with `Base.cumulative_compile_time_ns()` (timing is
 switched on for the call and off again) and returned as `<phase>_compile_s`.
 
+`atol_exact`/`rtol_exact` are passed to `_admm_certify`; their defaults are `solve_admm`'s own
+(`nothing` = the hybrid floor, `1e-4`), which is what `run(::ADMM)` uses. The command line never
+sets them, so a measured row is never judged with another tolerance; they exist only so that the
+tests can force the certificate-refusal branch on IEEE-13.
+
 Returns row-ready fields (`status`, timings, sizes, `iters`, `gap_ratio`, `vmhwm_kb`,
 `hwm_by_phase`, `message`, ...) and `result`: on `status == "ok"` the certified result
 NamedTuple with `welfare`, `dadp`, `exact_maxgap` and `iters` converted exactly as
 `run(::ADMM, s)` converts them, else `nothing`. Expected solver outcomes become statuses; any
 exception that is not a `TSODSOError` propagates.
 """
-function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bool = true)
+function scenario_admm_phases(
+    s::Scenario;
+    time_limit_s = 1200.0,
+    sample_mem::Bool = true,
+    atol_exact::Union{Nothing, Real} = nothing,
+    rtol_exact::Real = 1e-4,
+)
     A = s.strategy
     A isa ADMM || throw(ArgumentError("scenario_admm_phases: needs an ADMM strategy, got $(typeof(A))"))
     hwm() = sample_mem ? proc_status_kb("VmHWM") : missing
@@ -783,7 +795,7 @@ function scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem::Bo
             t0 = time_ns()
             c0 = cns()
             r = try
-                TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, nothing, 1e-4, false)
+                TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, atol_exact, rtol_exact, false)
             catch err
                 err isa CertificateError || rethrow()
                 err
