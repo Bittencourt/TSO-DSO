@@ -731,6 +731,11 @@ end
         @test wrapper_rc(out, "used") == 2
         write(joinpath(out, "point_resources.csv"), "run_label,rc\nrowonly,0\n")
         @test wrapper_rc(out, "rowonly") == 2
+        # A heap-size hint without a unit (bytes), a percentage (misread by julia 1.10) or a
+        # fraction is refused before anything is written, even for a fresh label.
+        for bad in ("8", "50%", "8.5G", "0G")
+            @test wrapper_rc(out, "fresh"; HEAP_SIZE_HINT = bad) == 2
+        end
         @test readdir(joinpath(out, "runs")) == ["used.time"]
         @test read(joinpath(out, "point_resources.csv"), String) == "run_label,rc\nrowonly,0\n"
     end

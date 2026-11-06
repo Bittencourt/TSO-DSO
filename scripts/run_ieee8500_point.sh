@@ -48,8 +48,10 @@ fi
 
 HEAP_ARGS=()
 if [ -n "${HEAP_SIZE_HINT:-}" ]; then
-  if ! [[ "$HEAP_SIZE_HINT" =~ ^[0-9]+([.][0-9]+)?[KMGTkmgt%]?$ ]]; then
-    echo "HEAP_SIZE_HINT must look like 8G, 8192M or 50% (got '$HEAP_SIZE_HINT')" >&2
+  # A whole number WITH a unit only: julia reads a bare number as bytes (HEAP_SIZE_HINT=8 is an
+  # 8-byte hint), and julia 1.10 (the compat floor) reads 50% as 50 bytes.
+  if ! [[ "$HEAP_SIZE_HINT" =~ ^[1-9][0-9]*[KMGTkmgt]$ ]]; then
+    echo "HEAP_SIZE_HINT must be a whole number with a unit K, M, G or T, for example 8G or 8192M (got '$HEAP_SIZE_HINT'); a bare number means bytes and julia 1.10 misreads a percentage" >&2
     exit 2
   fi
   HEAP_ARGS=("--heap-size-hint=$HEAP_SIZE_HINT")
@@ -129,6 +131,12 @@ if [ ! -f "$CSV" ]; then
 fi
 ARGS_STR="$(printf '%s ' "$@")"
 ARGS_STR="${ARGS_STR//\"/}"
+ARGS_STR="${ARGS_STR% }"
+# The julia-side hint is recorded beside the script arguments (only when one was passed, so the
+# column is unchanged for runs without a hint).
+if [ "${#HEAP_ARGS[@]}" -gt 0 ]; then
+  ARGS_STR="$ARGS_STR [julia ${HEAP_ARGS[0]}]"
+fi
 printf '%s,%s,%s,%s,%s,%s,%s,%s,"%s"\n' \
   "$LABEL" "$RC" "$PEAK_KB" "$OOM_SOURCE" "$MEM_AVAIL" "$SWAP_USED" "$OTHER_JULIA" "$START" "${ARGS_STR% }" >> "$CSV"
 echo "run_ieee8500_point: label=$LABEL rc=$RC peak_rss_kb=$PEAK_KB oom_source=$OOM_SOURCE"
