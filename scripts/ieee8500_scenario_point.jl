@@ -289,8 +289,8 @@ one_line(s) = replace(string(s), r"[\r\n]+" => " ")
 # ---------------------------------------------------------------------------- row schema
 
 """
-Column order of `scenario_table.csv`. `note` is free text and LAST (the docs page splits each
-line with `limit = ncols`, so only the last field may contain commas).
+Column order of `scenario_table.csv`. `note` is free text and LAST by convention; CSV.jl quotes
+any field that contains a comma, and the docs reader is quote-aware.
 """
 const SCENARIO_TABLE_COLUMNS = (
     :row_kind,
