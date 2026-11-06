@@ -1042,9 +1042,28 @@ function hm_print_wrappers(wrappers, rows)
     r = only(rows)
     ## The wrapper row that joins the measured row is the LAST one whose MaxRSS equals the row's
     ## VmHWM. A later launch of the label that did not replace the measured row (for example a
-    ## refused pre-flight, kept beside it) is printed above but does not join it.
-    joined = filter(w -> hm_num(w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"]), wrappers)
-    @assert !isempty(joined)
+    ## refused pre-flight, kept beside it) is printed above but does not join it. A row without a
+    ## peak (`started`, `preflight_refused`) joins none, and neither does a row whose VmHWM differs
+    ## from the wrapper's MaxRSS; then the last wrapper row is named as the launch outcome.
+    vm = hm_num(r["vmhwm_kb"])
+    joined = isnan(vm) ? empty(wrappers) : filter(w -> hm_num(w["peak_rss_kb"]) == vm, wrappers)
+    if isempty(joined)
+        if isempty(wrappers)
+            println("no wrapper row for this label")
+        else
+            lw = last(wrappers)
+            println(
+                "no wrapper row joins this row by peak; the last wrapper row (attempt ",
+                length(wrappers),
+                ", rc ",
+                lw["rc"],
+                ", oom_source ",
+                lw["oom_source"],
+                ") is the launch outcome",
+            )
+        end
+        return nothing
+    end
     join_w = last(joined)
     k_join = findlast(w -> w === join_w, wrappers)
     footprint_kb =
