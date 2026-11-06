@@ -419,3 +419,84 @@ end
     @test p.heap_size_hint === eff
     @test p.run_label == "hint-check"
 end
+
+@testitem "ieee8500 scenario: a transient row never displaces a completed measurement" begin
+    using TSODSO
+    using CSV, DataFrames
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    @test ROW_KEY == (:row_kind, :feeder, :population, :T, :strategy, :seed, :run_label)
+    @test is_transient_status("started")
+    @test is_transient_status("preflight_refused")
+    @test !is_transient_status("refused_certificate")
+    @test !is_transient_status("ok")
+
+    path = joinpath(mktempdir(), "scenario_table.csv")
+    key = (;
+        row_kind = "measured",
+        feeder = "ieee8500",
+        population = "default_10pct",
+        T = 10,
+        strategy = "ADMM",
+        seed = 1,
+        run_label = "p-a",
+    )
+    statuses(p) = sort(string.(CSV.read(p, DataFrame).status))
+
+    upsert_rows!(path, [scenario_row(; key..., status = "refused_certificate", iters = 5)])
+    # A pre-flight refusal of a later attempt under the same key keeps the completed row.
+    upsert_rows!(path, [scenario_row(; key..., status = "preflight_refused")])
+    @test statuses(path) == ["preflight_refused", "refused_certificate"]
+    # A `started` row replaces the older transient row, never the completed one.
+    upsert_rows!(path, [scenario_row(; key..., status = "started")])
+    @test statuses(path) == ["refused_certificate", "started"]
+    d = CSV.read(path, DataFrame)
+    @test d.iters[findfirst(==("refused_certificate"), d.status)] == 5
+    # The attempt's final row replaces both rows of its key.
+    upsert_rows!(path, [scenario_row(; key..., status = "ok", iters = 7)])
+    d = CSV.read(path, DataFrame)
+    @test nrow(d) == 1
+    @test d.status[1] == "ok"
+    @test d.iters[1] == 7
+
+    # Another seed or another run label is another row.
+    upsert_rows!(path, [scenario_row(; key..., seed = 2, status = "started")])
+    upsert_rows!(path, [scenario_row(; key..., run_label = "p-b", status = "preflight_refused")])
+    d = CSV.read(path, DataFrame)
+    @test nrow(d) == 3
+    @test count(==("ok"), d.status) == 1
+
+    # A table written before seed and run_label joined the key stays readable: its rows key on
+    # missing seed and label, and the schema grows by union.
+    old = joinpath(mktempdir(), "scenario_table.csv")
+    write(
+        old,
+        "row_kind,feeder,population,T,strategy,status,note\n" *
+        "recorded_no_go,ieee8500,harness_density_0.1,24,ADMM,memory_infeasible,\"a, b\"\n" *
+        "measured,ieee8500,default_10pct,10,ADMM,refused_certificate,x\n",
+    )
+    upsert_rows!(old, [scenario_row(; key..., status = "started")])
+    d = CSV.read(old, DataFrame)
+    @test nrow(d) == 3
+    @test :seed in propertynames(d) && :run_label in propertynames(d)
+    @test last(propertynames(d)) === :note
+    @test count(==("refused_certificate"), d.status) == 1
+    # The NO-GO record (missing seed and label) is replaced in place by a re-derivation.
+    upsert_rows!(
+        old,
+        [
+            scenario_row(;
+                row_kind = "recorded_no_go",
+                feeder = "ieee8500",
+                population = "harness_density_0.1",
+                T = 24,
+                strategy = "ADMM",
+                status = "memory_infeasible",
+                note = "re-derived",
+            ),
+        ],
+    )
+    d = CSV.read(old, DataFrame)
+    @test nrow(d) == 3
+    @test only(d.note[d.row_kind .== "recorded_no_go"]) == "re-derived"
+end

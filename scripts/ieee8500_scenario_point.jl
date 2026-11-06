@@ -22,8 +22,12 @@
 #
 # Both modes upsert rows into `<results-dir>/scenario_table.csv` (default
 # results/ieee8500_benchmark/, or env TSODSO_IEEE8500_RESULTS_DIR, or --results-dir), keyed by
-# (row_kind, feeder, population, T, strategy): a re-run replaces its own row and keeps every
-# other row; `cols = :union` lets the schema grow. The free-text `note` column is always LAST.
+# (row_kind, feeder, population, T, strategy, seed, run_label): a re-run of the same attempt
+# identity replaces its own row and keeps every other row; another seed or label is another row.
+# A transient row (`started`, `preflight_refused`) never displaces a final row of the same key:
+# it is kept beside it until that attempt's final row replaces both. `cols = :union` lets the
+# schema grow (rows written before a column existed read as missing). The free-text `note`
+# column is always LAST.
 #
 # Measured mode. The `Scenario` is materialized exactly as `TSODSO.run(::ADMM, s)` does
 # (`_materialize`, `build_powerflow`), then the `solve_admm` plumbing is composed phase by phase
@@ -37,8 +41,10 @@
 #
 # Sequence: validate flags -> pre-flight (MemAvailable from /proc/meminfo, before any
 # materialization) -> upsert a `started` row -> run the phases -> upsert the final row (same key,
-# so it replaces `started`). A process killed mid-run therefore leaves its `started` row, and the
-# wrapper's point_resources.csv row (joined by run_label) carries rc and oom_source.
+# so it replaces `started`, and any earlier final row of the same seed and label). A process
+# killed mid-run therefore leaves its `started` row (beside an earlier completed row of the same
+# key, which it never replaces), and the wrapper's point_resources.csv row (joined by run_label)
+# carries rc and oom_source.
 #
 # Status vocabulary (one token in the `status` column):
 #   ok                   converged and certified
@@ -306,7 +312,21 @@ const SCENARIO_TABLE_COLUMNS = (
     :note,
 )
 
-const ROW_KEY = (:row_kind, :feeder, :population, :T, :strategy)
+"""
+Identity of a row in `scenario_table.csv`: the attempt identity (seed and run label included), so
+a later attempt with another seed or label never replaces an earlier measurement.
+"""
+const ROW_KEY = (:row_kind, :feeder, :population, :T, :strategy, :seed, :run_label)
+
+"""
+Statuses of a row that is not a final outcome of its attempt: `started` (the run is under way, or
+the process died) and `preflight_refused` (nothing was materialized). Such a row never replaces a
+final row of the same key.
+"""
+const TRANSIENT_STATUSES = ("started", "preflight_refused")
+
+"""`is_transient_status(status)`: true for a status in `TRANSIENT_STATUSES`."""
+is_transient_status(status) = string(status) in TRANSIENT_STATUSES
 
 """
     scenario_row(; kwargs...) -> NamedTuple
@@ -324,23 +344,36 @@ function scenario_row(; kwargs...)
     return ismissing(nt.note) ? nt : merge(nt, (; note = one_line(nt.note)))
 end
 
-_key(r) = Tuple(string(getproperty(r, k)) for k in ROW_KEY)
+# A key column absent from an older table (written before it joined the key) reads as missing.
+_key(r) = Tuple(string(hasproperty(r, k) ? getproperty(r, k) : missing) for k in ROW_KEY)
 
 """
     upsert_rows!(csv_path, rows) -> DataFrame
 
-Keyed upsert on (row_kind, feeder, population, T, strategy): existing rows with a key present in
-`rows` are replaced, every other row is kept; `cols = :union` lets the schema grow. Creates the
-directory. Columns are written in `SCENARIO_TABLE_COLUMNS` order, extra columns after them and
-`note` last.
+Keyed upsert on `ROW_KEY` (row_kind, feeder, population, T, strategy, seed, run_label). For each
+new row, the existing rows with the same key are replaced, except that a transient new row
+(`is_transient_status`) never displaces a final row: then only the older transient rows of that
+key are replaced and the final row stays. Every other row is kept; `cols = :union` lets the
+schema grow. Creates the directory. Columns are written in `SCENARIO_TABLE_COLUMNS` order, extra
+columns after them and `note` last.
 """
 function upsert_rows!(csv_path::AbstractString, rows)
     mkpath(dirname(abspath(csv_path)))
     new = reduce((a, b) -> vcat(a, b; cols = :union), (DataFrame([r]) for r in rows))
     df = if isfile(csv_path)
         old = CSV.read(csv_path, DataFrame)
-        nk = Set(_key(r) for r in eachrow(new))
-        vcat(filter(r -> !(_key(r) in nk), old), new; cols = :union)
+        okeys = [_key(r) for r in eachrow(old)]
+        otrans = [hasproperty(r, :status) && is_transient_status(r.status) for r in eachrow(old)]
+        keep = trues(nrow(old))
+        for nr in eachrow(new)
+            k = _key(nr)
+            same = [i for i in eachindex(okeys) if okeys[i] == k]
+            protect_final = is_transient_status(nr.status) && any(i -> !otrans[i], same)
+            for i in same
+                (protect_final && !otrans[i]) || (keep[i] = false)
+            end
+        end
+        vcat(old[keep, :], new; cols = :union)
     else
         new
     end

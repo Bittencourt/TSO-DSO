@@ -764,7 +764,28 @@ hm_print_components(hm_attr24)
 # size, build time, solve time, iterations, peak memory and the exactness verdict.
 
 hm_label = "p46-scn-ieee8500-d10-T10"
-hm_meas = filter(r -> r["row_kind"] == "measured" && r["run_label"] == hm_label, hm_scn)
+# The intended row is selected by its full key (row kind, feeder, population, T, strategy, seed,
+# run label). A key holds at most one final row and at most one transient row (`started` or
+# `preflight_refused`, which never displaces a final row). The final row is the measurement; a
+# transient row beside it is a later attempt that did not finish, and it is printed as such.
+hm_is_transient(status) = status in ("started", "preflight_refused")
+hm_meas_all = filter(
+    r ->
+        r["row_kind"] == "measured" &&
+            r["feeder"] == "ieee8500" &&
+            r["population"] == "default_10pct" &&
+            r["T"] == "10" &&
+            r["strategy"] == "ADMM" &&
+            r["seed"] == "1" &&
+            r["run_label"] == hm_label,
+    hm_scn,
+)
+hm_meas_final = filter(r -> !hm_is_transient(r["status"]), hm_meas_all)
+hm_meas = isempty(hm_meas_final) ? hm_meas_all : hm_meas_final
+@assert length(hm_meas) <= 1
+for r in setdiff(hm_meas_all, hm_meas)
+    println("later attempt under the same key, not finished: status ", r["status"])
+end
 
 function hm_status_sentence(status)
     status == "ok" && return "converged and certified exact; prices are reported."
@@ -1052,9 +1073,12 @@ hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
 # julia --project=. scripts/ieee8500_scenario_point.jl --record-nogo
 # ```
 #
-# Both commands upsert keyed rows into `results/ieee8500_benchmark/scenario_table.csv`. The key is
-# row kind, feeder, population, T and strategy. A `started` row is replaced by the final row, and a
-# killed run leaves its `started` row as the trace. The wrapper appends one row per launch to
+# Both commands upsert keyed rows into `results/ieee8500_benchmark/scenario_table.csv`. Since
+# 2026-11-06 the key is row kind, feeder, population, T, strategy, seed and run label (before, seed
+# and run label were not part of it, so a later `started` or `preflight_refused` row could replace
+# a completed measurement). A `started` or `preflight_refused` row never displaces a final row of
+# the same key; it sits beside it until that attempt's final row replaces both. A killed run leaves
+# its `started` row as the trace. The wrapper appends one row per launch to
 # `point_resources.csv` and keeps its evidence files under `results/ieee8500_benchmark/runs/`. The
 # draws depend on the Julia version through `Base.hash`. The measured row was produced on the Julia
 # version recorded in it.
