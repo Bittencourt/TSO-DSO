@@ -595,8 +595,11 @@ end
 
 hm_num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
 hm_gib(kb) = kb / 1024^2
-hm_ratio(msg) =
-    (m = match(r"=([0-9.]+) > 1", msg); m === nothing ? NaN : parse(Float64, m[1]))
+## Same pattern as the script's parser (it accepts exponent notation such as 1.2e3).
+hm_ratio(msg) = (
+    m = match(r"worst gap/\(atol_b\+rtol·\|cone\|\)=([0-9.eE+-]+)", msg);
+    m === nothing ? NaN : something(tryparse(Float64, m[1]), NaN)
+)
 
 hm_scn = hm_read_rows("scenario_table.csv")
 hm_res = hm_read_rows("point_resources.csv")
