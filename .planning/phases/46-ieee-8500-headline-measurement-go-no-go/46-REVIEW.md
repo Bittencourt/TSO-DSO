@@ -194,3 +194,11 @@ _Reviewed: 2026-11-06T12:30:09Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
 _Iteration: 3_
+
+## Resolution (orchestrator, 2026-11-06)
+
+The `--fix --auto` loop is capped at three iterations, and this is iteration 3. WR-01, WR-02 and
+IN-01..03 stay open and are listed in `deferred-items.md` as items 5–7. They affect only future
+re-runs of the script: the label-reuse override path and the error paths in materialize and build.
+They do not affect the committed measured or NO-GO rows, the docs numbers, or any `src/` code.
+The phase can proceed to the regression gate and verification.

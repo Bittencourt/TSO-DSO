@@ -31,3 +31,25 @@
    results directory, `git_head()`). The existing precedent (`test_case_a_magnitude.jl`) does the
    same. A fix would make the activation conditional on `PROGRAM_FILE` and route `projectdir()`
    through `pkgdir(TSODSO)`.
+
+## From the code review, iteration 3 (2026-11-06)
+
+The review loop reached its three-iteration cap. The findings below are open; none of them
+affects the committed rows or the docs numbers. They concern future re-runs of the measurement
+script.
+
+5. **`REPLACE_LABEL=1` overwrites `runs/` evidence before the script decides (iteration-3 WR-01).**
+   When the script then keeps the old row (no `--replace`, a pre-flight refusal, an earlyoom kill or
+   a crash), the committed row sits next to another launch's evidence files. The docs page prints
+   the `.time` heap flag but never checks it against the row.
+   Fix:
+   - move the old evidence aside instead of overwriting it;
+   - assert the flag against the row's `heap_size_hint`;
+   - document that `REPLACE_LABEL=1` and `--replace` go together.
+6. **An out-of-memory error during materialize or build loses that phase's timing, memory sample and
+   sizes (iteration-3 WR-02).** Those two phases still use `@elapsed`. Fix: use the `time_ns` +
+   `finally` pattern the solve phase already uses, and add a build-phase test seam.
+7. **Iteration-3 Info items:**
+   - IN-01: stale comments ("every phase timed with `@elapsed`"; "exceeds" vs `>=`).
+   - IN-02: the wrapper test inherits `REPLACE_LABEL`/`HEAP_SIZE_HINT` from the environment.
+   - IN-03: the run label is passed twice, to the wrapper and to the script.
