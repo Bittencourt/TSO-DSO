@@ -1,18 +1,23 @@
 ---
 phase: 46-ieee-8500-headline-measurement-go-no-go
-fixed_at: 2026-11-06T00:00:00Z
+fixed_at: 2026-11-06T12:23:06Z
 review_path: .planning/phases/46-ieee-8500-headline-measurement-go-no-go/46-REVIEW.md
-iteration: 1
-findings_in_scope: 11
-fixed: 11
+iteration: 2
+findings_in_scope: 5
+fixed: 5
 skipped: 0
 status: all_fixed
+iteration_1: {review_path: 46-REVIEW.iter1.md, findings_in_scope: 11, fixed: 11, skipped: 0, status: all_fixed}
 ---
 
 # Phase 46: Code Review Fix Report
 
+> This file has two iterations. Iteration 1 comes first; its review is now kept as
+> `46-REVIEW.iter1.md`, so where it says `46-REVIEW.md` it means that file. Iteration 2 is the
+> section "Iteration 2" at the end, and the frontmatter describes iteration 2.
+
 **Fixed at:** 2026-11-06
-**Source review:** .planning/phases/46-ieee-8500-headline-measurement-go-no-go/46-REVIEW.md
+**Source review:** .planning/phases/46-ieee-8500-headline-measurement-go-no-go/46-REVIEW.md (iteration 1, now `46-REVIEW.iter1.md`)
 **Iteration:** 1
 
 **Summary:**
@@ -247,3 +252,191 @@ Other commits:
 _Fixed: 2026-11-06_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+
+---
+
+# Iteration 2
+
+**Fixed at:** 2026-11-06T12:23:06Z
+**Source review:** .planning/phases/46-ieee-8500-headline-measurement-go-no-go/46-REVIEW.md (iteration 2)
+**Iteration:** 2
+
+**Summary:**
+- Findings in scope: 5 (1 critical, 4 warning). All 5 were fixed.
+- Info findings: IN-01 to IN-05 were fixed (each was trivial and safe). IN-06 was handled by listing
+  iteration-1 IN-07 and IN-08 in `deferred-items.md`.
+- As instructed, all work was done in the main working tree: no worktree, no branch. No IEEE-8500
+  run was launched. No measured CSV row was edited: `scenario_table.csv` and
+  `point_resources.csv` are untouched in this iteration.
+
+## Fixed Issues
+
+### CR-01: After the re-run, the docs page contradicted its own evidence and printed numbers, and omitted the 2026-11-06 gate override
+
+**Files modified:** `docs/literate/ieee8500_scaling.jl`, `.planning/research/STACK.md`
+**Commits:** 0bfbe83, 1a9ed86 (rewording for the planning-ID guard)
+
+**Applied fix (docs page):**
+- **Correction note.** It now cites the 2026-11-05 evidence by commit
+  (`git show f60857e:results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.time`). It also
+  says why the working-tree file differs: the re-run overwrote the label's `runs/` files.
+- **New dated "Re-run (2026-11-06)" paragraph.**
+  - The measured row is attempt 3. It was launched with the corrected script and
+    `HEAP_SIZE_HINT=8G`, so `--heap-size-hint=8G` was applied.
+  - It replaced attempt 2's row under the same key.
+  - The `runs/` files now belong to attempt 3.
+  - The page now checks the current `.time` command line for the flag and prints it:
+    `--heap-size-hint=8G`.
+- **"Wrapper rows" prose** now covers all three attempts:
+  - **Attempts 1 and 2 (2026-11-05):** user-approved launch at about 7.1 GiB, with the
+    pre-flight read after package load.
+    - Attempt 1 was `preflight_refused`.
+    - Attempt 2 used a 5.5 GiB floor and had no hint. It ended `refused_certificate` with 5
+      iterations and ratio 309.67; its row is cited at f60857e.
+  - **Attempt 3 (2026-11-06):** pre-load reading, and the user explicitly approved a 6.5 GiB
+    floor below the 8 GiB gate.
+  - Asserts tie this prose to the first three wrapper rows (dates and floors 7 / 5.5 / 6.5).
+    Those rows cannot change because the file is append-only.
+- **The ~0.92 GiB footprint and the ~8.9 GiB launch level.** These are now described as
+  properties of the post-load pre-flight that attempts 1 and 2 used, and are no longer derived.
+  The 6,455,204 kB reading and the 965,724 kB difference are cited at commit f60857e.
+- **Printed footprint lines.**
+  - They name the joined attempt: "the measured row joins attempt 3".
+  - They label the difference by reading point ("wrapper minus in-script reading (bare runtime
+    startup) 77496 kB = 0.074 GiB").
+  - The implied launch level is printed conditional on the reading point (about 8.07 GiB).
+- **Divergence-table heap row:** "an applied `--heap-size-hint=8G` on the current row (attempt
+  3, 2026-11-06); none on the replaced 2026-11-05 row (attempt 2)".
+- **Reproducing section:** the "about one more GiB (printed above)" clause is gone.
+
+**Applied fix (STACK.md):**
+- The correction note is now scoped to "the 2026-11-05 launches" of the T = 10 point and cites
+  f60857e.
+- A dated update records that the 2026-11-06 re-run did apply the hint.
+
+### WR-01: Reusing a run label overwrote the `runs/` evidence and could replace the committed measurement
+
+**Files modified:** `scripts/run_ieee8500_point.sh`, `scripts/ieee8500_scenario_point.jl`, `scripts/README.md`, `docs/literate/ieee8500_scaling.jl`, `test/test_ieee8500_scenario.jl`
+**Commit:** eadc747
+
+**Applied fix:**
+- **Wrapper.** A label that already has `runs/<label>.time` or `.free_before`, or a
+  `point_resources.csv` row, is refused with exit 2 before anything is written.
+  `REPLACE_LABEL=1` overrides.
+- **Script.**
+  - The new `--replace` flag. Without it, a measured run whose key already holds a final row is
+    refused with an `ArgumentError`. The refusal comes before the pre-flight, so no row is
+    written.
+  - The new helper `final_status_for_key` does the lookup.
+  - An `opts` without `replace` counts as `false`.
+- **Reproduce commands.** The docs, the README, the script header and `--help` now use a fresh
+  dated label (`LABEL=<name>-$(date +%Y%m%d-%H%M)`). The docs say that the committed label
+  `p46-scn-ieee8500-d10-T10` and its row stay as they are.
+- **Not done.** The committed measured row was not renamed, regenerated or edited. The optional
+  explicit join key (WR-01 fix 3) was not added.
+- **Tests:**
+  - **Script guard:** the run is refused without starting, the table stays byte-identical, a
+    pre-flight on that key is refused too, and a fresh label and `replace` both run.
+  - **Wrapper guard:** exit 2 for runs/ evidence and for a CSV-row-only label, and nothing is
+    written. SCRIPT points at a nonexistent file, so a missing guard would show up as a julia
+    failure.
+  - The in-process-failure item now passes `replace = true`, because it reuses a key on purpose.
+
+### WR-02: The docs page crashed on `started` and `preflight_refused` rows
+
+**Files modified:** `docs/literate/ieee8500_scaling.jl`
+**Commit:** 5f08835
+
+**Applied fix:**
+- A row without a VmHWM joins no wrapper row, and neither does a final row whose VmHWM differs
+  from MaxRSS.
+- In that case the page prints the last wrapper row (attempt, rc, oom_source) as the launch
+  outcome, instead of `@assert`, and skips the footprint lines.
+- **Verified** by evaluating the page's `hm_*` function definitions on synthetic rows. Five cases
+  all render: started, preflight_refused, a final row with no peak match, a final row that
+  matches, and no wrapper rows.
+
+### WR-03: A solver-layer error inside the ADMM loop discarded the solve time and the iterations already run
+
+**Files modified:** `scripts/ieee8500_scenario_point.jl`, `test/test_ieee8500_scenario.jl`
+**Commit:** 5a5dc7f
+**Status:** fixed: requires human verification (logic change in the error path)
+
+**Applied fix:**
+- The solve phase is timed with `time_ns`. Its time, compile time and `:solve` VmHWM sample are
+  recorded in `finally`, the same pattern as certify.
+- The outer catch takes `st.residuals.iters` as soon as the ADMM state exists, but only when the
+  error carries no `iterations` of its own.
+- A mid-loop count is marked `iters_partial:` in the message.
+- **Seams.** New test-only keywords `iterate_fn` and `certify_fn`. Their defaults are the real
+  `_admm_iterate!` and `_admm_certify`, and the command line never sets them.
+- **Test (IEEE-13).** A stub runs 2 real iterations, then raises `SolveFailedError`. The result
+  has:
+  - status `error:SolveFailedError`;
+  - `iters == 2`, with the `iters_partial` marker;
+  - solve and compile times recorded;
+  - VmHWM samples `[materialize, build, solve]`.
+
+### WR-04: A `memory_infeasible_inprocess` row could not say which phase ran out of memory
+
+**Files modified:** `scripts/ieee8500_scenario_point.jl`, `test/test_ieee8500_scenario.jl`
+**Commit:** 45ad85c
+**Status:** fixed: requires human verification (logic change in the error path)
+
+**Applied fix:**
+- `scenario_admm_phases` catches `OutOfMemoryError` and returns `memory_infeasible_inprocess`.
+- **Kept fields:** phase times, compile times, sizes, VmHWM samples and completed iterations.
+- **Message:** names the phase under way (a new `phase` tracker), the sampled phases and the
+  iteration count.
+- **Exit status.** `run_measured_point` writes the full row, then raises `OutOfMemoryError`, so
+  the exit stays nonzero as documented. Its existing catch still covers a custom phase runner
+  that lets an OOM through.
+- **Tests (IEEE-13, a stub runs 1 real iteration, then OOM).**
+  - The phases return the status, iters 1, "during phase solve", the build and solve times, and
+    the sizes.
+  - Through `run_measured_point`, the full row is written and the error still propagates. This
+    part runs only where `/proc/self/status` exists.
+
+### Info findings fixed
+
+| ID | Commit | What changed |
+|---|---|---|
+| IN-01 | 8f837aa | `HEAP_SIZE_HINT` must be a whole number with a K/M/G/T unit; `8`, `50%`, `8.5G` and `0G` are refused with exit 2 (tested). When a hint is passed, the `args` column gets a `[julia --heap-size-hint=...]` suffix; rows without a hint are unchanged (checked by hand in a scratch OUTDIR). |
+| IN-02 | 396a924 | The counter-fact counts the anchor as completed only if it has at least one iteration and is not a budget exit. The docs assert mirrors this. Test: a budget_exceeded anchor gives "once" and the new wording. The committed row's note is unchanged. |
+| IN-03 | 00726f6 | NO-GO when `B1 >= threshold`, in both the script and the docs. The message now says "reaches". Test: a threshold equal to B1 is recorded as NO-GO. |
+| IN-04 | 04d4a77 | The atomic-write test now fails mid-stream: CSV.jl's `string` call on a stub cell confirms the temporary file exists, then throws. The test asserts the file is removed and the table is byte-identical. `.gitignore` gains `/results/**/.*.tmp.*`, which matches no tracked file. |
+| IN-05 | 6919388 | The `error:<Type>` branch is tested through the `certify_fn` seam. The result has the converged iteration count (no partial marker), the certify time and compile time, and all four VmHWM samples. |
+| IN-06 | 7975215 | Iteration-1 IN-07 and IN-08 are listed in `deferred-items.md` (items 3 and 4), with the fix each one needs. |
+
+Other commit: `f8977d8` is a style pass with JuliaFormatter 2.10.2, on `test/test_ieee8500_scenario.jl` and `docs/literate/ieee8500_scaling.jl` only.
+
+## Verification (iteration 2)
+
+- **Regression set.** `TSODSO_TEST_SET=fast` over the six files passed **895/895** in 4m18s; the
+  baseline was 837. The new assertions are the WR-01, WR-03, WR-04 and IN-01 to IN-05 tests.
+  `test/Project.toml` and `test/Manifest.toml` were restored afterwards. The knife-edge canary
+  passed.
+- **Formatter.** Run on the touched in-scope files only. The second pass was a no-op, and
+  `check_content_loss.py HEAD` reported whitespace and commas only.
+- **Planning IDs.** 355 hits against a baseline of 355. The first draft had 3 new `[artifact]`
+  hits on "review-fixed"; the follow-up commit `1a9ed86` reworded them.
+- **Scripts index.** Complete (48 files).
+- **Script-API lint.** Only the 2 known findings in `profile_ieee8500_memory_attribution.jl`;
+  nothing new.
+- **JET.** 20 current, 20 baseline, 0 NEW, 0 FIXED (Julia 1.12.5).
+- **SC3.** `git diff 7f13ec4..HEAD -- src/admm src/models/exactness.jl src/solver/factory.jl test/expected_broken.txt` is empty.
+- **Docs page.** `julia --project=docs docs/literate/ieee8500_scaling.jl` exits 0, and its
+  output agrees with the prose:
+  - verdict NO-GO;
+  - provenance hint `8589934592 bytes`;
+  - `runs/...time command line: --heap-size-hint=8G`;
+  - attempts 1 to 3 with floors 7 / 5.5 / 6.5;
+  - "the measured row joins attempt 3";
+  - a pre-load difference of 77,496 kB and about 8.07 GiB at launch.
+- **Not run:** no IEEE-8500 solve, no full suite, no full docs build.
+
+---
+
+_Fixed: 2026-11-06T12:23:06Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2_
