@@ -714,7 +714,9 @@ end
 
 """
     scenario_admm_phases(s::Scenario; time_limit_s = 1200.0, sample_mem = true,
-                         atol_exact = nothing, rtol_exact = 1e-4) -> NamedTuple
+                         atol_exact = nothing, rtol_exact = 1e-4,
+                         iterate_fn = TSODSO._admm_iterate!,
+                         certify_fn = TSODSO._admm_certify) -> NamedTuple
 
 Run the ADMM `Scenario` `s` phase by phase, in the order of `TSODSO.run(::ADMM, s)` plus
 `solve_admm` (same calls, same arguments), each phase timed with `@elapsed`:
@@ -733,7 +735,14 @@ switched on for the call and off again) and returned as `<phase>_compile_s`.
 `atol_exact`/`rtol_exact` are passed to `_admm_certify`; their defaults are `solve_admm`'s own
 (`nothing` = the hybrid floor, `1e-4`), which is what `run(::ADMM)` uses. The command line never
 sets them, so a measured row is never judged with another tolerance; they exist only so that the
-tests can force the certificate-refusal branch on IEEE-13.
+tests can force the certificate-refusal branch on IEEE-13. `iterate_fn`/`certify_fn` are the loop
+and certify calls (same positional arguments as `_admm_iterate!`/`_admm_certify`); the command
+line never sets them either, and the tests pass stubs that raise inside the loop or certify.
+
+The solve and certify phases are timed with `time_ns` and recorded in `finally`, so an error
+raised inside them keeps the phase time, its compilation part and its VmHWM sample. A
+`TSODSOError` raised inside the loop keeps the number of iterations completed so far (the message
+then starts with `iters_partial:`).
 
 Returns row-ready fields (`status`, timings, sizes, `iters`, `gap_ratio`, `vmhwm_kb`,
 `hwm_by_phase`, `message`, ...) and `result`: on `status == "ok"` the certified result
@@ -747,6 +756,8 @@ function scenario_admm_phases(
     sample_mem::Bool = true,
     atol_exact::Union{Nothing, Real} = nothing,
     rtol_exact::Real = 1e-4,
+    iterate_fn = TSODSO._admm_iterate!,
+    certify_fn = TSODSO._admm_certify,
 )
     A = s.strategy
     A isa ADMM || throw(ArgumentError("scenario_admm_phases: needs an ADMM strategy, got $(typeof(A))"))
@@ -815,9 +826,13 @@ function scenario_admm_phases(
             m in values(st.agr_by_bus)
         )
 
+        # Timed with time_ns and recorded in `finally`, as certify is: an error raised inside the
+        # loop (for example a SolveFailedError of one subproblem) keeps the solve time, its
+        # compilation part and its high-water-mark sample.
+        t0 = time_ns()
         c0 = cns()
-        t[:solve] = @elapsed begin
-            TSODSO._admm_iterate!(
+        try
+            iterate_fn(
                 st,
                 rmode,
                 A.maxiter,
@@ -830,9 +845,11 @@ function scenario_admm_phases(
                 time_limit_s,
                 false,
             )
+        finally
+            t[:solve] = (time_ns() - t0) / 1e9
+            tc[:solve] = (cns() - c0) / 1e9
+            push!(hwm_by_phase, :solve => hwm())
         end
-        tc[:solve] = (cns() - c0) / 1e9
-        push!(hwm_by_phase, :solve => hwm())
         loop_done = true
         iters = Int(st.residuals.iters)
 
@@ -853,7 +870,7 @@ function scenario_admm_phases(
             t0 = time_ns()
             c0 = cns()
             r = try
-                TSODSO._admm_certify(st, rmode, mode, aggs, λ₀, atol_exact, rtol_exact, false)
+                certify_fn(st, rmode, mode, aggs, λ₀, atol_exact, rtol_exact, false)
             catch err
                 err isa CertificateError || rethrow()
                 err
@@ -890,16 +907,24 @@ function scenario_admm_phases(
             status = "refused_certificate"
             gap_ratio = parse_gap_ratio(err.msg)
         end
-        # Once the loop has finished, its iteration count is known whatever certify raised; -1 is
-        # kept for failures before the loop ended.
-        iters = if hasproperty(err, :iterations) && err.iterations !== nothing
+        # An error's own iteration count comes first. Otherwise, once the ADMM state exists, its
+        # counter holds the iterations completed so far: the converged count when the loop has
+        # finished (certify raised), a partial count when the loop itself raised. -1 is kept for
+        # failures before the loop started.
+        own_iters = hasproperty(err, :iterations) && err.iterations !== nothing
+        iters = if own_iters
             Int(err.iterations)
-        elseif have_st && loop_done
+        elseif have_st
             Int(st.residuals.iters)
         else
             -1
         end
         message = first(string(err.msg), 400)
+        if have_st && !loop_done && !own_iters
+            message =
+                "iters_partial: the ADMM loop raised after $(iters) completed iterations; " *
+                message
+        end
     finally
         Base.cumulative_compile_timing(false)
     end

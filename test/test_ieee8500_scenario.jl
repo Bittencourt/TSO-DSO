@@ -830,6 +830,41 @@ end
     @test phb.iters >= 1
 end
 
+@testitem "ieee8500 scenario: ieee13 errors inside the loop or certify keep their partial fields" begin
+    using TSODSO
+    include(joinpath(@__DIR__, "..", "scripts", "ieee8500_scenario_point.jl"))
+
+    # IEEE-13 only. Stubs stand in for the loop or certify call and raise there; the real loop
+    # still runs its first iterations, so the counters and timings are the real ones.
+    s = Scenario(;
+        name = "error-branches",
+        feeder = :ieee13,
+        strategy = ADMM(),
+        T = 10,
+        seed = 3,
+    )
+    phase_names(ph) = [first(p) for p in ph.hwm_by_phase]
+
+    # A solver-layer error inside the loop: the solve time and the completed iterations survive.
+    function two_then_fail(st, rmode, maxiter, rest...)
+        TSODSO._admm_iterate!(st, rmode, 2, rest...)
+        throw(TSODSO.SolveFailedError("stub: subproblem failed mid-loop"))
+    end
+    ph = scenario_admm_phases(
+        s;
+        time_limit_s = nothing,
+        sample_mem = false,
+        iterate_fn = two_then_fail,
+    )
+    @test ph.status == "error:SolveFailedError"
+    @test ph.iters == 2
+    @test startswith(ph.message, "iters_partial:")
+    @test !ismissing(ph.solve_s) && ph.solve_s > 0
+    @test !ismissing(ph.solve_compile_s)
+    @test ismissing(ph.certify_s)
+    @test phase_names(ph) == [:materialize, :build, :solve]
+end
+
 @testitem "ieee8500 scenario: the pre-flight judges the reading taken before package load" begin
     using TSODSO
     using CSV, DataFrames
