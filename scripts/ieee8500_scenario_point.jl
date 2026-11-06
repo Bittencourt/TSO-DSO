@@ -448,8 +448,9 @@ headline point (feeder ieee8500, density 0.1, ADMM only), computed ONLY from the
   host's earlyoom floor at the peak without leaning on swap. It depends on the earlyoom
   configuration and is not a bound.
 
-The verdict compares the measured peaks with `threshold_gib`; it throws (never records) if the
-measured peak does not exceed the threshold, because then the row would misstate the data.
+The verdict compares the LARGER measured peak (B1) with `threshold_gib`: GO needs the point's
+peak below the threshold, so one observation above it is enough for NO-GO. It throws (never
+records) if no measured peak exceeds the threshold, because then the row would misstate the data.
 """
 function derive_nogo_row(;
     attribution_csv::AbstractString,
@@ -499,10 +500,10 @@ function derive_nogo_row(;
     total_kb > 0 || throw(ArgumentError("derive_nogo_row: MemTotal unavailable"))
     total_gib = kb_to_gib(total_kb)
     b2 = b1 + EARLYOOM_SIGTERM_FRACTION * total_gib
-    min(kb_to_gib(vmhwm_kb), kb_to_gib(p35_kb)) > threshold_gib || throw(
+    b1 > threshold_gib || throw(
         ArgumentError(
-            "derive_nogo_row: a measured peak does not exceed the $(threshold_gib) GiB threshold; " *
-            "the memory_infeasible verdict would misstate the data",
+            "derive_nogo_row: no measured peak exceeds the $(threshold_gib) GiB threshold " *
+            "(larger peak $(_fmt(b1)) GiB); the memory_infeasible verdict would misstate the data",
         ),
     )
 
@@ -515,8 +516,8 @@ function derive_nogo_row(;
     end
     note =
         "T = 24 headline point (feeder ieee8500, benchmark-harness density 0.1, ADMM only) " *
-        "is memory_infeasible on this host: the measured peak exceeds the $(threshold_gib) GiB GO " *
-        "threshold. In-process peak VmHWM $(vmhwm_kb) kB = $(_fmt(kb_to_gib(vmhwm_kb))) GiB " *
+        "is memory_infeasible on this host: the larger measured peak exceeds the $(threshold_gib) " *
+        "GiB GO threshold. In-process peak VmHWM $(vmhwm_kb) kB = $(_fmt(kb_to_gib(vmhwm_kb))) GiB " *
         "(memory_attribution.csv, max VmHWM_kB over fixture $(NOGO_FIXTURE), density $(NOGO_DENSITY), " *
         "T $(NOGO_T)); wrapper MaxRSS $(p35_kb) kB = $(_fmt(kb_to_gib(p35_kb))) GiB " *
         "(point_resources.csv $(NOGO_HEAD_LABEL), rc $(p35_rc)). " *

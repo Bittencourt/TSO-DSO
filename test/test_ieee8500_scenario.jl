@@ -287,6 +287,17 @@ end
     @test occursin("Counter-fact", row.note)
     @test !occursin('\n', row.note)
 
+    # The verdict uses the LARGER peak: a threshold between the two peaks (11.209 and 11.520 GiB)
+    # is still a NO-GO.
+    between = derive_nogo_row(;
+        attribution_csv = joinpath(dir, "memory_attribution.csv"),
+        resources_csv = joinpath(dir, "point_resources.csv"),
+        host_total_kb = host_kb,
+        threshold_gib = 11.3,
+    )
+    @test between.status == "memory_infeasible"
+    @test between.threshold_gib == 11.3
+
     # The verdict is refused (not recorded) when the threshold is above the measured peaks.
     @test_throws ArgumentError derive_nogo_row(;
         attribution_csv = joinpath(dir, "memory_attribution.csv"),

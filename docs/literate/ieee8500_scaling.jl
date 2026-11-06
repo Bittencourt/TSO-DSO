@@ -640,8 +640,10 @@ hm_head24 = only(hm_wrappers("p35-head-d0.1-T24"))
 hm_maxrss_kb = parse(Int, hm_head24["peak_rss_kb"])
 @assert hm_num(hm_nogo["vmhwm_kb"]) == hm_hwm_kb
 @assert hm_num(hm_nogo["p35_maxrss_kb"]) == hm_maxrss_kb
+## GO needs the point's peak below the threshold, so the LARGER observed peak decides.
 hm_verdict =
-    min(hm_gib(hm_hwm_kb), hm_gib(hm_maxrss_kb)) > hm_threshold_gib ? "NO-GO" : "GO"
+    max(hm_gib(hm_hwm_kb), hm_gib(hm_maxrss_kb)) > hm_threshold_gib ? "NO-GO" : "GO"
+@assert (hm_verdict == "NO-GO") == (hm_nogo["status"] == "memory_infeasible")
 @printf("GO threshold (recorded_no_go row):           %.1f GiB\n", hm_threshold_gib)
 @printf(
     "in-process peak VmHWM (memory_attribution):   %d kB = %.3f GiB\n",
@@ -656,8 +658,9 @@ hm_verdict =
 )
 println("verdict: ", hm_verdict, " (recorded status: ", hm_nogo["status"], ")")
 
-# **What the verdict means.** NO-GO is a threshold verdict: both observed peaks are above the GO
-# threshold, so the headline point is not declared feasible on this host. It does **not** mean the
+# **What the verdict means.** NO-GO is a threshold verdict: the larger observed peak is above the
+# GO threshold, so the headline point is not declared feasible on this host. The
+# check above asserts that this recomputed verdict agrees with the status recorded in the row. It does **not** mean the
 # point cannot run. The next subsection shows that it completed on this host, and states the
 # conditions under which it did.
 
