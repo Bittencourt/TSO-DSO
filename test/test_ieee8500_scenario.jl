@@ -935,6 +935,27 @@ end
     @test pho.dso_vars > 0 && pho.n_agr_models > 0
     @test phase_names(pho) == [:materialize, :build, :solve]
 
+    # A non-certificate solver-layer error raised by certify: status `error:<Type>`, the
+    # converged iteration count (not -1, not partial) and certify's own timing.
+    seen_iters = Ref(-1)
+    function certify_fails(st, rest...)
+        seen_iters[] = Int(st.residuals.iters)
+        throw(TSODSO.SolveFailedError("stub: certify re-solve failed"))
+    end
+    phc = scenario_admm_phases(
+        s;
+        time_limit_s = nothing,
+        sample_mem = false,
+        certify_fn = certify_fails,
+    )
+    @test phc.status == "error:SolveFailedError"
+    @test seen_iters[] > 0
+    @test phc.iters == seen_iters[]
+    @test !startswith(phc.message, "iters_partial:")
+    @test occursin("stub: certify re-solve failed", phc.message)
+    @test !ismissing(phc.certify_s) && !ismissing(phc.certify_compile_s)
+    @test phase_names(phc) == [:materialize, :build, :solve, :certify]
+
     # Through run_measured_point (VmHWM is read from /proc): the full row is written, then the
     # error still propagates.
     if isfile("/proc/self/status")
