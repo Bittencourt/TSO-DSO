@@ -779,8 +779,11 @@ hm_print_components(hm_attr24)
 # ### The Scenario-path measured table at T = 10
 #
 # The largest point measured as feasible earlier, `ieee8500` at density 0.1 and T = 10, was run
-# through the `Scenario` path (first on 2026-11-05; the row below is the latest final row). It used the population selector `:default_10pct`, the ADMM strategy,
-# and `scripts/ieee8500_scenario_point.jl` under the per-point wrapper. The script times four steps
+# through the `Scenario` path: first on 2026-11-05, then re-run on 2026-11-06 with the
+# review-fixed script. The row below is the latest final row of its key, which as of 2026-11-06 is
+# the re-run (attempt 3 in the wrapper rows further down). It used the population selector
+# `:default_10pct`, the ADMM strategy, and `scripts/ieee8500_scenario_point.jl` under the
+# per-point wrapper. The script times four steps
 # separately: materialize, build, solve (the ADMM loop) and certify. It reads `VmHWM` after each
 # step. The run's status is its measured outcome: a refusal, a convergence error, a budget exit, a
 # pre-flight refusal or a killed run is printed as such and is not retuned. The six numbers are
@@ -951,30 +954,72 @@ end
 hm_print_measured(hm_meas, hm_label)
 
 # **Correction (2026-11-06): the heap-size hint.** The measured row first committed on 2026-11-05
-# recorded `heap_size_hint = 8G`. That value was copied from the environment variable
-# `JULIA_HEAP_SIZE_HINT`, which julia does not read, and the wrapper did not pass the
-# `--heap-size-hint` flag (the run's `runs/p46-scn-ieee8500-d10-T10.time` command line has no such
-# flag). That run therefore had **no** heap-size hint. The script now records the effective hint
-# (`Base.JLOptions().heap_size_hint`, bytes, 0 = none), and the wrapper passes the flag only when
-# `HEAP_SIZE_HINT` is set. The provenance line above prints whatever the current row records.
-
-# **Wrapper rows and the pre-flight.** `point_resources.csv` is append-only. On 2026-11-05 it
-# received two rows for this label (attempts 1 and 2 below; any further attempt is a later launch).
-# Both were launched with the user's explicit approval at about 7.1 GiB MemAvailable. The planned 8 GiB launch gate could not be reached on this host even after other
-# work was closed.
+# (attempt 2 below) recorded `heap_size_hint = 8G`. That value was copied from the environment
+# variable `JULIA_HEAP_SIZE_HINT`, which julia does not read, and the wrapper did not pass the
+# `--heap-size-hint` flag, so that run had **no** heap-size hint. The evidence is that run's
+# `/usr/bin/time` command line, which has no such flag. It is in git history, not in the working
+# tree, because the re-run below overwrote the label's `runs/` files:
+# `git show f60857e:results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.time`. The script now
+# records the effective hint (`Base.JLOptions().heap_size_hint`, bytes, 0 = none), and the wrapper
+# passes the flag only when `HEAP_SIZE_HINT` is set.
 #
-# On 2026-11-05 the script read MemAvailable *after* Julia had started and loaded the package.
-# That reading is lower than the wrapper's pre-launch reading by the process's own startup
-# footprint. (Since 2026-11-06 the script reads MemAvailable on its first lines, before any package
-# is loaded, so only the bare Julia runtime's footprint remains; the row's note says which reading
-# it carries.) The first attempt asked for 7 GiB at that point and was refused by the script's own
-# gate, so nothing was materialized. Its `preflight_refused` row was then replaced by the second
-# attempt's final row under the same key, and only its wrapper row remains. The second attempt
-# lowered the in-script floor to the post-load equivalent of the approved level and ran to completion. The last wrapper
-# row whose MaxRSS equals the measured row's VmHWM joins the measured row. The startup footprint is
-# computed below from that attempt's two readings, together with the launch level that the default
-# 8 GiB in-script gate implies on this host. Any later row for this label is a later launch of the
-# same point.
+# **Re-run (2026-11-06).** The measured row above is attempt 3, launched on 2026-11-06 with the
+# review-fixed script and `HEAP_SIZE_HINT=8G`, so julia ran with an applied `--heap-size-hint=8G`.
+# The provenance line above prints the row's effective hint, and the current `runs/` command line
+# is checked below. Its final row replaced attempt 2's under the same key. The `runs/` evidence
+# files of this label now belong to attempt 3; the 2026-11-05 copies (attempt 2's) are at commit
+# f60857e. The harness comparators in the path-divergence table below all ran without a hint.
+
+function hm_time_heap_flag(label)
+    tf = joinpath(pkgdir(TSODSO), "results", "ieee8500_benchmark", "runs", label * ".time")
+    isfile(tf) || return "no runs/$(label).time file"
+    cmd = filter(l -> occursin("Command being timed", l), readlines(tf))
+    isempty(cmd) && return "no command line in runs/$(label).time"
+    m = match(r"--heap-size-hint=(\S+)", only(cmd))
+    return m === nothing ? "no --heap-size-hint flag" : "--heap-size-hint=" * m[1]
+end
+println("runs/", hm_label, ".time command line: ", hm_time_heap_flag(hm_label))
+
+# **Wrapper rows and the pre-flight.** `point_resources.csv` is append-only. As of 2026-11-06 it
+# holds three rows for this label, printed below as attempts 1 to 3 (any further row is a later
+# launch of the same point):
+# - **Attempts 1 and 2 (2026-11-05).** Both were launched with the user's explicit approval at
+#   about 7.1 GiB MemAvailable, below the planned 8 GiB launch gate, which this host could not
+#   reach even after other work was closed. On that day the script read MemAvailable *after* Julia
+#   had started and loaded the package, so its reading was lower than the wrapper's pre-launch
+#   reading by the process's own startup and package-load footprint. Attempt 1 asked for 7 GiB at
+#   that point and was refused by the script's own gate, so nothing was materialized; its
+#   `preflight_refused` row was replaced by attempt 2's final row under the same key, and only its
+#   wrapper row remains. Attempt 2 lowered the in-script floor to 5.5 GiB, the post-load
+#   equivalent of the approved level, and ran with no heap-size hint in effect to a certificate
+#   refusal: 5 iterations and ratio 309.67, the same as attempt 3. Its row is no longer in the
+#   table; it is at commit f60857e (`git show f60857e:results/ieee8500_benchmark/scenario_table.csv`).
+# - **Attempt 3 (2026-11-06).** The re-run with the review-fixed script, which reads MemAvailable
+#   on its first lines, before any package load. The host again had less than 8 GiB available,
+#   and the user explicitly approved an in-script floor of 6.5 GiB for this launch, also below
+#   the planned 8 GiB gate. Julia ran with `--heap-size-hint=8G`. Its final row is the measured
+#   row above.
+#
+# The checks below tie these statements to the first three wrapper rows (the file is
+# append-only, so those rows do not change). The wrapper row whose MaxRSS equals the measured
+# row's VmHWM joins the measured row. The difference printed after it is the wrapper's pre-launch
+# reading minus the row's in-script reading. For a reading taken before package load it is only
+# the bare Julia runtime's startup, plus whatever else the host did in those seconds.
+#
+# **The 2026-11-05 package-load footprint no longer applies.** On 2026-11-05 the post-load reading
+# fell about 0.92 GiB short of the wrapper's reading, so the default 8 GiB in-script gate implied
+# about 8.9 GiB at launch on that day. Both figures were properties of the post-load pre-flight
+# that attempts 1 and 2 used; with the pre-load pre-flight they no longer apply. They cannot be
+# recomputed from the committed rows, because attempt 2's final row was replaced. That row's
+# in-script reading (6,455,204 kB, against the wrapper's 7,247 MiB, a difference of 965,724 kB) is
+# at commit f60857e.
+
+hm_hist = hm_wrappers(hm_label)
+@assert length(hm_hist) >= 3
+@assert [startswith(w["started_at"], "2026-11-05") for w in hm_hist[1:3]] == [true, true, false]
+@assert startswith(hm_hist[3]["started_at"], "2026-11-06")
+@assert [match(r"--min-mem-avail-gib ([0-9.]+)", w["args"])[1] for w in hm_hist[1:3]] ==
+        ["7", "5.5", "6.5"]
 
 function hm_print_wrappers(wrappers, rows)
     for (k, w) in enumerate(wrappers)
@@ -1001,21 +1046,30 @@ function hm_print_wrappers(wrappers, rows)
     joined = filter(w -> hm_num(w["peak_rss_kb"]) == hm_num(r["vmhwm_kb"]), wrappers)
     @assert !isempty(joined)
     join_w = last(joined)
+    k_join = findlast(w -> w === join_w, wrappers)
     footprint_kb =
         hm_num(join_w["mem_avail_before_mb"]) * 1024 - hm_num(r["mem_avail_before_kb"])
-    when =
-        occursin("before any package load", r["note"]) ? "before package load" :
-        "after package load"
+    pre_load = occursin("before any package load", r["note"])
+    when = pre_load ? "before package load" : "after package load"
+    what = pre_load ? "bare runtime startup" : "startup and package load"
     @printf(
-        "in-script MemAvailable (measured row, read %s) %s kB = %.3f GiB; startup footprint %.0f kB = %.3f GiB\n",
+        "the measured row joins attempt %d (started %s, MaxRSS = VmHWM = %s kB)\n",
+        k_join,
+        join_w["started_at"],
+        join_w["peak_rss_kb"]
+    )
+    @printf(
+        "in-script MemAvailable (measured row, read %s) %s kB = %.3f GiB; wrapper minus in-script reading (%s) %.0f kB = %.3f GiB\n",
         when,
         r["mem_avail_before_kb"],
         hm_gib(hm_num(r["mem_avail_before_kb"])),
+        what,
         footprint_kb,
         hm_gib(footprint_kb)
     )
     @printf(
-        "the default 8 GiB in-script gate therefore implies about %.2f GiB MemAvailable at launch\n",
+        "with a reading taken %s, the default 8 GiB in-script gate implies about %.2f GiB MemAvailable at launch\n",
+        when,
         8 + hm_gib(footprint_kb)
     )
     return nothing
@@ -1038,7 +1092,7 @@ hm_print_wrappers(hm_wrappers(hm_label), hm_meas)
 # | timing scope | one figure for build, loop and certify | separate materialize, build, solve and certify figures |
 # | compilation | included (cold process), not separated | included (cold process); the compile part is recorded per phase on rows since 2026-11-06 |
 # | process baseline | `GC.gc()` before ADMM | no forced collection |
-# | heap-size hint | none (the wrapper passed no `--heap-size-hint` flag) | the effective hint of the process, printed in the provenance line above (none on the 2026-11-05 row, see the correction note) |
+# | heap-size hint | none (the wrapper passed no `--heap-size-hint` flag) | the effective hint of the process, printed in the provenance line above: an applied `--heap-size-hint=8G` on the current row (attempt 3, 2026-11-06); none on the replaced 2026-11-05 row (attempt 2, see the correction note) |
 # | seed hashing | version-stable generator | `Base.hash`, so it depends on the Julia version (recorded) |
 #
 # If the two are compared, the reading is "same size and structure, different seed draws". The
@@ -1136,9 +1190,10 @@ hm_print_supersessions(hm_attr24, hm_nogo, hm_meas)
 #
 # The measured point needs a quiet host. Run one point at a time, detached, with no other Julia
 # process running. The script's pre-flight refuses below its floor (default 8 GiB MemAvailable)
-# and writes a `preflight_refused` row; it then exits 0. On 2026-11-05 that reading was taken after
-# package load, so the default floor needed about one more GiB at launch (printed above); since
-# 2026-11-06 it is taken on the script's first lines, before any package load. `HEAP_SIZE_HINT`
+# and writes a `preflight_refused` row; it then exits 0. Since 2026-11-06 that reading is taken on
+# the script's first lines, before any package load, so the floor is judged against nearly the
+# launch-time MemAvailable (the difference is printed above). The 2026-11-05 launches read it after
+# package load (see the footprint note above). `HEAP_SIZE_HINT`
 # makes the wrapper pass julia's `--heap-size-hint=` flag (julia reads no environment variable
 # for it); drop it to run without a hint.
 # `--record-nogo` reads only the committed CSVs and the measurement host's `runs/` evidence, and

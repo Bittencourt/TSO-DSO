@@ -64,9 +64,18 @@ The existing `scripts/profile_ieee8500_memory.jl` staged profiler plus stdlib is
 > the hint is "set in `run_ieee8500_point.sh`". It was not. Until 2026-11-06 the wrapper ran
 > `julia --project=. ...` with no `--heap-size-hint` flag, and `JULIA_HEAP_SIZE_HINT` is an
 > environment variable julia does not read (`Base.JLOptions().heap_size_hint` stays 0). No IEEE-8500
-> run through the wrapper up to and including the Phase-46 T = 10 point had a heap-size hint. Since
-> 2026-11-06 the wrapper passes `--heap-size-hint=$HEAP_SIZE_HINT` when `HEAP_SIZE_HINT` is set,
-> and the Scenario point script records the effective hint. The row above is kept as written.
+> run through the wrapper up to and including the 2026-11-05 launches of the Phase-46 T = 10 point
+> had a heap-size hint (amended 2026-11-06, review iteration 2: the evidence for the T = 10 point is
+> in history, `git show f60857e:results/ieee8500_benchmark/runs/p46-scn-ieee8500-d10-T10.time`,
+> because the re-run below overwrote that file). Since 2026-11-06 the wrapper passes
+> `--heap-size-hint=$HEAP_SIZE_HINT` when `HEAP_SIZE_HINT` is set, and the Scenario point script
+> records the effective hint. The row above is kept as written.
+>
+> **Update (2026-11-06, Phase 46 code review iteration 2, CR-01).** The 2026-11-06 re-run of the
+> Phase-46 T = 10 point, which produced the committed measured row, **did** apply the hint: it was
+> launched with `HEAP_SIZE_HINT=8G`, its `runs/p46-scn-ieee8500-d10-T10.time` command line carries
+> `--heap-size-hint=8G`, and the row records 8589934592 bytes. Every earlier harness run still had
+> none.
 
 **Planning implication:** the "measured IEEE-8500 headline run" is a measurement deliverable that may end honestly as "memory-infeasible on this host"; budget a go/no-go checkpoint after the profiling phase. A remote/bigger-RAM machine is outside the repo's scope but is the realistic alternative. Do not promise convergence to a headline point in the roadmap.
 
