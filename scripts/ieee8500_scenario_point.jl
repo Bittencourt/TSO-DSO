@@ -805,7 +805,6 @@ function scenario_admm_phases(
             message = "wall-clock cap time_limit_s=$(time_limit_s) reached; certify skipped, no welfare"
         else
             local r
-            certified = false
             # Timed with time_ns and recorded in `finally`, so a non-certificate error raised by
             # certify (for example a SolveFailedError in a certify re-solve) keeps its timing and
             # its high-water-mark sample.
@@ -828,8 +827,9 @@ function scenario_admm_phases(
                 message = "CertificateError kind=$(r.kind): " * first(string(r.msg), 400)
             else
                 status = "ok"
-                ratio = get(st.dso.ctx.meta, :socp_maxratio, missing)
-                gap_ratio = ratio === nothing ? missing : ratio
+                # The ADMM certify path does not expose the hybrid exactness ratio of a passing
+                # certificate (only a refusal message quotes it), so an `ok` row has none.
+                gap_ratio = missing
                 result = (;
                     r...,
                     welfare = Float64(r.welfare),
