@@ -293,9 +293,12 @@ This preserves the 2 call sites that already pass a hand-tuned explicit `atol`
 
 Why this gate exists: a strict cone at the optimum means the
 squared current `l` is a fictitious over-current and the recovered DADP duals are physically
-meaningless — with NO solver error to warn you (the solve is `OPTIMAL`). The LinDistFlow
-exactness copy (`v̂`, thesis 3.43/3.45) is what drives the cone tight on radial feeders; this
-checker is the numerical certificate that it did.
+meaningless — with NO solver error to warn you (the solve is `OPTIMAL`). On radial feeders
+the cone is normally driven tight by the welfare objective's `r·l` loss cost; the default
+LinDistFlow exactness copy (`v̂`, thesis 3.43/3.45) is a per-branch inner approximation of the
+upper voltage band, NOT a theorem-backed exactness guarantee, and it can leave the cone strict
+where `v̂ ≤ V²max` binds on deeper paths. This checker is the numerical certificate of whether
+the cone actually closed.
 
 Tolerance: the default `rtol = 1e-4` is a FRACTIONAL
 cone-slack bound — a genuinely exact solve (relative gap ~`1e-6` on the exactness-copy'd
