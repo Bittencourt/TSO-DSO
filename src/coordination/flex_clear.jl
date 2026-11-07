@@ -370,8 +370,9 @@ function _congested_hours(
 end
 
 """
-    _deliver(agg, price, target; T, weight, τ_batt = 1e-3)
-        -> (; net, utility, battery_certificate, battery_message, shortfall)
+    _deliver(agg, price, target; T, weight, τ_batt = 1e-3, τ_ev = TAU_EV_ADMM)
+        -> (; net, utility, battery_certificate, battery_message, ev_certificate, ev_message,
+              shortfall)
 
 The delivery re-solve of one aggregator: its own price-taker problem at the baseline tariff
 `price`, plus an L1 exact-penalty term that pulls its net injection toward the activated
@@ -391,9 +392,10 @@ devices are not) or because `weight` is below the multiplier; it is returned, ne
 
 The penalty is a MODELLING DEVICE, not money: it is never booked in a settlement ledger, and
 `utility` is the device utility of the delivered dispatch alone. `net`, `utility`,
-`battery_certificate` and `battery_message` have the meaning and names of
-[`price_taker_dispatch`](@ref); the battery complementarity certificate is reported
-(`:ok`, `:refused` or `:not_checked`), never thrown.
+`battery_certificate`, `battery_message`, `ev_certificate` and `ev_message` have the meaning
+and names of [`price_taker_dispatch`](@ref); both the battery complementarity certificate and
+the V2G EV co-charge certificate are reported (`:ok`, `:refused` or `:not_checked`), never
+thrown.
 
 Throws `ArgumentError` on a `price` or `target` of the wrong length or with a non-finite
 entry, or a `weight` that is not positive and finite.
@@ -405,6 +407,7 @@ function _deliver(
     T::Int,
     weight::Real,
     τ_batt::Real = 1e-3,
+    τ_ev::Real = TAU_EV_ADMM,
 )
     T >= 1 || throw(ArgumentError("_deliver: T=$T must be at least 1."))
     (length(price) == T && length(target) == T) || throw(
@@ -439,25 +442,17 @@ function _deliver(
     utility = value(ctx.objective)
     shortfall = Float64[abs(net[t] - target[t]) for t in 1:T]
 
-    # Battery complementarity as a recorded status (the price-taker report semantics).
-    has_battery = any(
-        haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q) for
-        varlist in values(ctx.agg_device_vars) for v in varlist
-    )
-    battery_certificate = :not_checked
-    battery_message = ""
-    if has_battery
-        battery_certificate = :ok
-        try
-            assert_battery_complementarity!(ctx; τ = τ_batt, T = T, on_violation = :error)
-        catch err
-            err isa CertificateError || rethrow()
-            battery_certificate = :refused
-            battery_message = err.msg
-        end
-    end
+    certs = _storage_certificates(ctx; T = T, τ_batt = τ_batt, τ_ev = τ_ev)
 
-    return (; net, utility, battery_certificate, battery_message, shortfall)
+    return (;
+        net,
+        utility,
+        certs.battery_certificate,
+        certs.battery_message,
+        certs.ev_certificate,
+        certs.ev_message,
+        shortfall,
+    )
 end
 
 # Internal: a stage-1 or delivery solver outcome → `(status, notes)` with the stage prefix;
@@ -489,9 +484,11 @@ function _shortfall_diagnostic(aggs, p, targets; T::Int, weight::Real, τ_batt::
     end
 end
 
-# Internal: per-aggregator dispatch results folded into one record with certificate counts.
+# Internal: per-aggregator dispatch results folded into one record with the counts of both
+# certificates (battery complementarity and V2G EV co-charge).
 function _dispatch_record(ds)
     certs = Symbol[d.battery_certificate for d in ds]
+    ev_certs = Symbol[d.ev_certificate for d in ds]
     return (;
         net = Vector{Float64}[d.net for d in ds],
         utility = Float64[d.utility for d in ds],
@@ -500,6 +497,11 @@ function _dispatch_record(ds)
         n_battery_ok = count(==(:ok), certs),
         n_battery_refused = count(==(:refused), certs),
         n_battery_not_checked = count(==(:not_checked), certs),
+        ev_certificate = ev_certs,
+        ev_message = String[d.ev_message for d in ds],
+        n_ev_ok = count(==(:ok), ev_certs),
+        n_ev_refused = count(==(:refused), ev_certs),
+        n_ev_not_checked = count(==(:not_checked), ev_certs),
     )
 end
 

@@ -936,8 +936,16 @@ end
         @test c.d1.shortfall[1] <= M.TOL_OVER_OTHER && c.d1.shortfall[3] <= M.TOL_OVER_OTHER
         @test maximum(abs.(c.d1.net .- c.d10.net)) <= M.TOL_WSENS
         # the delivery result speaks the price-taker vocabulary
-        @test keys(c.d1) ==
-              (:net, :utility, :battery_certificate, :battery_message, :shortfall)
+        @test keys(c.d1) == (
+            :net,
+            :utility,
+            :battery_certificate,
+            :battery_message,
+            :ev_certificate,
+            :ev_message,
+            :shortfall,
+        )
+        @test c.d1.ev_certificate === :not_checked
         @test c.d1.battery_certificate === :not_checked
         @test c.d1.shortfall == abs.(c.d1.net .- (c.ph.baseline.net[1] .+ [0, 2c.R, 0]))
     end
@@ -968,6 +976,136 @@ end
     )
     @test_throws ArgumentError TSODSO._deliver(f.agg, p, f.base; T = M.T_INT, weight = 0.0)
     @test_throws ArgumentError TSODSO._deliver(f.agg, p, f.base; T = M.T_INT, weight = Inf)
+end
+
+@testitem "flex market: the V2G EV certificate is recorded on delivery and in the clear physics" setup =
+    [FlexMarketFixtures, TwoBusFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    # A V2G EV at a deeply negative price co-charges (an SOC-neutral round trip is the optimum
+    # for η < 1), so the EV certificate refuses; the battery certificate never ran on it.
+    negative_ev() = ElectricVehicle(
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        20.0,
+        20.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        1,
+        24;
+        v2g = true,
+        c_deg = 0.01,
+    )
+    neg_agg() = Aggregator(2, 0.9, AbstractDevice[negative_ev()], zeros(24))
+
+    # Delivery: the same shared certificate report as the price-taker dispatch. The tracking
+    # penalty holds the net injection at the zero target, and an SOC-neutral round trip with
+    # η < 1 needs a net import, so the co-charge disappears here (measured ratio 4.2e-15 of
+    # the EV tolerance): the EV certificate runs and either outcome is a recorded result.
+    d = TSODSO._deliver(neg_agg(), fill(-50.0, 24), zeros(24); T = 24, weight = 500.0)
+    @info "delivery of a V2G EV at a negative price" ev = d.ev_certificate
+    @test d.ev_certificate in (:ok, :refused)
+    @test d.ev_certificate === :refused ? occursin("EV complementarity", d.ev_message) :
+          d.ev_message == ""
+    @test d.battery_certificate === :not_checked
+
+    # Clear at a negative tariff (a hand-built input): stage 1 runs before stage 2 and its
+    # record is present on every non-throwing status, so only the baseline is asserted.
+    function negative_clear()
+        input_neg = SettlementInput((
+            prices = fill(-50.0, 1, 24),
+            bus_nets = Dict(2 => fill(-1.0, 24)),
+            bus_utilities = Dict(2 => 0.0),
+            p_import = fill(1.0, 24),
+            λ₀ = fill(4.0, 24),
+            buses = [2],
+            T = 24,
+            source = :centralized,
+        ))
+        return clear_flex_market(
+            M.feeder2(10.0),
+            ConvexBranchFlow(),
+            [neg_agg()],
+            input_neg,
+            FlexMarket();
+            T = 24,
+            λ₀ = fill(4.0, 24),
+        )
+    end
+    res_neg = negative_clear()
+    @info "flex clear at a negative tariff" status = res_neg.status
+    b = res_neg.physics.baseline
+    @test b !== nothing
+    @test b.ev_certificate == [:refused]
+    @test b.battery_certificate == [:not_checked]
+    @test b.n_ev_refused == 1
+    @test b.n_ev_ok + b.n_ev_refused + b.n_ev_not_checked == 1
+    @test occursin("EV complementarity", b.ev_message[1])
+
+    # Compliant clear: an Interruptible and the compliant V2G test EV in one aggregator.
+    function compliant_clear()
+        T = TwoBusFixtures.T
+        swing = [(t in 5:8) ? 12.0 : ((t >= 18 || t <= 4) ? 1.0 : 4.0) for t in 1:T]
+        Pdc =
+            TwoBusFixtures.LOAD_SCALE_2BUS .*
+            generate_profiles(seed = TwoBusFixtures.SEED_2BUS + 2, T = T).demand
+        ev = ElectricVehicle(
+            2,
+            0.95,
+            1.0,
+            0.02,
+            0.0,
+            0.08,
+            0.06,
+            0.06,
+            1e3,
+            TwoBusFixtures.BATT_λ_MIN,
+            TwoBusFixtures.BATT_λ_MED,
+            TwoBusFixtures.BATT_λ_MAX,
+            18,
+            8;
+            v2g = true,
+            c_deg = 0.05,
+        )
+        agg = Aggregator(2, 0.9, AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), ev], Pdc)
+        feeder = TwoBusFixtures.two_bus_feeder()
+        ctx, _, _ =
+            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = swing, allow_export = true)
+        input = settlement_input(ctx; T = T)
+        return clear_flex_market(
+            feeder,
+            ConvexBranchFlow(),
+            [agg],
+            input,
+            FlexMarket();
+            T = T,
+            λ₀ = swing,
+        )
+    end
+    function ev_fields_ok(r)
+        return r.battery_certificate == [:not_checked] &&
+               r.ev_certificate[1] in (:ok, :refused) &&
+               length(r.ev_message) == 1 &&
+               r.n_ev_ok + r.n_ev_refused + r.n_ev_not_checked == 1
+    end
+    res = compliant_clear()
+    @info "flex clear with a compliant V2G EV" status = res.status baseline_ev =
+        res.physics.baseline.ev_certificate
+    @test res.status in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
+          startswith(res.status, "error:")
+    @test res.physics.baseline !== nothing
+    @test ev_fields_ok(res.physics.baseline)
+    res.status == "ok" && @test res.physics.delivered !== nothing
+    if res.physics.delivered !== nothing
+        @test ev_fields_ok(res.physics.delivered)
+    end
 end
 
 @testitem "flex market: delivery on a coupled aggregator" setup = [FlexMarketFixtures] tags =
