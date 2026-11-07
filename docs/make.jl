@@ -85,9 +85,12 @@ makedocs(;
         # (commit dc0de79) to 600/400 KiB; since then the page has organically
         # grown to 676.24 KiB (more exported symbols and docstrings) and
         # tripped that limit too. Raised again with headroom for further growth rather
-        # than re-bumping repeatedly; all other pages are well under this.
-        size_threshold = 1024 * 1024,
-        size_threshold_warn = 800 * 1024,
+        # than re-bumping repeatedly; all other pages are well under this. Raised a third
+        # time to 1.5 MiB / 1 MiB-warn when the page reached 1.0 MiB (1023.56 KiB before the
+        # exactness-copy docstring corrections pushed it over). The durable fix is to split
+        # `api.md` into per-area pages instead of bumping again.
+        size_threshold = 1536 * 1024,
+        size_threshold_warn = 1024 * 1024,
     ),
     # No repo source links: the build must succeed in a bare/worktree checkout
     # where Documenter cannot infer a remote. Re-enable when deploying from CI.
