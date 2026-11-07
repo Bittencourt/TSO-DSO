@@ -400,8 +400,9 @@ T>1 joint Benders recourse, DLMP `cone`/`drop` naming, hybrid per-branch exactne
 on AC physics (violations reported), ALMOST_OPTIMAL flake bounded. Suite 30703/0/0/5.
 
 **v4.0 in progress — Phase 26 (Network & Device Model Correctness) COMPLETE 2026-09-29.** FIX-01..05
-validated: default `ConvexBranchFlow` exactness copy now Gan–Low direction (honestly labelled a
-conservative upper-band restriction, exact by theorem; thesis-literal copy kept as opt-in), receiving-end
+validated: default `ConvexBranchFlow` exactness copy now Gan–Low direction (re-documented since as a
+per-branch inner approximation of the upper band, `v̂ − v = Σ_path |z|²l`; not Gan–Low's OPF-m, not exact
+by theorem, inexact cases refused by the gate; thesis-literal copy kept as opt-in), receiving-end
 thermal limit 3.37 in SOCP + AC formulations, battery SOC linked over `soc[1:T+1]`, flexible loads draw
 `q = p·tanφ`, ADMM live reactive coupling by default with flexible loads. Headline goldens moved (see
 `phases/26-*/26-GOLDEN-AUDIT.md`); thesis-repro restatement is Phase 28. New findings: App. C η<1
@@ -500,7 +501,7 @@ Relaxation).
 
 The operational transactive-energy layer is complete and validated end-to-end:
 - **Solver abstraction** (`select_optimizer(::ProblemClass)`; Clarabel/HiGHS/Ipopt default, Gurobi/Mosek weakdep-gated), `assert_solved!` fail-loud status gate, `ModelContext` residual registry.
-- **Power flow** via one swappable residual seam: DC, LinDistFlow, and SOCP Convex Branch Flow with the LinDistFlow exactness copy — relaxation validated exact on radial fixtures.
+- **Power flow** via one swappable residual seam: DC, LinDistFlow, and SOCP Convex Branch Flow with the LinDistFlow exactness copy — validated exact on the realistic radial fixtures (the default copy bound `v̂ ≤ vmax²` is a per-branch inner approximation, never active there; inexact stress cases are refused by the gate).
 - **Prosumer device library** (thermostatic, deferrable, interruptible, PV+battery — no binaries) + aggregator roll-up + `GLB-CVX` social-welfare centralized solve + `operational_oracle(z)→(cost,π)`.
 - **Pricing**: DADP/DLMP as the dual of the nodal active-power balance, 4-way DLMP decomposition, welfare/surplus accounting + FIT baseline, economic-direction checks.
 - **ADMM** decomposition (AGR-OPT / DSO-OPT, adaptive ρ, primal+dual residual stop, build-once/re-solve) validated against the centralized optimum on IEEE 13 (congestion) + 123 (voltage).

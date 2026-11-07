@@ -35,8 +35,9 @@ documented results cannot drift from the code.
 - [Rung 3: SOCP + Exactness](generated/convex_branch_flow.md) — the convex
   branch-flow relaxation and the LinDistFlow exactness copy (thesis 3.39, 3.43-3.45).
 - [Rung 3: AC-Exactness Oracle](generated/ac_oracle.md) — the independent nonconvex
-  AC-OPF peer (Ipopt, true equality `l·v = P² + Q²`) certifying the SOCP relaxation
-  per-hour, including the genuine high-PV/reverse-flow inexactness finding.
+  AC-OPF peer (Ipopt, true equality `l·v = P² + Q²`) certifying the SOCP model
+  per-hour, including the high-PV/reverse-flow finding (the default copy's `v̂ ≤ vmax²` bound is a
+  per-branch inner approximation that can exclude the AC optimum).
 - [Rung 3: Devices + GLB-CVX](generated/prosumer_welfare.md) — the prosumer
   device library rolled into the aggregator social-welfare solve (thesis 3.2-3.23, 3.38).
 - [Rung 4: DADP/DLMP Pricing](generated/pricing_dlmp.md) — the day-ahead dynamic
@@ -91,9 +92,11 @@ documented results cannot drift from the code.
 The operational layer's headline correctness claim is certified two ways: the LinDistFlow
 exactness copy is checked per-branch after every SOCP solve (`assert_socp_exact!`, which refuses
 to publish prices on failure), and — since v2.1 — an independent nonconvex AC-OPF oracle
-(`ACPowerFlow` + `assert_ac_exact!`) cross-checks the relaxation per-hour against a genuinely
-different formulation. Where the relaxation is genuinely inexact (high-PV reverse flow with the
-voltage pinned at its upper bound), that is reported as a first-class, citable finding rather
+(`ACPowerFlow` + `assert_ac_exact!`) cross-checks the model per-hour against a genuinely
+different formulation. Where the default model departs from AC (high-PV reverse flow with the
+voltage pinned at its upper bound: the copy bound `v̂ ≤ vmax²` is a per-branch inner approximation,
+and past `pv_scale ≈ 1.3` on the stress fixture the cone itself is inexact and refused by the
+gate), that is reported as a first-class, citable finding rather
 than tuned away. Thesis reproduction claims are pinned only on sign-safe quantities (the
 DSO-surplus sign flip) and always carry the "directional, public-data" qualifier.
 

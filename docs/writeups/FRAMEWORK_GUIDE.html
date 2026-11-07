@@ -351,8 +351,8 @@ leader's strategy.
   and a parallel <em>LinDistFlow</em>-style constraint copy (the Gan–Low exactness device,
   thesis eqs. 3.43–3.45) steers the relaxation toward tightness on radial feeders, so (when the exactness certificate
   passes) the convex solution is an AC-feasible operating point, not a fiction. <em>(Changed in v4.0: the
-  default copy now follows the Gan–Low direction, which makes the model a slight restriction of
-  the upper voltage band rather than a pure relaxation; see Section 5.1.)</em></li>
+  default copy now follows the Gan–Low direction, which makes the model a per-branch inner
+  approximation of the upper voltage band rather than a pure relaxation; see Section 5.1.)</em></li>
   <li><strong>The objective</strong> — social welfare: total prosumer utility minus the DSO's
   purchase cost at the wholesale (MEM) price \(\lambda_0[t]\) at the substation bus \(j=0\), the
   TSO–DSO frontier:
@@ -965,11 +965,18 @@ gives \(\hat v \le v\), so it restricts the <em>lower</em> voltage band — the 
 thesis's own adjacent claim (citing Gan–Low) that the copy makes \(v \le V_{\max}^2\) redundant.
 Since v4.0 the default copy follows the Gan–Low direction, \(\hat P = P - r\ell\),
 \(\hat Q = Q - x\ell\): its drop carries \(+2(r^2+x^2)\,\ell\), more than the true drop's
-\(+(r^2+x^2)\,\ell\), so \(\hat v \ge v\) and the load-bearing bound is
-\(\hat v \le V_{\max}^2\), which presses \(\ell\) down until the cone closes. That default is
-Gan–Low's modified OPF: a conservative restriction of the upper voltage band, exact by theorem under Gan–Low's
-conditions (the Section 6 sweep still finds 3 of 150 cone-inexact points), with a small measured
-welfare loss (about 0.05% on the high-PV reference fixture). Neither copy is
+\(+(r^2+x^2)\,\ell\), so \(\hat v \ge v\); telescoped along the path, \(\hat v - v = \sum_{b \in \text{path}(j)}
+(r_b^2+x_b^2)\,\ell_b \ge 0\) (coefficient 1, not 2), so the bound \(\hat v \le V_{\max}^2\)
+enforces \(v \le V_{\max}^2 - \sum_{\text{path}} |z_b|^2 \ell_b\). That default is a
+<em>per-branch inner approximation</em> of the upper voltage band: an inner restriction that grows
+with accumulated path losses, with a small measured welfare loss (about 0.05% on the high-PV
+reference fixture). It is not Gan–Low's modified OPF and not exact by theorem: OPF-m uses the
+lossless shadow voltage \(\hat v_{GL}(s)\) (the <code>RestrictedBranchFlow</code> of Section 6),
+whereas each branch's copy here removes only that branch's own loss, so \(\hat v\) at a bus
+decreases with downstream branch currents and the Gan–Low exactness theorem does not apply beyond
+single-branch paths. Accordingly the Section 6 sweep finds 3 of 150 cone-inexact points, and the
+gate below refuses them (no inexact price is returned silently). On the realistic fixtures
+(IEEE-13, its PV-boom sweep, IEEE-123) the bound is never active. Neither copy is
 a genuine relaxation. <code>ConvexBranchFlow(; thesis_literal = true)</code> reproduces the
 thesis form.</p>
 
@@ -1112,7 +1119,7 @@ operating room for trustworthy prices in the overvoltage regime.</p>
 <code>scripts/socp_applicability_sweep.jl</code> (map generator; results committed under
 <code>results/socp_applicability/</code>).<br>
 <strong>See it run:</strong> docs pages "SOC Relaxation Applicability"
-(<code>docs/literate/socp_applicability.jl</code>) and "Rung 3 — Overvoltage-Capable Relaxation"
+(<code>docs/literate/socp_applicability.jl</code>) and "Rung 3 — Overvoltage-Capable Restriction"
 (<code>docs/literate/restricted_branch_flow.jl</code>).</p>
 
 <h3 id="network-7-real-network-data-ieee-13-ieee-123-fixtures">7. Real network data: IEEE-13 / IEEE-123 fixtures</h3>

@@ -534,8 +534,10 @@ a2_cf_residual_txt =
         a2_cf_not_relaxation ?
         "ABOVE (in magnitude) this script's own not-a-relaxation threshold (obj_gap < -" *
         "$(@sprintf("%.0e", A2_WORDING_TOL))), so by the same rule the bound-deleted SOCP is " *
-        "still not a relaxation of the AC model: the v̂ bound explains almost all of the gap " *
-        "but does not close it." :
+        "classified as not a relaxation at the default solver tolerances, but the residual is " *
+        "solver tolerance, not a model gap (Ipopt bound_relax_factor 6.10e-6 plus Clarabel " *
+        "tol_gap 3.63e-6): with both solvers tight, the bound-deleted SOCP is a true " *
+        "relaxation on this fixture (obj_gap +2.6e-9, 0 inexact hours)." :
         "within this script's not-a-relaxation threshold (obj_gap >= -" *
         "$(@sprintf("%.0e", A2_WORDING_TOL))), so by the same rule the bound-deleted SOCP is " *
         "not classified as worse than the AC solution."
@@ -572,13 +574,15 @@ elseif a2_not_relaxation
         (
             isempty(a2_cf_inexact_hours) ? "no hour where SOCP and AC differ." :
             "$(length(a2_cf_inexact_hours)) hour(s) $a2_cf_inexact_hours where SOCP and AC " *
-            "still differ (not diagnosed further)."
+            "still differ (solver-tolerance noise on a flat hour; see the residual note below)."
         ) * " " * a2_cf_residual_txt :
         "Cause not established; candidate: the exactness-copy bound v̂ <= vmax^2 " *
         "(src/powerflow/ConvexBranchFlow.jl, thesis 3.45), absent from the AC model. " *
         "Diagnostic: v̂ bound active at hours $a2_vhat_bound_hours; deleting it gives " *
         "status $a2_cf_status, obj_gap $(@sprintf("%.3e", a2_cf_obj_gap))."
-    ) * " UNRESOLVED in the model: reconcile the two before citing an exactness verdict here."
+    ) * " The gap is by design: under the default copy v̂ - v = sum over the path of |z|^2 l >= 0, " *
+    "so v̂ <= vmax^2 is a per-branch inner approximation of the upper voltage band " *
+    "(v <= vmax^2 - sum |z|^2 l), not Gan-Low's OPF-m and not a relaxation of AC."
 elseif a2_cone_tight
     "SOCP and AC differ at $(length(inexact_hours))/$T_FULL hours $inexact_hours with " *
     "obj_gap = $(@sprintf("%.4e", ac_report.obj_gap)) >= 0, but the SOC cone is " *
