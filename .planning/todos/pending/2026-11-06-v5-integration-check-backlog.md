@@ -63,3 +63,7 @@ Details are in `.planning/milestones/v5.0-phases/47-v5-audit-gap-closure/47-REVI
 - **N2 (warning, predates v5.0):** `src/planning/subproblem.jl:365` runs only the battery certificate, and nothing refuses EV populations. Fix: refuse EVs there, or run `assert_ev_complementarity!`.
 - **N3 (info):** `build_settlement_ledger` accepts `actor_wedges` and `flex_payments` together with no guard (`run_inputs.jl:536-555`). It is a building block for hand-assembled ledgers. This ties in with the SETL-F2 provenance flag.
 - **N4 (info):** `TAU_EV_ADMM` is the default in the exported `price_taker_dispatch` signature, but it is neither exported nor `public`.
+
+## Docs page size (2026-11-07)
+
+- **Split `docs/src/api.md`.** The single page grew to 1.0 MiB of HTML. Quick task 261107-qzn raised the Documenter `size_threshold` a third time, to 1.5 MiB with a 1 MiB warning. The search index also warns at 1.2 MiB. Fix: split `api.md` into per-area pages (operational, ADMM, settlement, planning, devices) instead of raising the limit again.

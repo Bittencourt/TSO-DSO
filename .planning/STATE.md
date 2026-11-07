@@ -5,7 +5,7 @@ milestone_name: Aggregator Layer at Scale
 status: Awaiting next milestone
 stopped_at: Milestone v5.0 completed and archived
 last_updated: "2026-11-07T12:06:44.837Z"
-last_activity: 2026-11-07 — Milestone v5.0 completed and archived
+last_activity: 2026-11-07 — Quick task 261107-qzn (exactness-copy re-documentation, debug Option A)
 progress:
   total_phases: 9
   completed_phases: 9
@@ -165,6 +165,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 261008-clo | Fix FRAMEWORK_GUIDE and compare_default_stochastic writeup review findings (DLMP cone/drop names, 3.37 dual, copy-tightness wording, MPC knobs; stale numbers, planning IDs) | 2026-10-08 | bb257cb | [261008-clo-fix-guide-and-compare-writeup-review-fin](./quick/261008-clo-fix-guide-and-compare-writeup-review-fin/) |
 | 261008-duh | Update README to reflect the v4.0 project stage | 2026-10-08 | 806d527 | [261008-duh-update-readme-to-reflect-v4-0-project-st](./quick/261008-duh-update-readme-to-reflect-v4-0-project-st/) |
 | 261008-tu1 | 6-node hybrid SDP-SOCP T&D case study backing the draft convexification paper (baseline, AC-OPF check, TSO-DSO ADMM + rho/eps sweeps, congestion, inexact regimes) | 2026-10-09 | 6963b0f | [261008-tu1-td-hybrid-6node-paper-case-study](./quick/261008-tu1-td-hybrid-6node-paper-case-study/) |
+| 261107-qzn | Re-document the default ConvexBranchFlow exactness copy as a per-branch inner approximation (not Gan–Low OPF-m, not exact by theorem); fix stale relaxation/sign wording (debug lindistflow-vmax-reverse-flow, Option A) | 2026-11-07 | 880e34d | [261107-qzn-re-document-default-convexbranchflow-exa](./quick/261107-qzn-re-document-default-convexbranchflow-exa/) |
 | 26 | 20 | - | - |
 | 27 | 9 | - | - |
 | 28 | 6 | - | - |

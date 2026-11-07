@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "linDistFlow vmax bound under reverse flow"
 created: 2026-11-07
 updated: 2026-11-07
@@ -73,7 +73,7 @@ source_todo: .planning/todos/pending/2026-10-07-linDistFlow-copy-vmax-bound-brea
 - hypothesis: CONFIRMED (with amendment) — v̂ ≤ vmax² is an inner restriction by design (v̂ − v = Σ_path|z|²l), already documented as a restriction; BUT mis-attributed as Gan–Low OPF-m / "exact by theorem": the per-branch copy induces downstream cone slack when binding (measured pv ≥ 1.3).
 - test: done (m1–m4)
 - expecting: n/a
-- next_action: researcher decision among options A/B/C/D in Resolution; no fix applied (find_root_cause_only)
+- next_action: researcher chose Option A (docs only) on 2026-11-07 → quick task 261107-qzn
 
 ## Evidence
 
@@ -180,7 +180,7 @@ source_todo: .planning/todos/pending/2026-10-07-linDistFlow-copy-vmax-bound-brea
     Stale/inconsistent "relaxation" claims remain in: ac_oracle.jl (pre-P26 sign), restriction_exactness.jl
     and the restricted_branch_flow literate page ("unrestricted relaxation's bound"), assert_ac_exact!
     docstring, docs/src/index.md, PROJECT.md, findings.txt/pv_boom script ("UNRESOLVED").
-- fix: not applied (find_root_cause_only)
+- fix: Option A (researcher, 2026-11-07) — documentation only, model unchanged. Quick task 261107-qzn (commits fc1bcf1, 252db0b, e1e9f37, e97dd06, 880e34d) re-documents the default copy as a per-branch inner approximation and fixes the stale relaxation/sign wording; no golden, tolerance, fence or runtime string changed.
 - decision_options (blast radius measured where noted; for the researcher):
     A. Keep 3.45 as is; re-document it as a per-branch inner approximation (drop "Gan–Low modified OPF / exact by
        theorem", state the cone-inexactness at pv ≥ 1.3 and the v̂−v = Σ|z|²l identity). Numeric blast radius:
@@ -208,10 +208,10 @@ source_todo: .planning/todos/pending/2026-10-07-linDistFlow-copy-vmax-bound-brea
        as the default): theorem-backed restriction, but tighter → larger welfare loss on high-PV; moves
        everything that B moves.
 - verification: diagnosis only — scripts in /tmp/claude-1000/-home-pedro-programming-TSO-DSO/fb4d3a0a-3e04-4903-ba56-4b034de53945/scratchpad/ (m1_stress.jl, m2_fixtures.jl, m3_pvscan.jl, m3b_pvscan_tau.jl, m4_mechanism.jl); Julia 1.12.5; no src/test/golden change on disk.
-- files_changed: []
+- files_changed: [src/powerflow/ConvexBranchFlow.jl, src/models/ac_oracle.jl, src/models/restriction_exactness.jl, src/models/exactness.jl, test/test_convex_branch_flow.jl (comments), test/test_ac_oracle.jl (comments), docs/literate/{convex_branch_flow,ac_oracle,restricted_branch_flow}.jl, docs/src/index.md, docs/writeups/FRAMEWORK_GUIDE.html, scripts/pv_boom_case_study.jl, results/pv_boom/findings.txt, .planning/PROJECT.md]
 
 ## Specialist Review
 
 - specialist_hint: general (maps to engineering:debug)
 - result: NOT RUN. The skill invocation tool was unavailable to the session manager; no external review was obtained. The root-cause verdict above rests on the debugger measurements only.
-- user fix choice: not requested. Goal is find_root_cause_only; the fix option (A/B/C/D) is deferred to the researcher.
+- user fix choice (2026-11-07): **Option A** — keep thesis 3.45 unchanged; re-document the default copy as a per-branch inner approximation (not Gan–Low OPF-m, not exact by theorem) and fix the stale relaxation/sign wording. Executed as quick task 261107-qzn.
