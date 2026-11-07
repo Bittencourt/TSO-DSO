@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Case A Magnitude · TSODSO</title><meta name="title" content="Case A Magnitude · TSODSO"/><meta property="og:title" content="Case A Magnitude · TSODSO"/><meta property="twitter:title" content="Case A Magnitude · TSODSO"/><meta name="description" content="Documentation for TSODSO."/><meta property="og:description" content="Documentation for TSODSO."/><meta property="twitter:description" content="Documentation for TSODSO."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">TSODSO</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Models</span><ul><li><a class="tocitem" href="../toy_dc/">Rung 0: Toy DC</a></li><li><a class="tocitem" href="../lindistflow/">Rung 1-2: LinDistFlow</a></li><li><a class="tocitem" href="../convex_branch_flow/">Rung 3: SOCP + Exactness</a></li><li><a class="tocitem" href="../ac_oracle/">Rung 3: AC-Exactness Oracle</a></li><li><a class="tocitem" href="../restricted_branch_flow/">Rung 3: Overvoltage-Capable Restriction</a></li><li><a class="tocitem" href="../prosumer_welfare/">Rung 3: Devices + GLB-CVX</a></li><li><a class="tocitem" href="../pricing_dlmp/">Rung 4: DADP/DLMP Pricing</a></li><li><a class="tocitem" href="../admm/">Rung 5: ADMM Decomposition</a></li><li><a class="tocitem" href="../ieee123_impedances/">IEEE-123 Real Impedances</a></li><li><a class="tocitem" href="../thesis_reproduction_ieee123/">Thesis Reproduction — IEEE-123</a></li><li><a class="tocitem" href="../thesis_reproduction_assumptions/">Thesis Reproduction — Assumptions</a></li><li><a class="tocitem" href="../socp_applicability/">SOC Relaxation Applicability</a></li><li><a class="tocitem" href="../socp_highpv_exactness/">SOCP Exactness in High-PV (optimal Q)</a></li><li><a class="tocitem" href="../aggregator_actor/">Aggregator as Actor (wedge, behaviour)</a></li><li><a class="tocitem" href="../ieee8500_scaling/">Scaling to IEEE-8500</a></li><li><a class="tocitem" href="../mpc_rolling_horizon/">Rung 8: MPC / Rolling-Horizon RTP</a></li><li><a class="tocitem" href="../stochastic_pv_demand/">Rung 9: Stochastic PV/Demand Uncertainty</a></li><li><a class="tocitem" href="../meshed_reactive_price/">Rung 10: Meshed Networks + Live Reactive Price</a></li></ul></li><li><span class="tocitem">Experiments</span><ul><li><a class="tocitem" href="../experiments/">The Experiment Harness</a></li><li><a class="tocitem" href="../case_a_population/">Case A Population (784 houses)</a></li><li><a class="tocitem" href="../settlement_equity/">Settlement, Tariffs &amp; Equity</a></li><li><a class="tocitem" href="../flex_market/">Flexibility Market vs Price Coordination</a></li><li class="is-active"><a class="tocitem" href>Case A Magnitude</a><ul class="internal"><li><a class="tocitem" href="#The-live-slice-—-committed-CSV-reads-only-(seconds)"><span>The live slice — committed-CSV reads only (seconds)</span></a></li><li><a class="tocitem" href="#The-pre-registered-protocol-—-what-was-frozen,-and-when"><span>The pre-registered protocol — what was frozen, and when</span></a></li><li><a class="tocitem" href="#The-headline-—-W_DADP-certified-5/5-seeds;-the-FIT-counterfactual-refused-on-every-one"><span>The headline — W_DADP certified 5/5 seeds; the FIT counterfactual refused on every one</span></a></li><li><a class="tocitem" href="#The-centralized-cross-check-and-the-price-signal-lens"><span>The centralized cross-check and the price-signal lens</span></a></li><li><a class="tocitem" href="#The-ablation-—-where-the-gain-IS-measurable,-and-what-it-is"><span>The ablation — where the gain IS measurable, and what it is</span></a></li><li><a class="tocitem" href="#The-proxy-restatement-—-0.263%-under-the-registered-definition"><span>The proxy restatement — ≈+0.263% under the registered definition</span></a></li><li><a class="tocitem" href="#The-honesty-section-—-asymmetries-stated,-refusals-counted,-nothing-tuned"><span>The honesty section — asymmetries stated, refusals counted, nothing tuned</span></a></li><li><a class="tocitem" href="#The-attribution-statement-—-what-the-25%-question-measurably-resolves-to"><span>The attribution statement — what the +25% question measurably resolves to</span></a></li><li><a class="tocitem" href="#Reproducing-every-number-on-this-page"><span>Reproducing every number on this page</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../../status_policy/">Status &amp; Exception Policy</a></li><li><span class="tocitem">Planning</span><ul><li><a class="tocitem" href="../stackelberg_benders/">Rung 6: Stackelberg-Benders</a></li><li><a class="tocitem" href="../nash_diagonalization/">Rung 7: Nash Diagonalization &amp; Shared Corridor</a></li><li><a class="tocitem" href="../integer_investment/">Rung 11: Discrete/Integer Investment Expansion</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Experiments</a></li><li class="is-active"><a href>Case A Magnitude</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Case A Magnitude</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Case-A-Welfare-Gain-Magnitude-—-the-honest,-pre-registered-measurement"><a class="docs-heading-anchor" href="#Case-A-Welfare-Gain-Magnitude-—-the-honest,-pre-registered-measurement">Case A Welfare-Gain Magnitude — the honest, pre-registered measurement</a><a id="Case-A-Welfare-Gain-Magnitude-—-the-honest,-pre-registered-measurement-1"></a><a class="docs-heading-anchor-permalink" href="#Case-A-Welfare-Gain-Magnitude-—-the-honest,-pre-registered-measurement" title="Permalink"></a></h1><p>This page is the writeup of the Phase 42 Case A welfare-gain magnitude measurement: the DADP-vs-FIT welfare gain of the real 784-house Case A population, measured under a PRE-REGISTERED protocol (<code>42-CASE-A-PROTOCOL.md</code> in the phase&#39;s planning directory, committed BEFORE any Case A run executed) and reported AT WHATEVER MAGNITUDE IT MEASURED — the PROJECT.md v5.0 honesty policy. It is the evidence chain&#39;s last link:</p><ul><li><strong>REPRO-03</strong> — the SIGN-SAFE welfare-gain definition, pre-registered and guarded;</li><li><strong>REPRO-04</strong> — the headline measurement at the frozen registered configuration: five master seeds, the bounded AGR solver-precision ladder, the centralized cross-check, and the four-leg settlement lenses;</li><li><strong>REPRO-05</strong> — the four-axis OFAT ablation (FIT parameters, price range, population, device mix) and the written gap-attribution statement.</li></ul><p><strong>Page contract.</strong> This page READS <code>results/thesis_case_a_magnitude/*.csv</code> exactly as committed by <code>scripts/case_a_magnitude.jl</code> and SOLVES NOTHING — its whole live slice is reading those CSVs and recomputing the derived figures from the rows (seconds; the docs build&#39;s 30-minute CI budget is safe). Every relative figure below is RECOMPUTED LIVE from the committed rows (the Phase-28 CR-01 discipline: no stale derived number can survive a data revision), every division is SIGN-SAFE (denominator <code>abs(W_FIT)</code>), and every magnitude number is printed through ONE qualifier helper (defined below).</p><div class="admonition is-info" id="The-locked-statements-(protocol-§1–§2,-§9–§10)-af1fc86973ad5621"><header class="admonition-header">The locked statements (protocol §1–§2, §9–§10)<a class="admonition-anchor" href="#The-locked-statements-(protocol-§1–§2,-§9–§10)-af1fc86973ad5621" title="Permalink"></a></header><div class="admonition-body"><p>The registered relative gain is <code>Δ% = 100·(W_DADP − W_FIT)/|W_FIT|</code> — SIGN-SAFE. The naive ratio <code>W_DADP/W_FIT</code> is NEVER reported anywhere in this project: welfare is large and NEGATIVE at the 784-house population, so the ratio sign-inverts (a positive-looking number for a welfare LOSS). The SOC-exactness gate, the battery τ and ρ = <code>ADMM().ρ</code> were never loosened or re-tuned — refusals and infeasibilities are recorded MEASURED outcomes, answered only by the pre-registered ladder and its ONE sanctioned solver-tightened retry. &quot;Gap not fully attributed&quot; and &quot;whatever the magnitude&quot; are acceptable, pre-registered endings: closing the gap to the thesis&#39;s +25% was NEVER a success condition.</p></div></div><h2 id="The-live-slice-—-committed-CSV-reads-only-(seconds)"><a class="docs-heading-anchor" href="#The-live-slice-—-committed-CSV-reads-only-(seconds)">The live slice — committed-CSV reads only (seconds)</a><a id="The-live-slice-—-committed-CSV-reads-only-(seconds)-1"></a><a class="docs-heading-anchor-permalink" href="#The-live-slice-—-committed-CSV-reads-only-(seconds)" title="Permalink"></a></h2><p>The reader is quote-aware (the recorded status messages legitimately contain commas and quotes; the settlement page ships the same minimal reader) and treats an EMPTY cell as a deliberately-missing certified value — parsed to NaN, never silently to zero. The package import below exists ONLY for <code>pkgdir(TSODSO)</code> (the repo-root anchor the other committed-CSV pages use); nothing is solved, fitted or plotted on this page.</p><pre><code class="language-julia hljs">using TSODSO
+using Printf
+
+function read_case_a_csv(path)
+    function split_line(line)
+        cells = String[]
+        cur = Char[]
+        inq = false
+        i = firstindex(line)
+        while i &lt;= ncodeunits(line)
+            c = line[i]
+            if inq
+                if c == &#39;&quot;&#39;
+                    if nextind(line, i) &lt;= ncodeunits(line) &amp;&amp; line[nextind(line, i)] == &#39;&quot;&#39;
+                        push!(cur, &#39;&quot;&#39;)
+                        i = nextind(line, i)
+                    else
+                        inq = false
+                    end
+                else
+                    push!(cur, c)
+                end
+            elseif c == &#39;&quot;&#39;
+                inq = true
+            elseif c == &#39;,&#39;
+                push!(cells, String(cur))
+                empty!(cur)
+            else
+                push!(cur, c)
+            end
+            i = nextind(line, i)
+        end
+        push!(cells, String(cur))
+        return cells
+    end
+    lines = readlines(path)
+    header = split_line(first(lines))
+    return map(lines[2:end]) do ln
+        cells = split_line(ln)
+        Dict(header[j] =&gt; strip(cells[j]) for j in 1:min(length(header), length(cells)))
+    end
+end
+
+const RESULTS_DIR = joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;thesis_case_a_magnitude&quot;)
+readcsv(name) = read_case_a_csv(joinpath(RESULTS_DIR, name))
+num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+cell(s) = isempty(s) ? &quot;-&quot; : s
+
+const MAG = readcsv(&quot;magnitude.csv&quot;)     # the 5-seed headline ledger (REPRO-04)
+const XCHK = readcsv(&quot;crosscheck.csv&quot;)   # the centralized cross-check + price lens
+const ABL = readcsv(&quot;ablation.csv&quot;)      # the four-axis OFAT ablation table (REPRO-05)
+const LENS = readcsv(&quot;lens_summary.csv&quot;) # the four-leg settlement lenses
+const PROXY = readcsv(&quot;proxy.csv&quot;)       # the proxy restatement fixtures (protocol §8)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Dict{String, SubString{String}}}:
+ Dict(&quot;blas_threads&quot; =&gt; &quot;1&quot;, &quot;fixture&quot; =&gt; &quot;ieee123-default&quot;, &quot;note&quot; =&gt; &quot;&quot;, &quot;rung&quot; =&gt; &quot;default&quot;, &quot;welfare_dadp&quot; =&gt; &quot;-41055.14279676705&quot;, &quot;iters&quot; =&gt; &quot;4&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;kind&quot; =&gt; &quot;rung&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;blas_threads&quot; =&gt; &quot;1&quot;, &quot;fixture&quot; =&gt; &quot;ieee123-default&quot;, &quot;note&quot; =&gt; &quot;SIGN-SAFE registered gain (protocol §1): DADP ladder rung &#39;default&#39; vs FIT leg (tol_gap_1e-10); the naive W_DADP/W_FIT ratio is banned&quot;, &quot;rung&quot; =&gt; &quot;default&quot;, &quot;welfare_dadp&quot; =&gt; &quot;-41055.14279676705&quot;, &quot;iters&quot; =&gt; &quot;&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;kind&quot; =&gt; &quot;gain&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;blas_threads&quot; =&gt; &quot;1&quot;, &quot;fixture&quot; =&gt; &quot;ieee13-default&quot;, &quot;note&quot; =&gt; &quot;&quot;, &quot;rung&quot; =&gt; &quot;default&quot;, &quot;welfare_dadp&quot; =&gt; &quot;-4822.993417743747&quot;, &quot;iters&quot; =&gt; &quot;76&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;kind&quot; =&gt; &quot;rung&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;blas_threads&quot; =&gt; &quot;1&quot;, &quot;fixture&quot; =&gt; &quot;ieee13-default&quot;, &quot;note&quot; =&gt; &quot;no certified pair — DADP certified at rung &#39;default&#39; but the FIT leg did not certify; FIT: attempt: error:SolveFailedError (Solve failed — refusing to trust results:;   termination_status : INFEASIBLE;   primal_status      : INFEASIBLE_POINT;   dual_status        : INFEASIBILITY_CERTIFICATE;   raw_status         : PRIMAL_INFEA); pinned retry also refused: Solve failed — refusing to trust results:;   termination_status : INFEASIBLE;   primal_status      : INFEASIBLE_POINT;   dual_status        : INFEASIBILITY_CERTIFICATE;   raw_status         : PRIMAL_INFEA&quot;, &quot;rung&quot; =&gt; &quot;default&quot;, &quot;welfare_dadp&quot; =&gt; &quot;-4822.993417743747&quot;, &quot;iters&quot; =&gt; &quot;&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;kind&quot; =&gt; &quot;gain&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)</code></pre><p>Fail the docs build loudly if the evidence chain is broken — a missing/empty CSV must never render as an empty page.</p><pre><code class="language-julia hljs">for (name, rows) in (
+    (&quot;magnitude.csv&quot;, MAG),
+    (&quot;crosscheck.csv&quot;, XCHK),
+    (&quot;ablation.csv&quot;, ABL),
+    (&quot;lens_summary.csv&quot;, LENS),
+    (&quot;proxy.csv&quot;, PROXY),
+)
+    isempty(rows) &amp;&amp; error(
+        &quot;case_a_magnitude page: $name carries no rows — the committed evidence chain &quot; *
+        &quot;is broken; re-run the measurement (scripts/case_a_magnitude.jl) and commit &quot; *
+        &quot;the CSVs before rendering this page&quot;,
+    )
+end</code></pre><p>The ONE qualifier convention this page introduces (the <code>scripts/thesis_case123_repro.jl</code> <code>REPRO_QUALIFIER</code>/<code>cite_repro</code> pattern): EVERY magnitude number printed below passes through this helper, which states what the number is — measured under the pre-registered protocol, reported at whatever magnitude it measured, never gated, never tuned toward a target.</p><pre><code class="language-julia hljs">const MAGNITUDE_QUALIFIER = &quot;measured, pre-registered&quot;
+cite_magnitude(x) = &quot;$x ($MAGNITUDE_QUALIFIER)&quot;</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">cite_magnitude (generic function with 1 method)</code></pre><p>The page&#39;s own SIGN-SAFE recomputation (the registered definition, protocol §1): the denominator carries <code>abs</code>, so the sign of the result always equals the sign of <code>W_DADP − W_FIT</code> whatever the sign of the welfare level. <code>haspair</code> decides whether a row carries BOTH certified welfares (a certified pair) — an empty cell is NaN, so a refused leg is &quot;no pair&quot;, never a zero.</p><pre><code class="language-julia hljs">delta_abs(w_dadp, w_fit) = w_dadp - w_fit
+delta_pct_signsafe(w_dadp, w_fit) = 100 * (w_dadp - w_fit) / abs(w_fit)
+haspair(r) = !isnan(num(r[&quot;welfare_dadp&quot;])) &amp;&amp; !isnan(num(r[&quot;welfare_fit&quot;]))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">haspair (generic function with 1 method)</code></pre><h2 id="The-pre-registered-protocol-—-what-was-frozen,-and-when"><a class="docs-heading-anchor" href="#The-pre-registered-protocol-—-what-was-frozen,-and-when">The pre-registered protocol — what was frozen, and when</a><a id="The-pre-registered-protocol-—-what-was-frozen,-and-when-1"></a><a class="docs-heading-anchor-permalink" href="#The-pre-registered-protocol-—-what-was-frozen,-and-when" title="Permalink"></a></h2><p>The protocol (<code>.planning/phases/42-thesis-case-a-magnitude/42-CASE-A-PROTOCOL.md</code>) was committed before any 784-house solve executed; every CSV row this page reads stamps a <code>protocol_sha</code> column (the 40-hex git SHA of the protocol&#39;s latest commit at measurement time), so every number below is auditable to the exact protocol version that produced it. The frozen pieces:</p><ul><li><strong>The gain definition</strong> (REPRO-03): <code>ΔW = W_DADP − W_FIT</code>, <code>Δ% = 100·ΔW/|W_FIT|</code> — the naive ratio banned (see the locked statements above).</li><li><strong>The registered configuration</strong> (REPRO-04): <code>:ieee13</code> feeder, <code>ConvexBranchFlow()</code>, T = 24, λ₀ = <code>build_price(:mem)</code>, <code>allow_export = true</code>, the <code>:case_a_784</code> population (784 houses → 10 bus-level aggregators), ρ = <code>ADMM().ρ</code> locked, provenance stamped on every row (<code>julia_version</code>, <code>threads</code>, <code>blas_threads</code>, <code>seed</code>, <code>t_horizon</code>).</li><li><strong>The seeds</strong>: master seeds 42 (the registered continuity anchor) … 46 — each a full honest re-draw via the POP-02 hash seeding.</li><li><strong>The AGR solver-precision ladder</strong>: <code>default → gap_1e-10 → gap_1e-12 → gapfeas_1e-12</code>, stop-on-first-certified, hard stop after the last rung — the ONLY answer to a refusal; no gate was ever loosened.</li><li><strong>The four ablation axes</strong> (REPRO-05): fit<em>params, price</em>range, population, device_mix — axis names AND variant values committed pre-run; no free-form search.</li><li><strong>The amendment policy</strong>: the protocol file is append-only after the pre-run commit; the ONE amendment (2026-10-26) repaired the <code>gapfeas_1e-12</code> rung&#39;s Clarabel attribute spelling (<code>tol_feas</code>; the pre-registered <code>tol_feas_abs/rel</code> field names do not exist in Clarabel 0.11.1) — name, ladder position and hard-stop unchanged; no gate, no ρ, no battery τ touched. The <code>protocol_sha</code> trail printed below splits visibly at that amendment.</li></ul><h2 id="The-headline-—-W_DADP-certified-5/5-seeds;-the-FIT-counterfactual-refused-on-every-one"><a class="docs-heading-anchor" href="#The-headline-—-W_DADP-certified-5/5-seeds;-the-FIT-counterfactual-refused-on-every-one">The headline — W_DADP certified 5/5 seeds; the FIT counterfactual refused on every one</a><a id="The-headline-—-W_DADP-certified-5/5-seeds;-the-FIT-counterfactual-refused-on-every-one-1"></a><a class="docs-heading-anchor-permalink" href="#The-headline-—-W_DADP-certified-5/5-seeds;-the-FIT-counterfactual-refused-on-every-one" title="Permalink"></a></h2><p><code>magnitude.csv</code> stamps one row per ladder-rung attempt plus one terminal <code>gain</code> row per seed. The DADP leg CERTIFIED on all five seeds — the seed→rung attribution (which seed certified at which rung, at how many iterations, and the default-rung refusal the ladder answered) RECOMPUTES LIVE from the committed rows below; no seed→rung map or iteration count is hand-copied into this prose, so a re-measurement re-attributes visibly instead of silently disagreeing. The FIT leg — <code>fit_baseline</code> consumed unchanged, BATTERYLESS by thesis design (Assumption A4) — reports termination INFEASIBLE at the registered call AND at the ONE sanctioned solver-tightened retry on EVERY seed. <strong>No certified pair exists at the registered 784-house mix: the headline DADP-vs-FIT Δ% is honestly UNDEFINED there.</strong> That is a measured result of the honest-status discipline — not a failure of the measurement, and never a reason to loosen a gate or manufacture a value.</p><pre><code class="language-julia hljs">headline_rows = filter(r -&gt; r[&quot;mode&quot;] == &quot;headline&quot;, MAG)
+seeds = sort(unique(parse(Int, r[&quot;seed&quot;]) for r in headline_rows))
+w_certified = Float64[]
+for s in seeds
+    seed_rungs = filter(r -&gt; r[&quot;kind&quot;] == &quot;rung&quot; &amp;&amp; r[&quot;seed&quot;] == string(s), headline_rows)
+    certified = filter(r -&gt; r[&quot;status&quot;] == &quot;converged&quot;, seed_rungs)
+    isempty(certified) &amp;&amp; error(
+        &quot;case_a_magnitude page: headline seed $s has no certified rung row — the &quot; *
+        &quot;committed ledger&#39;s DADP leg certified on every seed; investigate the CSV &quot; *
+        &quot;before rendering this page&quot;,
+    )
+    c = certified[end]
+    gain = filter(r -&gt; r[&quot;kind&quot;] == &quot;gain&quot; &amp;&amp; r[&quot;seed&quot;] == string(s), headline_rows)[end]
+    @printf(
+        &quot;seed %d: W_DADP %s at rung &#39;%s&#39; (iters %s); FIT leg: %s\n&quot;,
+        s,
+        cite_magnitude(num(c[&quot;welfare_dadp&quot;])),
+        cell(gain[&quot;rung&quot;]),
+        cell(c[&quot;iters&quot;]),
+        cell(gain[&quot;status&quot;]),
+    )
+    push!(w_certified, num(c[&quot;welfare_dadp&quot;]))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">seed 42: W_DADP -378163.5654347284 (measured, pre-registered) at rung &#39;gap_1e-10&#39; (iters 80); FIT leg: error:SolveFailedError
+seed 43: W_DADP -378163.57421763154 (measured, pre-registered) at rung &#39;default&#39; (iters 81); FIT leg: error:SolveFailedError
+seed 44: W_DADP -378163.5258411311 (measured, pre-registered) at rung &#39;default&#39; (iters 82); FIT leg: error:SolveFailedError
+seed 45: W_DADP -378163.5725944356 (measured, pre-registered) at rung &#39;default&#39; (iters 84); FIT leg: error:SolveFailedError
+seed 46: W_DADP -378163.5542310182 (measured, pre-registered) at rung &#39;gap_1e-10&#39; (iters 80); FIT leg: error:SolveFailedError</code></pre><p>The seed→rung attribution, RECOMPUTED LIVE from the committed rows (the prose deliberately names no seed→rung map — this print IS the attribution, and a re-measurement restates it):</p><pre><code class="language-julia hljs">attribution = Dict{String,Vector{String}}()   # certified rung → seeds
+default_refusal_iters = String[]              # default-rung refusal iterations, seed order
+for s in seeds
+    seed_rungs = filter(r -&gt; r[&quot;kind&quot;] == &quot;rung&quot; &amp;&amp; r[&quot;seed&quot;] == string(s), headline_rows)
+    c = filter(r -&gt; r[&quot;status&quot;] == &quot;converged&quot;, seed_rungs)[end]
+    push!(get!(attribution, cell(c[&quot;rung&quot;]), String[]), string(s))
+    for r in seed_rungs
+        if cell(r[&quot;rung&quot;]) == &quot;default&quot; &amp;&amp; startswith(cell(r[&quot;status&quot;]), &quot;error:&quot;)
+            push!(default_refusal_iters, cell(r[&quot;iters&quot;]))
+        end
+    end
+end
+for rung in sort!(collect(keys(attribution)))
+    @printf(
+        &quot;DADP certified at rung &#39;%s&#39;: seeds %s\n&quot;,
+        rung,
+        join(sort(attribution[rung]), &quot;, &quot;),
+    )
+end
+isempty(default_refusal_iters) || @printf(
+    &quot;default-rung refusal (the battery-complementarity precedent) recorded at iters %s before certification\n&quot;,
+    join(default_refusal_iters, &quot;, &quot;),
+)
+
+w_mean = sum(w_certified) / length(w_certified)
+w_spread = maximum(w_certified) - minimum(w_certified)
+@printf(
+    &quot;mean W_DADP %s; min–max spread %s (relative %.3e of |mean|)\n&quot;,
+    cite_magnitude(w_mean),
+    cite_magnitude(w_spread),
+    w_spread / abs(w_mean),
+)
+
+head_gains = filter(r -&gt; r[&quot;kind&quot;] == &quot;gain&quot;, headline_rows)
+npairs = count(haspair, head_gains)
+@printf(
+    &quot;certified DADP-vs-FIT pairs at the registered mix: %d of %d seeds → headline Δ%%: %s\n&quot;,
+    npairs,
+    length(head_gains),
+    npairs == 0 ? &quot;UNDEFINED (no W_FIT exists to divide by — the honest terminal rows)&quot; :
+    &quot;defined&quot;,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">DADP certified at rung &#39;default&#39;: seeds 43, 44, 45
+DADP certified at rung &#39;gap_1e-10&#39;: seeds 42, 46
+default-rung refusal (the battery-complementarity precedent) recorded at iters 80, 80 before certification
+mean W_DADP -378163.55846378894 (measured, pre-registered); min–max spread 0.04837650043191388 (measured, pre-registered) (relative 1.279e-07 of |mean|)
+certified DADP-vs-FIT pairs at the registered mix: 0 of 5 seeds → headline Δ%: UNDEFINED (no W_FIT exists to divide by — the honest terminal rows)</code></pre><p>The seed-42 continuity anchor holds: the certified value printed above reproduces the committed Phase-40 <code>results/case_a_population/agreement.csv</code> welfare (−378163.5654, the same code path, seed and gap_1e-10 rung) to ALL printed digits — cited to that committed artifact, not re-read here.</p><h2 id="The-centralized-cross-check-and-the-price-signal-lens"><a class="docs-heading-anchor" href="#The-centralized-cross-check-and-the-price-signal-lens">The centralized cross-check and the price-signal lens</a><a id="The-centralized-cross-check-and-the-price-signal-lens-1"></a><a class="docs-heading-anchor-permalink" href="#The-centralized-cross-check-and-the-price-signal-lens" title="Permalink"></a></h2><p><code>crosscheck.csv</code> records the centralized <code>solve_welfare</code> bound at the registered seed — via the ONE sanctioned <code>tol_gap_1e-10</code> SOCP tightening, the same path the Phase-40 agreement measurement used — and the DADP-vs-λ₀ price lens at the certified rung&#39;s conditioning. Both figures re-derive below from the row&#39;s own values.</p><pre><code class="language-julia hljs">x = XCHK[end]
+w_cen = num(x[&quot;welfare_centralized&quot;])
+w_dadp42 = num(x[&quot;welfare_dadp&quot;])
+xabs = abs(w_cen - w_dadp42)
+xrel = xabs / abs(w_dadp42)
+@printf(
+    &quot;centralized bound (optimizer path &#39;%s&#39;): W_CEN %s\n&quot;,
+    cell(x[&quot;centralized_optimizer&quot;]),
+    cite_magnitude(w_cen),
+)
+@printf(
+    &quot;|W_CEN − W_DADP| = %s (relative %.3e) — decomposed/centralized agreement to solver precision\n&quot;,
+    cite_magnitude(xabs),
+    xrel,
+)
+@printf(
+    &quot;price lens: max|λ_DADP − λ₀| = %s (relative %.3f on the max(|λ₀|, 1) denominator) — the DADP prices MOVE off the flat signal where the network asks them to\n&quot;,
+    cite_magnitude(num(x[&quot;price_max_abs_delta&quot;])),
+    num(x[&quot;price_max_rel_delta&quot;]),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">centralized bound (optimizer path &#39;tol_gap_1e-10&#39;): W_CEN -378163.58894571784 (measured, pre-registered)
+|W_CEN − W_DADP| = 0.023510989442002028 (measured, pre-registered) (relative 6.217e-08) — decomposed/centralized agreement to solver precision
+price lens: max|λ_DADP − λ₀| = 6.219662838773958 (measured, pre-registered) (relative 1.001 on the max(|λ₀|, 1) denominator) — the DADP prices MOVE off the flat signal where the network asks them to</code></pre><h2 id="The-ablation-—-where-the-gain-IS-measurable,-and-what-it-is"><a class="docs-heading-anchor" href="#The-ablation-—-where-the-gain-IS-measurable,-and-what-it-is">The ablation — where the gain IS measurable, and what it is</a><a id="The-ablation-—-where-the-gain-IS-measurable,-and-what-it-is-1"></a><a class="docs-heading-anchor-permalink" href="#The-ablation-—-where-the-gain-IS-measurable,-and-what-it-is" title="Permalink"></a></h2><p><code>ablation.csv</code> is the complete four-axis OFAT table. Its certified DADP-vs-FIT pairs (both legs certified — the ONLY rows where Δ% exists under the registered definition) recompute below, live and sign-safe. The registered mix itself contributes NO pair (the FIT refusal above), so the per-axis effect versus the registered variant — <code>Δ%_variant − Δ%_registered</code> — is honestly UNDEFINED on every axis; the code computes it where both sides exist and says so where they do not.</p><pre><code class="language-julia hljs">gain_rows = filter(r -&gt; r[&quot;kind&quot;] == &quot;gain&quot;, ABL)
+pairs = filter(haspair, gain_rows)
+println(&quot;certified DADP-vs-FIT pairs (ΔW and Δ% recomputed live, sign-safe):&quot;)
+for r in pairs
+    wd = num(r[&quot;welfare_dadp&quot;])
+    wf = num(r[&quot;welfare_fit&quot;])
+    @printf(
+        &quot;  axis %-12s variant %-14s ΔW %s  Δ%% %s\n&quot;,
+        cell(r[&quot;axis&quot;]),
+        cell(r[&quot;variant&quot;]),
+        cite_magnitude(delta_abs(wd, wf)),
+        cite_magnitude(delta_pct_signsafe(wd, wf)),
+    )
+end
+
+println(&quot;per-axis effect on Δ% (variant Δ% − registered Δ%), recomputed live:&quot;)
+for ax in unique(r[&quot;axis&quot;] for r in ABL)
+    reg = filter(
+        r -&gt; r[&quot;axis&quot;] == ax &amp;&amp; r[&quot;variant&quot;] == &quot;registered&quot; &amp;&amp; r[&quot;kind&quot;] == &quot;gain&quot;,
+        ABL,
+    )
+    reg_dp =
+        !isempty(reg) &amp;&amp; haspair(reg[end]) ?
+        delta_pct_signsafe(num(reg[end][&quot;welfare_dadp&quot;]), num(reg[end][&quot;welfare_fit&quot;])) :
+        NaN
+    for v in unique(r[&quot;variant&quot;] for r in filter(r -&gt; r[&quot;axis&quot;] == ax, pairs))
+        r = filter(r -&gt; r[&quot;axis&quot;] == ax &amp;&amp; r[&quot;variant&quot;] == v, pairs)[end]
+        v_dp = delta_pct_signsafe(num(r[&quot;welfare_dadp&quot;]), num(r[&quot;welfare_fit&quot;]))
+        effect = v_dp - reg_dp
+        @printf(
+            &quot;  axis %-12s variant %-14s Δ%% %s  effect vs registered: %s\n&quot;,
+            ax,
+            v,
+            cite_magnitude(v_dp),
+            isnan(effect) ?
+            &quot;UNDEFINED — the registered mix has no measurable FIT gain (FIT refused; see the headline)&quot; :
+            cite_magnitude(effect),
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">certified DADP-vs-FIT pairs (ΔW and Δ% recomputed live, sign-safe):
+  axis population   variant proxy_ieee123  ΔW 5.5498424509423785 (measured, pre-registered)  Δ% 0.013516192967581844 (measured, pre-registered)
+  axis population   variant rung_0.25      ΔW 0.016924501833273098 (measured, pre-registered)  Δ% 1.8467199904551264e-5 (measured, pre-registered)
+  axis population   variant rung_0.5       ΔW 0.004477274720557034 (measured, pre-registered)  Δ% 2.38005945624442e-6 (measured, pre-registered)
+  axis device_mix   variant batteries_out  ΔW 0.05020788998808712 (measured, pre-registered)  Δ% 1.3276531617113613e-5 (measured, pre-registered)
+per-axis effect on Δ% (variant Δ% − registered Δ%), recomputed live:
+  axis population   variant proxy_ieee123  Δ% 0.013516192967581844 (measured, pre-registered)  effect vs registered: UNDEFINED — the registered mix has no measurable FIT gain (FIT refused; see the headline)
+  axis population   variant rung_0.25      Δ% 1.8467199904551264e-5 (measured, pre-registered)  effect vs registered: UNDEFINED — the registered mix has no measurable FIT gain (FIT refused; see the headline)
+  axis population   variant rung_0.5       Δ% 2.38005945624442e-6 (measured, pre-registered)  effect vs registered: UNDEFINED — the registered mix has no measurable FIT gain (FIT refused; see the headline)
+  axis device_mix   variant batteries_out  Δ% 1.3276531617113613e-5 (measured, pre-registered)  effect vs registered: UNDEFINED — the registered mix has no measurable FIT gain (FIT refused; see the headline)</code></pre><p><strong>The price-range axis cut hard both ways</strong>: one variant runs the ladder to real EXHAUSTION (the honest terminal state is the documented non-closure, <code>error:ladder_exhausted</code>) while the other certifies — both verdicts, with their rungs and iterations, RECOMPUTE LIVE below (no rung count, iteration count or certifying rung is hand-copied into this prose). The verdict lines, then the per-rung ledger:</p><pre><code class="language-julia hljs">scale_rungs = filter(r -&gt; r[&quot;axis&quot;] == &quot;price_range&quot; &amp;&amp; r[&quot;kind&quot;] == &quot;rung&quot;, ABL)
+for v in (&quot;scale_0.5&quot;, &quot;scale_2.0&quot;)
+    vr = filter(r -&gt; r[&quot;variant&quot;] == v, scale_rungs)
+    cert = filter(r -&gt; cell(r[&quot;status&quot;]) == &quot;converged&quot;, vr)
+    if isempty(cert)
+        @printf(
+            &quot;  price_range/%-10s NOT CERTIFIED — terminal state %s over %d rung rows (iters %s)\n&quot;,
+            v,
+            isempty(vr) ? &quot;no rows&quot; : cell(vr[end][&quot;status&quot;]),
+            length(vr),
+            join((cell(r[&quot;iters&quot;]) for r in vr), &quot;, &quot;),
+        )
+    else
+        @printf(
+            &quot;  price_range/%-10s CERTIFIED at rung &#39;%s&#39; (iters %s)\n&quot;,
+            v,
+            cell(cert[end][&quot;rung&quot;]),
+            cell(cert[end][&quot;iters&quot;]),
+        )
+    end
+end
+for v in (&quot;scale_0.5&quot;, &quot;scale_2.0&quot;)
+    vr = filter(r -&gt; r[&quot;variant&quot;] == v, scale_rungs)
+    for r in vr
+        @printf(
+            &quot;  price_range/%-10s rung %-13s status %-22s iters %s\n&quot;,
+            v,
+            cell(r[&quot;rung&quot;]),
+            cell(r[&quot;status&quot;]),
+            cell(r[&quot;iters&quot;]),
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  price_range/scale_0.5  NOT CERTIFIED — terminal state error:ladder_exhausted over 5 rung rows (iters 88, 88, 88, 88, -)
+  price_range/scale_2.0  CERTIFIED at rung &#39;default&#39; (iters 52)
+  price_range/scale_0.5  rung default       status error:CertificateError iters 88
+  price_range/scale_0.5  rung gap_1e-10     status error:CertificateError iters 88
+  price_range/scale_0.5  rung gap_1e-12     status error:CertificateError iters 88
+  price_range/scale_0.5  rung gapfeas_1e-12 status error:CertificateError iters 88
+  price_range/scale_0.5  rung (ladder)      status error:ladder_exhausted iters -
+  price_range/scale_2.0  rung default       status converged              iters 52</code></pre><p>The population axis carries the gain-vs-population-size curve (the Phase-40 nested-prefix rungs, no per-rung re-tuning) plus the headline row itself (<code>full_784</code>, reused provenance-transparently, never re-run). FIT certifies only at the small rungs — and every certified gain there sits ORDERS OF MAGNITUDE below the thesis&#39;s +25% (the exact factors print below, recomputed live):</p><pre><code class="language-julia hljs">pop_order = (
+    &quot;rung_1/78&quot;,
+    &quot;rung_0.125&quot;,
+    &quot;rung_0.25&quot;,
+    &quot;rung_0.5&quot;,
+    &quot;rung_0.75&quot;,
+    &quot;rung_1.0&quot;,
+    &quot;full_784&quot;,
+)
+println(&quot;population curve (seed 42; W_DADP from the committed rung/reuse rows):&quot;)
+for v in pop_order
+    rows = filter(r -&gt; r[&quot;axis&quot;] == &quot;population&quot; &amp;&amp; r[&quot;variant&quot;] == v, ABL)
+    isempty(rows) &amp;&amp; error(
+        &quot;case_a_magnitude page: population axis is missing variant &#39;$v&#39; — the &quot; *
+        &quot;committed ablation table is incomplete; investigate before rendering&quot;,
+    )
+    gain = filter(r -&gt; r[&quot;kind&quot;] == &quot;gain&quot;, rows)[end]
+    wd = num(gain[&quot;welfare_dadp&quot;])
+    dp = haspair(gain) ? delta_pct_signsafe(wd, num(gain[&quot;welfare_fit&quot;])) : NaN
+    @printf(
+        &quot;  %-10s W_DADP %s  status %-20s Δ%% %s\n&quot;,
+        v,
+        cite_magnitude(wd),
+        cell(gain[&quot;status&quot;]),
+        isnan(dp) ? &quot;undefined (no certified pair)&quot; : cite_magnitude(dp),
+    )
+end
+for v in (&quot;rung_0.25&quot;, &quot;rung_0.5&quot;)
+    r = filter(r -&gt; r[&quot;axis&quot;] == &quot;population&quot; &amp;&amp; r[&quot;variant&quot;] == v &amp;&amp; haspair(r), ABL)
+    isempty(r) &amp;&amp; continue
+    dp = delta_pct_signsafe(num(r[end][&quot;welfare_dadp&quot;]), num(r[end][&quot;welfare_fit&quot;]))
+    @printf(
+        &quot;  distance below the thesis +25%%: Δ%% %s → a factor of %.3e below (measured point, never gated)\n&quot;,
+        cite_magnitude(dp),
+        25.0 / dp,
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">population curve (seed 42; W_DADP from the committed rung/reuse rows):
+  rung_1/78  W_DADP -4823.502302305045 (measured, pre-registered)  status error:SolveFailedError Δ% undefined (no certified pair)
+  rung_0.125 W_DADP -43411.37384013993 (measured, pre-registered)  status error:SolveFailedError Δ% undefined (no certified pair)
+  rung_0.25  W_DADP -91646.2636201845 (measured, pre-registered)  status ok                   Δ% 1.8467199904551264e-5 (measured, pre-registered)
+  rung_0.5   W_DADP -188116.0826570309 (measured, pre-registered)  status ok                   Δ% 2.38005945624442e-6 (measured, pre-registered)
+  rung_0.75  W_DADP -281692.4496347468 (measured, pre-registered)  status error:SolveFailedError Δ% undefined (no certified pair)
+  rung_1.0   W_DADP -378163.5654347284 (measured, pre-registered)  status reused               Δ% undefined (no certified pair)
+  full_784   W_DADP -378163.5654347284 (measured, pre-registered)  status reused               Δ% undefined (no certified pair)
+  distance below the thesis +25%: Δ% 1.8467199904551264e-5 (measured, pre-registered) → a factor of 1.354e+06 below (measured point, never gated)
+  distance below the thesis +25%: Δ% 2.38005945624442e-6 (measured, pre-registered) → a factor of 1.050e+07 below (measured point, never gated)</code></pre><h2 id="The-proxy-restatement-—-0.263%-under-the-registered-definition"><a class="docs-heading-anchor" href="#The-proxy-restatement-—-0.263%-under-the-registered-definition">The proxy restatement — ≈+0.263% under the registered definition</a><a id="The-proxy-restatement-—-0.263%-under-the-registered-definition-1"></a><a class="docs-heading-anchor-permalink" href="#The-proxy-restatement-—-0.263%-under-the-registered-definition" title="Permalink"></a></h2><p>The SAME protocol re-run on the IEEE-123 <code>:default</code> proxy (one house per load bus, fixture seed 20260719 — the provenance fixture of <code>scripts/thesis_case123_repro.jl</code>) restates the published ≈+0.263% figure under the pre-registered definition. Proximity is REPORTED — the underlying seeding differs from the script&#39;s ad-hoc per-bus construction, so exact equality is neither expected nor required (protocol §8) — never gated and never tuned toward. The same-feeder IEEE-13 <code>:default</code> proxy keeps its honest statuses.</p><pre><code class="language-julia hljs">p = filter(r -&gt; r[&quot;fixture&quot;] == &quot;ieee123-default&quot; &amp;&amp; r[&quot;kind&quot;] == &quot;gain&quot;, PROXY)[end]
+dp_proxy = delta_pct_signsafe(num(p[&quot;welfare_dadp&quot;]), num(p[&quot;welfare_fit&quot;]))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.013516192967581844</code></pre><p>The CITED EXTERNAL provenance figure (scripts/thesis<em>case123</em>repro.jl&#39;s restatement) — a literature value for proximity reporting, NOT a magnitude golden and NOT a gate.</p><pre><code class="language-julia hljs">const PROVENANCE_PROXY_PCT = 0.263
+@printf(
+    &quot;measured proxy Δ%% %s vs the cited ≈+%.3f%% provenance figure → the measured figure sits a factor %.1f BELOW the provenance restatement (reported proximity; protocol §8: exact equality neither expected nor required — never gated)\n&quot;,
+    cite_magnitude(dp_proxy),
+    PROVENANCE_PROXY_PCT,
+    PROVENANCE_PROXY_PCT / dp_proxy,
+)
+for r in filter(r -&gt; r[&quot;fixture&quot;] == &quot;ieee13-default&quot; &amp;&amp; r[&quot;kind&quot;] == &quot;gain&quot;, PROXY)
+    @printf(
+        &quot;ieee13-default proxy: status %s (the committed FIT-INFEASIBLE precedent at the ground fixture — an honest recorded outcome)\n&quot;,
+        cell(r[&quot;status&quot;]),
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">measured proxy Δ% 0.013516192967581844 (measured, pre-registered) vs the cited ≈+0.263% provenance figure → the measured figure sits a factor 19.5 BELOW the provenance restatement (reported proximity; protocol §8: exact equality neither expected nor required — never gated)
+ieee13-default proxy: status error:SolveFailedError (the committed FIT-INFEASIBLE precedent at the ground fixture — an honest recorded outcome)</code></pre><h2 id="The-honesty-section-—-asymmetries-stated,-refusals-counted,-nothing-tuned"><a class="docs-heading-anchor" href="#The-honesty-section-—-asymmetries-stated,-refusals-counted,-nothing-tuned">The honesty section — asymmetries stated, refusals counted, nothing tuned</a><a id="The-honesty-section-—-asymmetries-stated,-refusals-counted,-nothing-tuned-1"></a><a class="docs-heading-anchor-permalink" href="#The-honesty-section-—-asymmetries-stated,-refusals-counted,-nothing-tuned" title="Permalink"></a></h2><h3 id="The-A1/A4-asymmetry-—-the-FIT-leg-is-batteryless,-and-it-shows-(it-IS-the-finding)"><a class="docs-heading-anchor" href="#The-A1/A4-asymmetry-—-the-FIT-leg-is-batteryless,-and-it-shows-(it-IS-the-finding)">The A1/A4 asymmetry — the FIT leg is batteryless, and it shows (it IS the finding)</a><a id="The-A1/A4-asymmetry-—-the-FIT-leg-is-batteryless,-and-it-shows-(it-IS-the-finding)-1"></a><a class="docs-heading-anchor-permalink" href="#The-A1/A4-asymmetry-—-the-FIT-leg-is-batteryless,-and-it-shows-(it-IS-the-finding)" title="Permalink"></a></h3><p>The DADP leg carries batteries (the registered 3-device set: Thermostatic + Deferrable + PVBattery). The FIT counterfactual is <code>fit_baseline</code> consumed as-is — BATTERYLESS by thesis design (Assumption A4). At the registered 784-house mix this asymmetry blocks the measurement through TWO battery-linked mechanisms: the DADP battery-complementarity certificate refuses the default rung (answered by the pre-registered ladder, never by a gate change), and the batteryless FIT dispatch is genuinely INFEASIBLE. The device-mix ablation MEASURES the asymmetry instead of back-filling it: with batteries dropped from EVERY house, BOTH mechanisms vanish — the ladder certifies at the <code>default</code> rung in 5 iterations (the complementarity refusal is gone) and the FIT leg certifies — producing the only full certified pair at the 784-house scale. No battery was added to the FIT leg; no correction term was invented.</p><h3 id="The-DSO-surplus-sign-flip-lens-—-confirmed-at-full-scale"><a class="docs-heading-anchor" href="#The-DSO-surplus-sign-flip-lens-—-confirmed-at-full-scale">The DSO-surplus sign-flip lens — confirmed at full scale</a><a id="The-DSO-surplus-sign-flip-lens-—-confirmed-at-full-scale-1"></a><a class="docs-heading-anchor-permalink" href="#The-DSO-surplus-sign-flip-lens-—-confirmed-at-full-scale" title="Permalink"></a></h3><p>The v2.1/v4.0 headline the thesis itself frames — the DSO&#39;s settlement surplus flipping sign between the flat/TOU counterfactuals and DADP — re-derives from <code>lens_summary.csv</code> (the four-leg settlement at the certified 784-house point):</p><pre><code class="language-julia hljs">for r in LENS
+    dso = num(r[&quot;dso_total&quot;])
+    @printf(
+        &quot;  tariff %-5s status %-22s dso_total %s\n&quot;,
+        cell(r[&quot;tariff&quot;]),
+        cell(r[&quot;status&quot;]),
+        isnan(dso) ? &quot;-&quot; : cite_magnitude(dso),
+    )
+end
+dso_dadp = num(filter(r -&gt; r[&quot;tariff&quot;] == &quot;dadp&quot;, LENS)[end][&quot;dso_total&quot;])
+dso_flat = num(filter(r -&gt; r[&quot;tariff&quot;] == &quot;flat&quot;, LENS)[end][&quot;dso_total&quot;])
+@printf(
+    &quot;the sign flip: DADP %s vs flat %s — POSITIVE under DADP, negative under the derived tariffs, at the full 784-house scale\n&quot;,
+    cite_magnitude(dso_dadp),
+    cite_magnitude(dso_flat),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  tariff dadp  status ok                     dso_total 2.9798925110428836 (measured, pre-registered)
+  tariff flat  status ok                     dso_total -1600.508221525783 (measured, pre-registered)
+  tariff tou   status ok                     dso_total -1561.181352858052 (measured, pre-registered)
+  tariff fit   status error:SolveFailedError dso_total -
+the sign flip: DADP 2.9798925110428836 (measured, pre-registered) vs flat -1600.508221525783 (measured, pre-registered) — POSITIVE under DADP, negative under the derived tariffs, at the full 784-house scale</code></pre><h3 id="The-refusal-ledger-—-every-error-row,-with-its-iterations"><a class="docs-heading-anchor" href="#The-refusal-ledger-—-every-error-row,-with-its-iterations">The refusal ledger — every error row, with its iterations</a><a id="The-refusal-ledger-—-every-error-row,-with-its-iterations-1"></a><a class="docs-heading-anchor-permalink" href="#The-refusal-ledger-—-every-error-row,-with-its-iterations" title="Permalink"></a></h3><p>The no-cherry-picking contract: every refusal, infeasibility and exhaustion is a committed row. The complete <code>error:</code> ledger of the headline and ablation artifacts:</p><pre><code class="language-julia hljs">n_err = let count = 0
+    for r in MAG
+        startswith(r[&quot;status&quot;], &quot;error:&quot;) || continue
+        count += 1
+        @printf(
+            &quot;  magnitude.csv   seed %-3s kind %-5s rung %-13s %-24s iters %s\n&quot;,
+            cell(r[&quot;seed&quot;]),
+            cell(r[&quot;kind&quot;]),
+            cell(r[&quot;rung&quot;]),
+            cell(r[&quot;status&quot;]),
+            cell(r[&quot;iters&quot;]),
+        )
+    end
+    for r in ABL
+        startswith(r[&quot;status&quot;], &quot;error:&quot;) || continue
+        count += 1
+        @printf(
+            &quot;  ablation.csv    axis %-11s variant %-16s kind %-5s %-24s iters %s\n&quot;,
+            cell(r[&quot;axis&quot;]),
+            cell(r[&quot;variant&quot;]),
+            cell(r[&quot;kind&quot;]),
+            cell(r[&quot;status&quot;]),
+            cell(r[&quot;iters&quot;]),
+        )
+    end
+    count
+end
+@printf(&quot;total honest error rows in the two ledgers: %d\n&quot;, n_err)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  magnitude.csv   seed 42  kind rung  rung default       error:CertificateError   iters 80
+  magnitude.csv   seed 42  kind gain  rung gap_1e-10     error:SolveFailedError   iters -
+  magnitude.csv   seed 43  kind gain  rung default       error:SolveFailedError   iters -
+  magnitude.csv   seed 44  kind gain  rung default       error:SolveFailedError   iters -
+  magnitude.csv   seed 45  kind gain  rung default       error:SolveFailedError   iters -
+  magnitude.csv   seed 46  kind rung  rung default       error:CertificateError   iters 80
+  magnitude.csv   seed 46  kind gain  rung gap_1e-10     error:SolveFailedError   iters -
+  ablation.csv    axis fit_params  variant registered       kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis fit_params  variant lam_export_half  kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis fit_params  variant lam_export_double kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis price_range variant registered       kind rung  error:CertificateError   iters 80
+  ablation.csv    axis price_range variant registered       kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis price_range variant scale_0.5        kind rung  error:CertificateError   iters 88
+  ablation.csv    axis price_range variant scale_0.5        kind rung  error:CertificateError   iters 88
+  ablation.csv    axis price_range variant scale_0.5        kind rung  error:CertificateError   iters 88
+  ablation.csv    axis price_range variant scale_0.5        kind rung  error:CertificateError   iters 88
+  ablation.csv    axis price_range variant scale_0.5        kind rung  error:ladder_exhausted   iters -
+  ablation.csv    axis price_range variant scale_0.5        kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis price_range variant scale_2.0        kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis population  variant rung_1/78        kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis population  variant rung_0.125       kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis population  variant rung_0.75        kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis device_mix  variant registered       kind rung  error:CertificateError   iters 80
+  ablation.csv    axis device_mix  variant registered       kind gain  error:SolveFailedError   iters -
+  ablation.csv    axis device_mix  variant pv_half          kind gain  error:SolveFailedError   iters -
+total honest error rows in the two ledgers: 25</code></pre><h3 id="The-no-tuning-statement-—-the-structural-guard,-with-its-sha-trail"><a class="docs-heading-anchor" href="#The-no-tuning-statement-—-the-structural-guard,-with-its-sha-trail">The no-tuning statement — the structural guard, with its sha trail</a><a id="The-no-tuning-statement-—-the-structural-guard,-with-its-sha-trail-1"></a><a class="docs-heading-anchor-permalink" href="#The-no-tuning-statement-—-the-structural-guard,-with-its-sha-trail" title="Permalink"></a></h3><p>The ablation axes AND their values were committed before any run (protocol §7); every intermediate row is committed — refusals included (the ledger above); the ONE constant introduced after intermediate results were visible went through the protocol&#39;s own amendment procedure (the 2026-10-26 <code>gapfeas_1e-12</code> Clarabel attribute spelling repair, an append-only dated amendment committed with the runner edit in the same deliberate act). No constant anywhere in this phase was fit to the +25% target. The <code>protocol_sha</code> values actually present in the committed rows — printed live — are:</p><pre><code class="language-julia hljs">for sha in unique(r[&quot;protocol_sha&quot;] for r in vcat(MAG, ABL, XCHK, LENS, PROXY))
+    println(&quot;  &quot;, sha)
+end
+distinct_shas = unique(r[&quot;protocol_sha&quot;] for r in vcat(MAG, ABL, XCHK, LENS, PROXY))
+println(
+    &quot;  ($(length(distinct_shas)) distinct protocol_sha values across the committed &quot; *
+    &quot;rows — the append-only 2026-10-26 amendment splits the trail visibly, per the &quot; *
+    &quot;amendment policy; which prefix is the pre-run protocol vs the amendment resolves &quot; *
+    &quot;from the protocol file&#39;s git history, never from a hand-copied annotation)&quot;,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  60e5d54969d7944d9398e24d0d1cc6dc2d52ad4d
+  af815b06578a457a5424e2116c21be53539d09b4
+  (2 distinct protocol_sha values across the committed rows — the append-only 2026-10-26 amendment splits the trail visibly, per the amendment policy; which prefix is the pre-run protocol vs the amendment resolves from the protocol file&#39;s git history, never from a hand-copied annotation)</code></pre><h2 id="The-attribution-statement-—-what-the-25%-question-measurably-resolves-to"><a class="docs-heading-anchor" href="#The-attribution-statement-—-what-the-25%-question-measurably-resolves-to">The attribution statement — what the +25% question measurably resolves to</a><a id="The-attribution-statement-—-what-the-25%-question-measurably-resolves-to-1"></a><a class="docs-heading-anchor-permalink" href="#The-attribution-statement-—-what-the-25%-question-measurably-resolves-to" title="Permalink"></a></h2><p>The thesis frames the Case A outcome as a ≈+25% welfare gain (the FIT-ratio framing of its Appendix E digitization). Under the pre-registered SIGN-SAFE definition, the measurement resolves that question as follows:</p><ol><li><strong>At the registered 784-house mix the DADP-vs-FIT gap is UNDEFINED</strong> — the FIT counterfactual refuses (INFEASIBLE at attempt AND the one sanctioned retry) on every seed. There is NO measurable FIT gain at the registered mix for a gap to +25% to be computed against. The measured DADP-vs-FIT gap therefore CANNOT be attributed to the thesis +25% at the registered mix.</li><li><strong>Every point where the gain IS measurable sits orders of magnitude below +25%</strong> — every certified pair the committed ledgers carry (the ablation variants and the proxy), its sign-safe Δ% and its distance below +25% (the 25.0/Δ% factor) RECOMPUTE LIVE in the table printed right below this list — no Δ% or factor is hand-copied into the prose. The thesis +25% number is NOT reproduced at any measured point.</li><li><strong>What explains the direction and the size of the measured state</strong>: the A1/A4 battery asymmetry (the FIT counterfactual is batteryless by design — it blocks the registered mix outright and dominates the measurable comparison), the repo&#39;s congestion-calibrated IEEE-13 fixture with its SOC-exactness and battery- complementarity certification gates (stricter physics than the thesis framing), and the sign-safe definition itself (the banned ratio framing cannot be used to restate a +25%-shaped number here).</li><li><strong>The gap is NOT FULLY ATTRIBUTED</strong> — explicitly an acceptable, recorded outcome (protocol §9). Closing the gap to +25% was never a success condition: the phase succeeds on the honesty of the measurement — reported at whatever magnitude it measured — not on the size of the gain.</li></ol><p>Item 2&#39;s magnitudes, RECOMPUTED LIVE (the same sign-safe recomputation the population and proxy sections print inline, now over EVERY certified pair — newest committed row per axis/variant, plus the proxy):</p><pre><code class="language-julia hljs">last_pair = Dict{String,Dict{String,String}}()
+for r in pairs
+    last_pair[cell(r[&quot;axis&quot;]) * &quot;/&quot; * cell(r[&quot;variant&quot;])] = r
+end
+last_pair[&quot;proxy/ieee123-default&quot;] = p
+println(&quot;every measurable point vs the thesis +25% (recomputed live, sign-safe):&quot;)
+for k in sort!(collect(keys(last_pair)))
+    r = last_pair[k]
+    wd = num(r[&quot;welfare_dadp&quot;])
+    wf = num(r[&quot;welfare_fit&quot;])
+    dp = delta_pct_signsafe(wd, wf)
+    @printf(
+        &quot;  %-28s Δ%% %s → a factor of %.3e below +25%% (measured point, never gated)\n&quot;,
+        k,
+        cite_magnitude(dp),
+        25.0 / dp,
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">every measurable point vs the thesis +25% (recomputed live, sign-safe):
+  device_mix/batteries_out     Δ% 1.3276531617113613e-5 (measured, pre-registered) → a factor of 1.883e+06 below +25% (measured point, never gated)
+  population/proxy_ieee123     Δ% 0.013516192967581844 (measured, pre-registered) → a factor of 1.850e+03 below +25% (measured point, never gated)
+  population/rung_0.25         Δ% 1.8467199904551264e-5 (measured, pre-registered) → a factor of 1.354e+06 below +25% (measured point, never gated)
+  population/rung_0.5          Δ% 2.38005945624442e-6 (measured, pre-registered) → a factor of 1.050e+07 below +25% (measured point, never gated)
+  proxy/ieee123-default        Δ% 0.013516192967581844 (measured, pre-registered) → a factor of 1.850e+03 below +25% (measured point, never gated)</code></pre><h2 id="Reproducing-every-number-on-this-page"><a class="docs-heading-anchor" href="#Reproducing-every-number-on-this-page">Reproducing every number on this page</a><a id="Reproducing-every-number-on-this-page-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducing-every-number-on-this-page" title="Permalink"></a></h2><pre><code class="nohighlight hljs"># the measurement modes that wrote the committed CSVs this page reads (long-running)
+julia --project=. scripts/case_a_magnitude.jl --mode headline
+julia --project=. scripts/case_a_magnitude.jl --mode crosscheck
+julia --project=. scripts/case_a_magnitude.jl --mode lenses
+julia --project=. scripts/case_a_magnitude.jl --mode proxy
+julia --project=. scripts/case_a_magnitude.jl --mode ablation-fit
+julia --project=. scripts/case_a_magnitude.jl --mode ablation-price
+julia --project=. scripts/case_a_magnitude.jl --mode ablation-population
+julia --project=. scripts/case_a_magnitude.jl --mode ablation-devices
+# the structural certificates (fast) + the seed-42 reproducibility band (:slow)
+TSODSO_TEST_FILES=test_case_a_magnitude.jl julia --project=. -e &#39;import Pkg; Pkg.test()&#39;
+TSODSO_TEST_SET=slow TSODSO_TEST_FILES=test_case_a_magnitude.jl julia --project=. -e &#39;import Pkg; Pkg.test()&#39;</code></pre><p><em>(Appended 2026-10-26. The page executes ONLY committed-CSV reads — no solve call exists on it; every derived percentage recomputes live from `results/thesis<em>case</em>a_magnitude/</em>.csv<code>as committed by</code>scripts/case<em>a</em>magnitude.jl` under the pre-registered protocol. Headline outcome, honestly: W_DADP certified on all five seeds; the FIT counterfactual INFEASIBLE everywhere at attempt and retry; the registered-mix Δ% undefined; the measurable gains three-to-seven orders below the thesis +25%; gap not fully attributed — recorded.)*</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../flex_market/">« Flexibility Market vs Price Coordination</a><a class="docs-footer-nextpage" href="../../status_policy/">Status &amp; Exception Policy »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 7 November 2026 12:27">Saturday 7 November 2026</span>. Using Julia version 1.12.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

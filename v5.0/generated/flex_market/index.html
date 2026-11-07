@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Flexibility Market vs Price Coordination · TSODSO</title><meta name="title" content="Flexibility Market vs Price Coordination · TSODSO"/><meta property="og:title" content="Flexibility Market vs Price Coordination · TSODSO"/><meta property="twitter:title" content="Flexibility Market vs Price Coordination · TSODSO"/><meta name="description" content="Documentation for TSODSO."/><meta property="og:description" content="Documentation for TSODSO."/><meta property="twitter:description" content="Documentation for TSODSO."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">TSODSO</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Models</span><ul><li><a class="tocitem" href="../toy_dc/">Rung 0: Toy DC</a></li><li><a class="tocitem" href="../lindistflow/">Rung 1-2: LinDistFlow</a></li><li><a class="tocitem" href="../convex_branch_flow/">Rung 3: SOCP + Exactness</a></li><li><a class="tocitem" href="../ac_oracle/">Rung 3: AC-Exactness Oracle</a></li><li><a class="tocitem" href="../restricted_branch_flow/">Rung 3: Overvoltage-Capable Restriction</a></li><li><a class="tocitem" href="../prosumer_welfare/">Rung 3: Devices + GLB-CVX</a></li><li><a class="tocitem" href="../pricing_dlmp/">Rung 4: DADP/DLMP Pricing</a></li><li><a class="tocitem" href="../admm/">Rung 5: ADMM Decomposition</a></li><li><a class="tocitem" href="../ieee123_impedances/">IEEE-123 Real Impedances</a></li><li><a class="tocitem" href="../thesis_reproduction_ieee123/">Thesis Reproduction — IEEE-123</a></li><li><a class="tocitem" href="../thesis_reproduction_assumptions/">Thesis Reproduction — Assumptions</a></li><li><a class="tocitem" href="../socp_applicability/">SOC Relaxation Applicability</a></li><li><a class="tocitem" href="../socp_highpv_exactness/">SOCP Exactness in High-PV (optimal Q)</a></li><li><a class="tocitem" href="../aggregator_actor/">Aggregator as Actor (wedge, behaviour)</a></li><li><a class="tocitem" href="../ieee8500_scaling/">Scaling to IEEE-8500</a></li><li><a class="tocitem" href="../mpc_rolling_horizon/">Rung 8: MPC / Rolling-Horizon RTP</a></li><li><a class="tocitem" href="../stochastic_pv_demand/">Rung 9: Stochastic PV/Demand Uncertainty</a></li><li><a class="tocitem" href="../meshed_reactive_price/">Rung 10: Meshed Networks + Live Reactive Price</a></li></ul></li><li><span class="tocitem">Experiments</span><ul><li><a class="tocitem" href="../experiments/">The Experiment Harness</a></li><li><a class="tocitem" href="../case_a_population/">Case A Population (784 houses)</a></li><li><a class="tocitem" href="../settlement_equity/">Settlement, Tariffs &amp; Equity</a></li><li class="is-active"><a class="tocitem" href>Flexibility Market vs Price Coordination</a><ul class="internal"><li><a class="tocitem" href="#1.-Two-coordination-schemes"><span>1. Two coordination schemes</span></a></li><li><a class="tocitem" href="#2.-First-welfare-theorem-framing-(read-this-before-any-number)"><span>2. First-welfare-theorem framing (read this before any number)</span></a></li><li><a class="tocitem" href="#3.-Welfare-convention:-lossless-vs-lossy"><span>3. Welfare convention: lossless vs lossy</span></a></li><li><a class="tocitem" href="#4.-Payment-rules:-the-dispatch-is-identical,-only-money-moves"><span>4. Payment rules: the dispatch is identical, only money moves</span></a></li><li><a class="tocitem" href="#5.-Tariff-on-activation"><span>5. Tariff on activation</span></a></li><li><a class="tocitem" href="#6.-Why-the-market-activates:-congestion-vs-energy-mispricing"><span>6. Why the market activates: congestion vs energy mispricing</span></a></li><li><a class="tocitem" href="#7.-Baseline-gaming-via-β"><span>7. Baseline gaming via β</span></a></li><li><a class="tocitem" href="#8.-Hour-separability-shortfall"><span>8. Hour-separability shortfall</span></a></li><li><a class="tocitem" href="#9.-AC-feasibility-per-leg"><span>9. AC feasibility per leg</span></a></li><li><a class="tocitem" href="#10.-IEEE-123"><span>10. IEEE-123</span></a></li><li><a class="tocitem" href="#11.-Refusals-and-status-rows"><span>11. Refusals and status rows</span></a></li><li><a class="tocitem" href="#12.-Assumptions-and-limitations"><span>12. Assumptions and limitations</span></a></li><li><a class="tocitem" href="#13.-Reproduce"><span>13. Reproduce</span></a></li></ul></li><li><a class="tocitem" href="../case_a_magnitude/">Case A Magnitude</a></li></ul></li><li><a class="tocitem" href="../../status_policy/">Status &amp; Exception Policy</a></li><li><span class="tocitem">Planning</span><ul><li><a class="tocitem" href="../stackelberg_benders/">Rung 6: Stackelberg-Benders</a></li><li><a class="tocitem" href="../nash_diagonalization/">Rung 7: Nash Diagonalization &amp; Shared Corridor</a></li><li><a class="tocitem" href="../integer_investment/">Rung 11: Discrete/Integer Investment Expansion</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Experiments</a></li><li class="is-active"><a href>Flexibility Market vs Price Coordination</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Flexibility Market vs Price Coordination</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Flexibility-market-vs-price-coordination"><a class="docs-heading-anchor" href="#Flexibility-market-vs-price-coordination">Flexibility market vs price coordination</a><a id="Flexibility-market-vs-price-coordination-1"></a><a class="docs-heading-anchor-permalink" href="#Flexibility-market-vs-price-coordination" title="Permalink"></a></h1><p>This page compares two ways a DSO can coordinate aggregators on the same feeder and the same population: price-based coordination through the dynamic distribution price (DADP), and a two-stage DSO flexibility market. The measurement is produced by <code>scripts/tariff_comparison.jl</code> and committed to <code>results/settlement_comparison/</code>:</p><pre><code class="nohighlight hljs">julia --project=. scripts/tariff_comparison.jl --mode ieee13-ground --flex-market
+julia --project=. scripts/tariff_comparison.jl --mode ieee123 --flex-market
+julia --project=. scripts/tariff_comparison.jl --mode ieee123-default</code></pre><p><strong>This page solves nothing.</strong> It reads the committed <code>tariff_comparison.csv</code> (and the per-hour <code>rebound_hourly.csv</code>) and recomputes every quoted number live from those rows, so no result below is typed by hand. The CSVs carry no run-date column; the provenance printed below is what every row stamps (Julia version, seed, horizon, thread counts), and the date of a measurement is the commit that recorded its rows.</p><p>The library side is <code>src/coordination/</code> (the scheme types, bid generation, the stage-2 clear and the settlement) and the opt-in <code>flex_market</code> keyword of <a href="../../api/#TSODSO.compare_tariffs-Tuple{AbstractFeeder, AbstractPowerFlow, AbstractVector{&lt;:Aggregator}}"><code>compare_tariffs</code></a>.</p><pre><code class="language-julia hljs">using TSODSO
+using Printf</code></pre><p>The reader below is copied from the settlement page: it is quote-aware, because the recorded status messages contain commas and quotes, and an EMPTY cell (a deliberately missing value) parses to NaN, never silently to zero.</p><pre><code class="language-julia hljs">function read_settlement_csv(path)
+    function split_line(line)
+        cells = String[]
+        cur = Char[]
+        inq = false
+        i = firstindex(line)
+        while i &lt;= ncodeunits(line)
+            c = line[i]
+            if inq
+                if c == &#39;&quot;&#39;
+                    if nextind(line, i) &lt;= ncodeunits(line) &amp;&amp; line[nextind(line, i)] == &#39;&quot;&#39;
+                        push!(cur, &#39;&quot;&#39;)
+                        i = nextind(line, i)
+                    else
+                        inq = false
+                    end
+                else
+                    push!(cur, c)
+                end
+            elseif c == &#39;&quot;&#39;
+                inq = true
+            elseif c == &#39;,&#39;
+                push!(cells, String(cur))
+                empty!(cur)
+            else
+                push!(cur, c)
+            end
+            i = nextind(line, i)
+        end
+        push!(cells, String(cur))
+        return cells
+    end
+    lines = readlines(path)
+    header = split_line(first(lines))
+    return map(lines[2:end]) do ln
+        cells = split_line(ln)
+        Dict(header[j] =&gt; strip(cells[j]) for j in 1:min(length(header), length(cells)))
+    end
+end
+
+num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+cell(s) = isempty(s) ? &quot;-&quot; : s
+
+const RESULTS_DIR = joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;settlement_comparison&quot;)
+
+summary_rows = read_settlement_csv(joinpath(RESULTS_DIR, &quot;tariff_comparison.csv&quot;))
+rebound_rows = read_settlement_csv(joinpath(RESULTS_DIR, &quot;rebound_hourly.csv&quot;))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">336-element Vector{Dict{String, SubString{String}}}:
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.00991226628548068&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.019912289405243904&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.011807555676207357&quot;, &quot;delta&quot; =&gt; &quot;-0.0018952893907266764&quot;, &quot;classification&quot; =&gt; &quot;reduction&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.015912263965911756&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.01991228673956228&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.018500903998562173&quot;, &quot;delta&quot; =&gt; &quot;-0.002588640032650417&quot;, &quot;classification&quot; =&gt; &quot;reduction&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.014412258969283288&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.01991228125501572&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.01796469284290591&quot;, &quot;delta&quot; =&gt; &quot;-0.003552433873622621&quot;, &quot;classification&quot; =&gt; &quot;reduction&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.021912250455669385&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.01991227290747513&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.02522732694049924&quot;, &quot;delta&quot; =&gt; &quot;-0.0033150764848298535&quot;, &quot;classification&quot; =&gt; &quot;reduction&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.024912236530224532&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.019912259532641054&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.0271892729100774&quot;, &quot;delta&quot; =&gt; &quot;-0.0022770363798528676&quot;, &quot;classification&quot; =&gt; &quot;reduction&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.024912213306490384&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.01991223770009718&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.024409086432601868&quot;, &quot;delta&quot; =&gt; &quot;0.0005031268738885167&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;-0.004781459609884196&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.01991222458209895&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-0.011399059670628462&quot;, &quot;delta&quot; =&gt; &quot;0.006617600060744266&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;-0.049833572429751165&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.017964510707282118&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-0.06336854786377691&quot;, &quot;delta&quot; =&gt; &quot;0.013534975434025744&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;-0.05875775472961817&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.008737604825525581&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-0.06658721389287804&quot;, &quot;delta&quot; =&gt; &quot;0.007829459163259875&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_uniform&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;-0.05902151172191623&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.008367467136375975&quot;, &quot;mode&quot; =&gt; &quot;ieee13-ground&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-0.06458627718379811&quot;, &quot;delta&quot; =&gt; &quot;0.005564765461881886&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ ⋮
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;-1.5030960344301174&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;3.3212316061952997e-7&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-1.6194630868308422&quot;, &quot;delta&quot; =&gt; &quot;0.11636705240072476&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;-1.1584657479850433&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;4.872076710285813e-5&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-1.1356875036628529&quot;, &quot;delta&quot; =&gt; &quot;-0.022778244322190444&quot;, &quot;classification&quot; =&gt; &quot;reduction&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.2876355235413208&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.3546413033440128&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;-0.06700556736738014&quot;, &quot;delta&quot; =&gt; &quot;0.354641090908701&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;0.82464118690323&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;0.35464117923477156&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;0.6462244182524307&quot;, &quot;delta&quot; =&gt; &quot;0.17841676865079925&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;1.5925011881789937&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;1.0216827428795143e-6&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;1.5809880688386293&quot;, &quot;delta&quot; =&gt; &quot;0.011513119340364364&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;2.5350002507283675&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;2.320982611658806e-8&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;2.369676186289702&quot;, &quot;delta&quot; =&gt; &quot;0.16532406443866554&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;2.7000002279149355&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;2.1214723994883444e-8&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;2.6999999810048583&quot;, &quot;delta&quot; =&gt; &quot;2.4691007727284386e-7&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;2.640000190911843&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;1.7515930683317804e-8&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;2.6399999928717848&quot;, &quot;delta&quot; =&gt; &quot;1.980400581302888e-7&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)
+ Dict(&quot;tariff&quot; =&gt; &quot;flex_pab_beta0.1&quot;, &quot;counterfactual_net_load&quot; =&gt; &quot;2.5350001591461035&quot;, &quot;delivery_shortfall&quot; =&gt; &quot;1.2617086037405856e-8&quot;, &quot;mode&quot; =&gt; &quot;ieee123&quot;, &quot;t_horizon&quot; =&gt; &quot;24&quot;, &quot;baseline_net_load&quot; =&gt; &quot;2.534999995294016&quot;, &quot;delta&quot; =&gt; &quot;1.638520874536198e-7&quot;, &quot;classification&quot; =&gt; &quot;increase&quot;, &quot;julia_version&quot; =&gt; &quot;1.12.5&quot;, &quot;threads&quot; =&gt; &quot;1&quot;…)</code></pre><p>One summary row by (mode, tariff); <code>nothing</code> when the row is absent.</p><pre><code class="language-julia hljs">function find_row(mode, tariff)
+    i = findfirst(r -&gt; r[&quot;mode&quot;] == mode &amp;&amp; r[&quot;tariff&quot;] == tariff, summary_rows)
+    return i === nothing ? nothing : summary_rows[i]
+end
+isflex(r) = startswith(r[&quot;tariff&quot;], &quot;flex_&quot;)
+const FLEX_MODES = (&quot;ieee13-ground&quot;, &quot;ieee123&quot;)
+
+let modes = unique(r[&quot;mode&quot;] for r in summary_rows)
+    println(length(summary_rows), &quot; committed summary rows over modes: &quot;, join(modes, &quot;, &quot;))
+    for mode in modes
+        r = first(filter(x -&gt; x[&quot;mode&quot;] == mode, summary_rows))
+        nflex = count(x -&gt; x[&quot;mode&quot;] == mode &amp;&amp; isflex(x), summary_rows)
+        @printf(
+            &quot;  %-16s seed %-9s T %-3s julia %-7s threads %s, BLAS %s; %d flexibility-market rows\n&quot;,
+            mode,
+            r[&quot;seed&quot;],
+            r[&quot;t_horizon&quot;],
+            r[&quot;julia_version&quot;],
+            r[&quot;threads&quot;],
+            r[&quot;blas_threads&quot;],
+            nflex
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">24 committed summary rows over modes: ieee13-ground, case-a-784, ieee123, ieee123-default
+  ieee13-ground    seed 20260718  T 24  julia 1.12.5  threads 1, BLAS 1; 8 flexibility-market rows
+  case-a-784       seed 42        T 24  julia 1.12.5  threads 1, BLAS 1; 0 flexibility-market rows
+  ieee123          seed 20260719  T 24  julia 1.12.5  threads 1, BLAS 1; 6 flexibility-market rows
+  ieee123-default  seed 20260718  T 24  julia 1.12.5  threads 1, BLAS 1; 0 flexibility-market rows</code></pre><h2 id="1.-Two-coordination-schemes"><a class="docs-heading-anchor" href="#1.-Two-coordination-schemes">1. Two coordination schemes</a><a id="1.-Two-coordination-schemes-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Two-coordination-schemes" title="Permalink"></a></h2><p><strong>Price-based (DADP).</strong> One centralized social-welfare solve on the SOCP branch-flow model, certified by the exactness gate. Its nodal-balance duals are the distribution prices, and each aggregator responds to its own bus price. In the code this is <code>PriceBased()</code>.</p><p><strong>Flexibility market.</strong> <code>FlexMarket(; baseline_tariff, payment_rule, n_blocks, baseline_inflation)</code> runs two stages:</p><ol><li><em>Baseline.</em> Each aggregator dispatches as a price-taker against a revenue-neutral retail tariff derived from the same DADP run: the flat tariff by default, TOU as an option. That schedule is the baseline <code>b</code>.</li><li><em>DSO redispatch.</em> On the same feeder, the same SOCP model and the same exactness gate, the DSO buys activated up and down quantities from the aggregators&#39; bids to minimise the cost of accepted bids plus the wholesale import cost <code>λ₀ᵀ p_import</code>.</li></ol><p>The bids are divisible, piecewise-linear and <strong>hour-separable</strong>: <code>n_blocks</code> up and <code>n_blocks</code> down blocks per aggregator and hour (4 each by default). Each aggregator builds them by <strong>probing its own model</strong>: single-hour perturbation re-solves around the baseline, with the other hours held at baseline. The block price is the aggregator&#39;s own utility loss, so the bids are truthful by construction and the marginal cost is non-decreasing.</p><p>Because a single-hour bid cannot carry intertemporal coupling (battery state of charge, deferrable energy), each aggregator then <strong>re-solves to track its activated targets</strong> <code>b + Δ</code>. The <em>delivered</em> dispatch is what gets settled, valued and AC-checked, and the delivery shortfall <code>|delivered − (b + Δ)|</code> is reported (section 8).</p><p><strong>Reactive power in stage 2 is held at the inelastic draw <code>−Pdc·tanφ</code>.</strong> The flex product is active power only, and the bid pseudo-device writes no reactive injection. Two reasons make this the right reading rather than a simplification of convenience: it is the same reactive model the AC feasibility check uses, so stage 2 and the AC verdict see the same <code>q</code>; and holding <code>q</code> at the full baseline value instead (which includes the flexible-load draw <code>p·tanφ</code> at the low flat price) makes the redispatch infeasible on these feeders. The documented difference from DADP is that the centralized DADP solve includes the flexible-load reactive draw and stage 2 does not. A population with a constant reactive injection (<code>FixedCapacitor</code>) or with a device that has its own reactive decision (<code>SmartInverterPV</code>, <code>FourQuadBESS</code>) is refused before any solve, because the pseudo-device cannot represent it. Flexible loads are not refused: their power-factor draw is exactly the term stage 2 drops on purpose.</p><h2 id="2.-First-welfare-theorem-framing-(read-this-before-any-number)"><a class="docs-heading-anchor" href="#2.-First-welfare-theorem-framing-(read-this-before-any-number)">2. First-welfare-theorem framing (read this before any number)</a><a id="2.-First-welfare-theorem-framing-(read-this-before-any-number)-1"></a><a class="docs-heading-anchor-permalink" href="#2.-First-welfare-theorem-framing-(read-this-before-any-number)" title="Permalink"></a></h2><p>With truthful, convex, divisible bids that equalled each aggregator&#39;s exact separable loss, the stage-2 optimality conditions would coincide with those of the centralized welfare solve: an accepted marginal block prices at the clearing price, and the network conditions are the same. The uniform clearing price would then equal the DADP price and the market welfare would equal the DADP welfare. This is the first-welfare-theorem (LP-duality) analogue of a competitive market.</p><p>The bids used here are a finite set of blocks (bid discretisation) and are hour-separable approximations of a value function that is coupled across hours (hour separability). <strong>The measured welfare gap is therefore the bid-discretisation plus hour-separability gap</strong>, not a property of markets in general. It is printed below in the like-for-like (lossless) convention explained in section 3, absolute and relative to the DADP welfare on the same footing.</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        for r in filter(x -&gt; x[&quot;mode&quot;] == mode &amp;&amp; isflex(x), summary_rows)
+            r[&quot;status&quot;] == &quot;ok&quot; || continue
+            num(r[&quot;baseline_inflation&quot;]) == 0 || continue
+            gap = num(r[&quot;welfare_gap_vs_dadp_lossless&quot;])
+            ref = num(r[&quot;welfare_dadp_lossless&quot;])
+            verdict =
+                gap == 0 ? &quot;NULL (exactly zero)&quot; :
+                (gap &lt; 0 ? &quot;flex below DADP&quot; : &quot;flex above DADP&quot;)
+            @printf(
+                &quot;%-14s %-13s  welfare_gap_vs_dadp_lossless = %+.4f  (relative %+.3e)  -&gt; %s\n&quot;,
+                mode,
+                r[&quot;tariff&quot;],
+                gap,
+                gap / abs(ref),
+                verdict
+            )
+        end
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground  flex_uniform   welfare_gap_vs_dadp_lossless = -0.0217  (relative -4.491e-06)  -&gt; flex below DADP
+ieee13-ground  flex_pab       welfare_gap_vs_dadp_lossless = -0.0217  (relative -4.491e-06)  -&gt; flex below DADP
+ieee123        flex_uniform   welfare_gap_vs_dadp_lossless = -1.8092  (relative -4.409e-05)  -&gt; flex below DADP
+ieee123        flex_pab       welfare_gap_vs_dadp_lossless = -1.8092  (relative -4.409e-05)  -&gt; flex below DADP</code></pre><p>The uniform and pay-as-bid rows share one dispatch, so they print the same gap. The gap is not null on either feeder. It is small and negative on both, so the market comes close to DADP without reaching it, and it is larger, in absolute and in relative terms, on IEEE-123.</p><p>The framing is cross-validated in <code>test/test_flex_market.jl</code>: the item &quot;flex market: liveness against the centralized optimum (hour-separable)&quot; clears an exactly hour-separable fixture for <code>n_blocks</code> in 1, 2, 4, 8 and 16 and checks that the centralized optimum bounds the market from above and that the gap shrinks strictly at every refinement. The item &quot;flex market: clearing prices sit in a band around the DADP prices&quot; checks the price side as a measured band, because a uniform clearing price over piecewise-linear bids is not the same object as a DLMP. On the IEEE feeders the largest such difference is the <code>price_gap_vs_dadp_max</code> column:</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        r = find_row(mode, &quot;flex_uniform&quot;)
+        r === nothing &amp;&amp; continue
+        @printf(
+            &quot;%-14s max |π − λ_dadp| over activated bus-hours = %.4f\n&quot;,
+            mode,
+            num(r[&quot;price_gap_vs_dadp_max&quot;])
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground  max |π − λ_dadp| over activated bus-hours = 4.6357
+ieee123        max |π − λ_dadp| over activated bus-hours = 3.8205</code></pre><p>Read this number against the two-bus band before using a clearing price for anything. The test above measures the band at <code>|π − λ_dadp| ≤ 9.18e-2</code> (<code>n_blocks = 16</code>, the tolerance recorded in the header of <code>test/test_flex_market.jl</code>). On both IEEE feeders the difference is more than forty times that, the same order as the prices themselves. <strong>On these feeders the uniform clearing price is not an estimate of the DADP price</strong>, and the framing above holds for welfare totals only, not for prices. A likely reason is that the dual of a stage-2 balance over piecewise-linear bids sits at a block price, which can jump between blocks while the welfare barely moves; this is not separately measured here.</p><h2 id="3.-Welfare-convention:-lossless-vs-lossy"><a class="docs-heading-anchor" href="#3.-Welfare-convention:-lossless-vs-lossy">3. Welfare convention: lossless vs lossy</a><a id="3.-Welfare-convention:-lossless-vs-lossy-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Welfare-convention:-lossless-vs-lossy" title="Permalink"></a></h2><p>Every welfare number is <strong>social welfare recomputed from utilities</strong>, never an objective value: device utilities minus the wholesale cost <code>λ₀ᵀ p_import</code>. The flexibility-market welfare is evaluated on the delivered dispatch with the <strong>lossless</strong> import <code>−Σ_j n_j[t]</code>, the same convention as the flat and TOU legs: the delivered dispatch comes from device-level re-solves that carry no network state. The DADP welfare uses its own <strong>loss-inclusive</strong> SOCP import.</p><p>A naive comparison therefore credits the flexibility market with the DADP loss cost and can show &quot;flex above DADP&quot;. The like-for-like column <code>welfare_gap_vs_dadp_lossless</code> re-evaluates the DADP dispatch on the lossless footing (<code>welfare_dadp_lossless</code>) before subtracting. Both gaps are printed below; the difference between them is the DADP loss cost.</p><pre><code class="language-julia hljs">let
+    @printf(
+        &quot;%-14s %15s %15s %15s %12s %12s %12s\n&quot;,
+        &quot;mode&quot;,
+        &quot;flex welfare&quot;,
+        &quot;DADP welfare&quot;,
+        &quot;DADP lossless&quot;,
+        &quot;raw gap&quot;,
+        &quot;lossless gap&quot;,
+        &quot;loss cost&quot;
+    )
+    for mode in FLEX_MODES
+        f = find_row(mode, &quot;flex_uniform&quot;)
+        d = find_row(mode, &quot;dadp&quot;)
+        (f === nothing || d === nothing) &amp;&amp; continue
+        wf, wd, wl = num(f[&quot;welfare&quot;]), num(d[&quot;welfare&quot;]), num(f[&quot;welfare_dadp_lossless&quot;])
+        @printf(
+            &quot;%-14s %15.4f %15.4f %15.4f %+12.4f %+12.4f %12.4f\n&quot;,
+            mode,
+            wf,
+            wd,
+            wl,
+            wf - wd,
+            num(f[&quot;welfare_gap_vs_dadp_lossless&quot;]),
+            wl - wd
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">mode              flex welfare    DADP welfare   DADP lossless      raw gap lossless gap    loss cost
+ieee13-ground       -4822.9030      -4823.0144      -4822.8813      +0.1115      -0.0217       0.1331
+ieee123            -41031.4580     -41035.4044     -41029.6489      +3.9463      -1.8092       5.7555</code></pre><p>The raw gap is positive on both feeders and the lossless gap is negative on both: the flexibility market does <strong>not</strong> beat DADP. The raw sign is an artefact of the convention.</p><h2 id="4.-Payment-rules:-the-dispatch-is-identical,-only-money-moves"><a class="docs-heading-anchor" href="#4.-Payment-rules:-the-dispatch-is-identical,-only-money-moves">4. Payment rules: the dispatch is identical, only money moves</a><a id="4.-Payment-rules:-the-dispatch-is-identical,-only-money-moves-1"></a><a class="docs-heading-anchor-permalink" href="#4.-Payment-rules:-the-dispatch-is-identical,-only-money-moves" title="Permalink"></a></h2><ul><li><strong>Uniform:</strong> activated flexibility at a bus and hour is paid the clearing price, the dual of the stage-2 nodal balance at that bus and hour.</li><li><strong>Pay-as-bid:</strong> each activated block is paid its own bid price times its quantity.</li></ul><p>The physics is computed once per clear and shared by both rules, so welfare, the AC verdict and the delivered dispatch are equal; the rows differ in the ledger only. The DSO pays the flexibility payments to the aggregators as mirrored transfer pairs in the same settlement ledger as the tariff legs, so the ledger still sums to zero exactly.</p><pre><code class="language-julia hljs">let
+    @printf(
+        &quot;%-14s %-9s %14s %14s %16s %12s\n&quot;,
+        &quot;mode&quot;,
+        &quot;rule&quot;,
+        &quot;aggregators&quot;,
+        &quot;DSO&quot;,
+        &quot;flex payments&quot;,
+        &quot;welfare&quot;
+    )
+    for mode in FLEX_MODES
+        for t in (&quot;flex_uniform&quot;, &quot;flex_pab&quot;)
+            r = find_row(mode, t)
+            r === nothing &amp;&amp; continue
+            @printf(
+                &quot;%-14s %-9s %14.4f %14.4f %16.4f %12.4f\n&quot;,
+                mode,
+                r[&quot;payment_rule&quot;],
+                num(r[&quot;aggregators_total&quot;]),
+                num(r[&quot;dso_total&quot;]),
+                num(r[&quot;flex_payments_total&quot;]),
+                num(r[&quot;welfare&quot;])
+            )
+        end
+        u, p = find_row(mode, &quot;flex_uniform&quot;), find_row(mode, &quot;flex_pab&quot;)
+        (u === nothing || p === nothing) &amp;&amp; continue
+        @printf(
+            &quot;%-14s pay-as-bid pays %.4f less in flexibility payments; welfare equal: %s\n&quot;,
+            mode,
+            num(u[&quot;flex_payments_total&quot;]) - num(p[&quot;flex_payments_total&quot;]),
+            num(u[&quot;welfare&quot;]) == num(p[&quot;welfare&quot;])
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">mode           rule         aggregators            DSO    flex payments      welfare
+ieee13-ground  uniform         872.0089      -869.0460         871.9457   -4822.9030
+ieee13-ground  pay_as_bid       208.4084      -205.4454         208.3452   -4822.9030
+ieee13-ground  pay-as-bid pays 663.6005 less in flexibility payments; welfare equal: true
+ieee123        uniform          62.7591       -64.6941          72.7834  -41031.4580
+ieee123        pay_as_bid        52.7203       -54.6552          62.7446  -41031.4580
+ieee123        pay-as-bid pays 10.0389 less in flexibility payments; welfare equal: true</code></pre><p>The ordering is the static one expected from truthful bids: a block is accepted only when it is in the money at the clearing price, so its own bid price never exceeds what the uniform rule would pay it, and pay-as-bid never pays more than uniform. With strategic bidders the comparison would change (bidders shade their bids up under pay-as-bid); that is out of scope here (section 12).</p><h2 id="5.-Tariff-on-activation"><a class="docs-heading-anchor" href="#5.-Tariff-on-activation">5. Tariff on activation</a><a id="5.-Tariff-on-activation-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Tariff-on-activation" title="Permalink"></a></h2><p>The settlement charges the baseline tariff on <strong>all metered (delivered) energy</strong> and pays flexibility on the <strong>activated deviation</strong> Δ. An up-activated unit is therefore billed the tariff for the energy it consumes and paid the clearing price for having moved, so relative to a baseline-settled design it earns tariff + clearing price. This is standard local flexibility market practice: retail energy and the flexibility service are settled separately. The column <code>tariff_on_activation = Σ p_t·Δ_{j,t}</code> quantifies the overlap. It moves money only; dispatch and welfare are unaffected.</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        r = find_row(mode, &quot;flex_uniform&quot;)
+        r === nothing &amp;&amp; continue
+        @printf(
+            &quot;%-14s tariff_on_activation = %.4f  (against flex payments %.4f)\n&quot;,
+            mode,
+            num(r[&quot;tariff_on_activation&quot;]),
+            num(r[&quot;flex_payments_total&quot;])
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground  tariff_on_activation = 36.3325  (against flex payments 871.9457)
+ieee123        tariff_on_activation = 12.3929  (against flex payments 72.7834)</code></pre><h2 id="6.-Why-the-market-activates:-congestion-vs-energy-mispricing"><a class="docs-heading-anchor" href="#6.-Why-the-market-activates:-congestion-vs-energy-mispricing">6. Why the market activates: congestion vs energy mispricing</a><a id="6.-Why-the-market-activates:-congestion-vs-energy-mispricing-1"></a><a class="docs-heading-anchor-permalink" href="#6.-Why-the-market-activates:-congestion-vs-energy-mispricing" title="Permalink"></a></h2><p>A flat-baseline market activates for two reasons that must not be confused:</p><ul><li><strong>Congestion relief:</strong> the baseline overloads a branch or a voltage limit, and stage 2 buys the deviation that removes it.</li><li><strong>Energy mispricing:</strong> the flat tariff is far from the wholesale price <code>λ₀</code>, so the baseline misallocates energy across hours, and stage 2 (which minimises cost at <code>λ₀</code>) buys back the energy value even in hours without any binding network limit.</li></ul><p>An hour counts as <strong>congested</strong> when the congestion and voltage-drop components of the stage-2 price decomposition exceed <code>κ·λ₀[t]</code> at some bus, with <code>κ = 1e-2</code>. The reported interval <code>[κ_lo, κ_hi)</code> is the measured range of thresholds that give exactly the same set of hours, so the count is robust to the choice of <code>κ</code> across that whole interval.</p><p>The flat level is recovered from the CSV: under a flat baseline <code>p_t</code> is one constant, so <code>p = tariff_on_activation / (flex_up_total − flex_down_total)</code>. The mean of <code>λ₀</code> is computed from <strong>the same price generator the script uses</strong>: <code>build_price(:mem, 24, nothing)</code> for IEEE-13 (the script&#39;s <code>ground_setup</code>), and the script&#39;s own <code>ieee123_lambda0()</code> profile for IEEE-123, parsed from <code>scripts/tariff_comparison.jl</code> (not retyped here).</p><pre><code class="language-julia hljs">function script_ieee123_lambda0()
+    path = joinpath(pkgdir(TSODSO), &quot;scripts&quot;, &quot;tariff_comparison.jl&quot;)
+    ex = Meta.parseall(read(path, String))
+    for a in ex.args
+        if a isa Expr &amp;&amp; a.head === :(=) &amp;&amp; a.args[1] == :(ieee123_lambda0())
+            return Core.eval(Module(), a.args[2])::Vector{Float64}
+        end
+    end
+    return error(&quot;ieee123_lambda0() not found in $path&quot;)
+end
+
+λ0_by_mode = Dict(
+    &quot;ieee13-ground&quot; =&gt; TSODSO.build_price(:mem, 24, nothing),
+    &quot;ieee123&quot; =&gt; script_ieee123_lambda0(),
+)
+
+let
+    for mode in FLEX_MODES
+        r = find_row(mode, &quot;flex_uniform&quot;)
+        r === nothing &amp;&amp; continue
+        up, dn = num(r[&quot;flex_up_total&quot;]), num(r[&quot;flex_down_total&quot;])
+        p_flat = num(r[&quot;tariff_on_activation&quot;]) / (up - dn)
+        λm = sum(λ0_by_mode[mode]) / length(λ0_by_mode[mode])
+        @printf(&quot;%s:\n&quot;, mode)
+        @printf(
+            &quot;  congested hours %d of %s at κ = %s; same hours for κ in [%.3e, %.4f)\n&quot;,
+            Int(num(r[&quot;n_congested_hours&quot;])),
+            r[&quot;t_horizon&quot;],
+            r[&quot;congestion_kappa&quot;],
+            num(r[&quot;congestion_kappa_lo&quot;]),
+            num(r[&quot;congestion_kappa_hi&quot;])
+        )
+        @printf(&quot;  activated up %.4f, down %.4f (Σ over aggregators and hours)\n&quot;, up, dn)
+        @printf(
+            &quot;  flat level %.4f vs mean λ₀ %.4f (flat / mean = %.3f)\n&quot;,
+            p_flat,
+            λm,
+            p_flat / λm
+        )
+        @printf(
+            &quot;  uniform payment per activated unit %.4f\n&quot;,
+            num(r[&quot;flex_payments_total&quot;]) / (up + dn)
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground:
+  congested hours 9 of 24 at κ = 0.01; same hours for κ in [6.095e-04, 0.7197)
+  activated up 236.8758, down 0.0000 (Σ over aggregators and hours)
+  flat level 0.1534 vs mean λ₀ 5.6042 (flat / mean = 0.027)
+  uniform payment per activated unit 3.6810
+ieee123:
+  congested hours 1 of 24 at κ = 0.01; same hours for κ in [7.881e-04, 0.7199)
+  activated up 9.0358, down 0.4863 (Σ over aggregators and hours)
+  flat level 1.4495 vs mean λ₀ 5.6042 (flat / mean = 0.259)
+  uniform payment per activated unit 7.6437</code></pre><p>On both feeders the flat level sits far below the mean wholesale price, while the uniform payment per activated unit is of the order of the wholesale price. <strong>A large part of what the market buys is energy-value correction of a mispriced baseline, not congestion relief</strong>, and this is why the flexibility payments are large against the DADP merchandising surplus: under DADP each aggregator already faces the right energy price, so there is nothing to buy back. The congested-hour count separates the two: only those hours carry a network price component above the threshold.</p><h2 id="7.-Baseline-gaming-via-β"><a class="docs-heading-anchor" href="#7.-Baseline-gaming-via-β">7. Baseline gaming via β</a><a id="7.-Baseline-gaming-via-β-1"></a><a class="docs-heading-anchor-permalink" href="#7.-Baseline-gaming-via-β" title="Permalink"></a></h2><p>A flexibility market settles against a baseline the seller reports. The opt-in <code>baseline_inflation = β</code> models the classic manipulation: the <em>reported</em> baseline is the true baseline times <code>(1 + β)</code> on the up direction in congested hours (only positive consumption baselines are inflated). β changes <strong>payments only, never physics</strong>: the dispatch, the welfare and the AC verdict are those of the truthful clear, and each row reports the overpayment against the true baseline.</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        for rule in (&quot;uniform&quot;, &quot;pab&quot;)
+            rs = [find_row(mode, &quot;flex_$rule$sfx&quot;) for sfx in (&quot;&quot;, &quot;_beta0.05&quot;, &quot;_beta0.1&quot;)]
+            any(isnothing, rs) &amp;&amp; continue
+            same_physics =
+                all(r -&gt; r[&quot;welfare&quot;] == rs[1][&quot;welfare&quot;], rs) &amp;&amp;
+                all(r -&gt; r[&quot;max_overload_ratio&quot;] == rs[1][&quot;max_overload_ratio&quot;], rs)
+            @printf(
+                &quot;%-14s %-8s β = %s: overpayment %s; physics identical across β: %s\n&quot;,
+                mode,
+                rule,
+                join((r[&quot;baseline_inflation&quot;] for r in rs), &quot; / &quot;),
+                join((@sprintf(&quot;%.4f&quot;, num(r[&quot;baseline_overpayment&quot;])) for r in rs), &quot; / &quot;),
+                same_physics
+            )
+            o05, o10 =
+                num(rs[2][&quot;baseline_overpayment&quot;]), num(rs[3][&quot;baseline_overpayment&quot;])
+            o05 &gt; 0 &amp;&amp; @printf(
+                &quot;%-14s %-8s overpayment(β = 0.10) / overpayment(β = 0.05) = %.6f\n&quot;,
+                mode,
+                rule,
+                o10 / o05
+            )
+        end
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground  uniform  β = 0.0 / 0.05 / 0.1: overpayment 0.0000 / 5.7973 / 11.5947; physics identical across β: true
+ieee13-ground  uniform  overpayment(β = 0.10) / overpayment(β = 0.05) = 2.000000
+ieee13-ground  pab      β = 0.0 / 0.05 / 0.1: overpayment 0.0000 / 5.7765 / 11.5530; physics identical across β: true
+ieee13-ground  pab      overpayment(β = 0.10) / overpayment(β = 0.05) = 2.000000
+ieee123        uniform  β = 0.0 / 0.05 / 0.1: overpayment 0.0000 / 0.0000 / 0.0000; physics identical across β: true
+ieee123        pab      β = 0.0 / 0.05 / 0.1: overpayment 0.0000 / 0.0000 / 0.0000; physics identical across β: true</code></pre><p>On IEEE-13 the overpayment is linear in β: a seller who inflates its baseline by 10 % is paid for flexibility it never provided, at no physical cost. On IEEE-123 the overpayment is zero at every β, for a structural reason rather than robustness (section 10): the only congested hour is a reverse-flow export hour, where the baselines are negative and nothing is inflated.</p><p>Baselines are a known weak point of local flexibility markets. The EcoGrid 2.0 field trial (Heinrich, Ziras, Syrri and Bindner, <em>Applied Energy</em> 261, 2020) reports real-life baseline problems for DSO services, and Ziras, Heinrich and Bindner, &quot;Why baselines are not suited for local flexibility markets&quot; (<em>Renewable and Sustainable Energy Reviews</em> 135, 2021), propose capacity-limitation services instead. The β rows quantify that exposure on this model; they are an exogenous sensitivity, not a model of strategic behaviour.</p><h2 id="8.-Hour-separability-shortfall"><a class="docs-heading-anchor" href="#8.-Hour-separability-shortfall">8. Hour-separability shortfall</a><a id="8.-Hour-separability-shortfall-1"></a><a class="docs-heading-anchor-permalink" href="#8.-Hour-separability-shortfall" title="Permalink"></a></h2><p>The bids are hour-separable, but the devices are not: a battery that discharges more in one hour has less energy for the next. The delivery re-solve tracks the targets <code>b + Δ</code> with a fixed, documented L1 penalty weight <code>w</code>, and whatever it does not reach is the <strong>delivery shortfall</strong>. It is reported, never hidden: total, worst single bus-hour, and ratio to <code>Σ|Δ|</code>.</p><p>The weight rule, ten times the largest price in play, is a heuristic and <strong>not a proof that the penalty is exact</strong>. The penalty is exact only when <code>w</code> exceeds the multiplier of the tracking constraint, and that multiplier is a device&#39;s marginal utility at its target minus the tariff, bounded by the slope of the device&#39;s value function there rather than by any price. A steep utility, or a coupled device near the edge of its reachable set, can push it above <code>w</code>. What is guaranteed is weaker: the total shortfall does not increase with the weight, so the total at <code>w</code> is an <strong>upper bound</strong> on the loss that hour separability alone causes. That bound has three limits. It holds for totals only (over all aggregators, or for one aggregator), not for the worst bus-hour or the per-hour shortfall, which can rise while the total falls. It is relative to the relaxed battery model, so it bounds the physical loss only where the delivered battery certificates are <code>:ok</code>, as they are on every committed <code>ok</code> flex row. And &quot;does not increase&quot; holds only up to solver tolerance, which is the size of the committed <code>10w</code> changes printed below.</p><p>The <strong>baseline</strong> is a different matter. The stage-1 flat-price dispatch that every offer is measured from carries its own battery certificates, and on both IEEE feeders some of them are refused: the relaxed battery model is not exact at that baseline. The baseline is used as computed and the refusals are counted, not repaired. Per feeder, baseline refusals next to the delivered ones:</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        r = find_row(mode, &quot;flex_uniform&quot;)
+        r === nothing &amp;&amp; continue
+        @printf(
+            &quot;%-14s baseline battery certificates refused: %s   delivered refused: %s\n&quot;,
+            mode,
+            cell(r[&quot;baseline_batt_refused&quot;]),
+            cell(r[&quot;batt_refused&quot;])
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground  baseline battery certificates refused: 10   delivered refused: 0
+ieee123        baseline battery certificates refused: 29   delivered refused: 0</code></pre><p>The <code>_10w</code> column measures how much the weight matters: it re-solves the delivery at ten times the weight. The change and the relative change are printed below; when the relative change is small, the shortfall is insensitive to the weight over a tenfold range. That is consistent with a structural hour-separability loss, but it does not rule out a tracking multiplier above <code>10w</code> (a near-vertical marginal-utility curve also gives an almost unchanged shortfall). The numbers are therefore the shortfall at <code>w</code>, with the <code>10w</code> sensitivity as the evidence for how far the weight can be trusted.</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        r = find_row(mode, &quot;flex_uniform&quot;)
+        r === nothing &amp;&amp; continue
+        tot, tot10 =
+            num(r[&quot;delivery_shortfall_total&quot;]), num(r[&quot;delivery_shortfall_total_10w&quot;])
+        @printf(
+            &quot;%-14s w = %s: shortfall total %.4f, max %.3e, ratio %.3e; at 10w total %.4f (change %.2e, relative %.2e)\n&quot;,
+            mode,
+            r[&quot;tracking_weight&quot;],
+            tot,
+            num(r[&quot;delivery_shortfall_max&quot;]),
+            num(r[&quot;delivery_shortfall_ratio&quot;]),
+            tot10,
+            tot10 - tot,
+            (tot10 - tot) / tot
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ieee13-ground  w = 90.0: shortfall total 0.2961, max 2.294e-03, ratio 1.250e-03; at 10w total 0.2961 (change -1.46e-08, relative -4.93e-08)
+ieee123        w = 90.0: shortfall total 0.7093, max 7.054e-03, ratio 7.449e-02; at 10w total 0.7093 (change -2.38e-07, relative -3.35e-07)</code></pre><p>Bids that keep the intertemporal coupling (aggregate-flexibility polytopes) would remove this loss; they are future work.</p><h2 id="9.-AC-feasibility-per-leg"><a class="docs-heading-anchor" href="#9.-AC-feasibility-per-leg">9. AC feasibility per leg</a><a id="9.-AC-feasibility-per-leg-1"></a><a class="docs-heading-anchor-permalink" href="#9.-AC-feasibility-per-leg" title="Permalink"></a></h2><p>Every leg&#39;s dispatch is checked against the AC power flow and the verdict is <strong>recorded, not gated</strong>: <code>feasible</code>, <code>infeasible</code> (with the worst overload ratio), <code>solve_failed</code> (no AC operating point exists for that dispatch) or <code>not_run</code> (no dispatch, for example a refused leg). The stage-2 targets sit on the head-branch limit by construction (the redispatch buys exactly enough to make the binding branch tight), so a ratio a hair under or over 1 is a measured outcome, not a bug.</p><pre><code class="language-julia hljs">let
+    for mode in FLEX_MODES
+        println(&quot;mode: $mode&quot;)
+        @printf(
+            &quot;  %-22s %-24s %-13s %8s %14s\n&quot;,
+            &quot;leg&quot;,
+            &quot;status&quot;,
+            &quot;feasibility&quot;,
+            &quot;thermal&quot;,
+            &quot;max overload&quot;
+        )
+        for r in filter(x -&gt; x[&quot;mode&quot;] == mode, summary_rows)
+            @printf(
+                &quot;  %-22s %-24s %-13s %8s %14s\n&quot;,
+                r[&quot;tariff&quot;],
+                r[&quot;status&quot;],
+                r[&quot;feasibility_status&quot;],
+                cell(r[&quot;n_thermal_violations&quot;]),
+                isempty(r[&quot;max_overload_ratio&quot;]) ? &quot;-&quot; :
+                @sprintf(&quot;%.10f&quot;, num(r[&quot;max_overload_ratio&quot;]))
+            )
+        end
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">mode: ieee13-ground
+  leg                    status                   feasibility    thermal   max overload
+  dadp                   ok                       feasible             0   0.9893639858
+  flat                   ok                       solve_failed         0   0.0000000000
+  tou                    ok                       solve_failed         0   0.0000000000
+  fit                    error:SolveFailedError   not_run              -              -
+  flex_uniform           ok                       feasible             0   0.9673580259
+  flex_uniform_beta0.05  ok                       feasible             0   0.9673580259
+  flex_uniform_beta0.1   ok                       feasible             0   0.9673580259
+  flex_pab               ok                       feasible             0   0.9673580259
+  flex_pab_beta0.05      ok                       feasible             0   0.9673580259
+  flex_pab_beta0.1       ok                       feasible             0   0.9673580259
+  flex_uniform_tou       error:SolveFailedError   not_run              -              -
+  flex_pab_tou           error:SolveFailedError   not_run              -              -
+mode: ieee123
+  leg                    status                   feasibility    thermal   max overload
+  dadp                   ok                       feasible             0   0.9999999960
+  flat                   ok                       infeasible           1   1.1172072188
+  tou                    ok                       infeasible           3   1.2595512267
+  fit                    error:CertificateError   not_run              -              -
+  flex_uniform           ok                       feasible             0   0.9999999824
+  flex_uniform_beta0.05  ok                       feasible             0   0.9999999824
+  flex_uniform_beta0.1   ok                       feasible             0   0.9999999824
+  flex_pab               ok                       feasible             0   0.9999999824
+  flex_pab_beta0.05      ok                       feasible             0   0.9999999824
+  flex_pab_beta0.1       ok                       feasible             0   0.9999999824</code></pre><p>On IEEE-13 the flat and TOU legs have no AC operating point at all (<code>solve_failed</code>), and the flexibility market restores a feasible dispatch from the same flat baseline. The TOU-baseline flexibility legs did not clear: the stage-2 redispatch solve ended <code>ALMOST_OPTIMAL</code> at the default optimizer and is recorded as an <code>error:SolveFailedError</code> status row (section 11), never re-tuned. FIT&#39;s committed error row is unchanged.</p><h2 id="10.-IEEE-123"><a class="docs-heading-anchor" href="#10.-IEEE-123">10. IEEE-123</a><a id="10.-IEEE-123-1"></a><a class="docs-heading-anchor-permalink" href="#10.-IEEE-123" title="Permalink"></a></h2><p>Two configurations were measured on the modified IEEE-123 feeder.</p><p><strong>Certified configuration (<code>--mode ieee123</code>).</strong> The certified test-fixture population (85 load nodes, one seeded thermostatic, deferrable and PV-battery house per node), the fixture&#39;s price profile and, for every welfare solve (DADP and the redispatch), the documented solver conditioning <code>select_optimizer(SOCP(); tol_gap_abs = 3e-9, tol_gap_rel = 3e-9)</code>. The exactness gate, <code>τ</code>, <code>ε</code> and the hybrid floor are untouched; the conditioning only asks the interior-point solver for a tighter stop. Wall times below are read from the CSV&#39;s <code>run_wall_s</code> (the whole comparison call) and <code>flex_wall_s</code> (the shared physics of one clear: probing, stage 2 and delivery) columns.</p><pre><code class="language-julia hljs">let
+    d = find_row(&quot;ieee123&quot;, &quot;dadp&quot;)
+    f = find_row(&quot;ieee123&quot;, &quot;flex_uniform&quot;)
+    if d !== nothing &amp;&amp; f !== nothing
+        @printf(&quot;comparison call wall time %.1f s\n&quot;, num(d[&quot;run_wall_s&quot;]))
+        @printf(
+            &quot;flex clear: %d probe solves (%d failed), clear physics %.1f s\n&quot;,
+            Int(num(f[&quot;n_probe_solves&quot;])),
+            Int(num(f[&quot;n_probe_failed&quot;])),
+            num(f[&quot;flex_wall_s&quot;])
+        )
+        @printf(
+            &quot;baseline battery certificates refused at the flat price: %d\n&quot;,
+            Int(num(f[&quot;baseline_batt_refused&quot;]))
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">comparison call wall time 215.6 s
+flex clear: 20485 probe solves (0 failed), clear physics 126.1 s
+baseline battery certificates refused at the flat price: 29</code></pre><p>Flat and TOU are AC-infeasible here (section 9), while every flexibility-market row is feasible. The single congested hour is a <strong>reverse-flow PV export hour</strong>: the flat baseline exports through the head branch at the PV peak. The flat leg&#39;s per-hour net load (from <code>rebound_hourly.csv</code>) shows it, together with the delivered flexibility-market net load in the same hour:</p><pre><code class="language-julia hljs">let
+    flat = filter(r -&gt; r[&quot;mode&quot;] == &quot;ieee123&quot; &amp;&amp; r[&quot;tariff&quot;] == &quot;flat&quot;, rebound_rows)
+    flex =
+        filter(r -&gt; r[&quot;mode&quot;] == &quot;ieee123&quot; &amp;&amp; r[&quot;tariff&quot;] == &quot;flex_uniform&quot;, rebound_rows)
+    if !isempty(flat) &amp;&amp; !isempty(flex)
+        k = argmin([num(r[&quot;counterfactual_net_load&quot;]) for r in flat])
+        t = flat[k][&quot;t&quot;]
+        fx = only(filter(r -&gt; r[&quot;t&quot;] == t, flex))
+        @printf(
+            &quot;hour %s: flat-baseline net load %.4f (export), flexibility-market net load %.4f\n&quot;,
+            t,
+            num(flat[k][&quot;counterfactual_net_load&quot;]),
+            num(fx[&quot;counterfactual_net_load&quot;])
+        )
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">hour 12: flat-baseline net load -4.0860 (export), flexibility-market net load -3.5998</code></pre><p>Because the congested-hour baseline is a net export, the β phantom has nothing to inflate, which is why the IEEE-123 overpayment is zero at every β (section 7).</p><p><strong>Default population (<code>--mode ieee123-default</code>).</strong> The default generated population (<code>build_population(:default, ..., :ieee123, ...)</code>), the <code>:mem</code> prices and the default optimizer. Its DADP solve is <strong>refused at the SOCP exactness certificate</strong>, so no leg exists; the refusal is recorded as its own status row and never re-tuned. Quoted from the row:</p><pre><code class="language-julia hljs">let
+    r = find_row(&quot;ieee123-default&quot;, &quot;(run)&quot;)
+    if r !== nothing
+        println(&quot;status: &quot;, r[&quot;status&quot;], &quot;  (wall time &quot;, r[&quot;run_wall_s&quot;], &quot; s)&quot;)
+        println(&quot;notes : &quot;, r[&quot;notes&quot;])
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">status: error:CertificateError  (wall time 26.902820475 s)
+notes : SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=1.062285309572047 &gt; 1 (rtol=0.0001, atol=max(τ_solver=2.0e-7, ε*ref_b, ε=1.0e-9); max abs |l·v−(P²+Q²)|=3.137388504548255e-7) — prices REFUSED (thesis 3.43-3.45)</code></pre><p>The worst gap ratio sits just above 1, in the band between the solver&#39;s own precision and the gate. Loosening the gate to pass it would undercut every exactness claim of the framework; the certified configuration above is the honest IEEE-123 measurement.</p><h2 id="11.-Refusals-and-status-rows"><a class="docs-heading-anchor" href="#11.-Refusals-and-status-rows">11. Refusals and status rows</a><a id="11.-Refusals-and-status-rows-1"></a><a class="docs-heading-anchor-permalink" href="#11.-Refusals-and-status-rows" title="Permalink"></a></h2><p>Every row whose status is not <code>ok</code>, in every mode of the committed CSV. A refused or failed leg is a row, never dropped and never repaired by loosening a tolerance.</p><pre><code class="language-julia hljs">let
+    bad = filter(r -&gt; r[&quot;status&quot;] != &quot;ok&quot;, summary_rows)
+    println(length(bad), &quot; non-ok rows:&quot;)
+    for r in bad
+        note = replace(r[&quot;notes&quot;], r&quot;\s+&quot; =&gt; &quot; &quot;)
+        note = length(note) &gt; 140 ? first(note, 140) * &quot; …&quot; : note
+        @printf(&quot;  %-16s %-18s %-24s %s\n&quot;, r[&quot;mode&quot;], r[&quot;tariff&quot;], r[&quot;status&quot;], note)
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">6 non-ok rows:
+  ieee13-ground    fit                error:SolveFailedError   Solve failed — refusing to trust results:; termination_status : INFEASIBLE; primal_status : INFEASIBLE_POINT; dual_status : INFEASIBILITY_CE …
+  case-a-784       (run)              error:CertificateError   Battery complementarity violated at bus 5, t=16: p_ch·p_dch = 1.0018571384202377e-12 ≥ τ·Pmax² = 1.00144207659029e-12 (relative τ=0.001, Pma …
+  ieee13-ground    flex_uniform_tou   error:SolveFailedError   Solve failed — refusing to trust results:; termination_status : ALMOST_OPTIMAL; primal_status : NEARLY_FEASIBLE_POINT; dual_status : NEARLY_ …
+  ieee13-ground    flex_pab_tou       error:SolveFailedError   Solve failed — refusing to trust results:; termination_status : ALMOST_OPTIMAL; primal_status : NEARLY_FEASIBLE_POINT; dual_status : NEARLY_ …
+  ieee123          fit                error:CertificateError   SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=2.4972675047569535 &gt; 1 (rtol=0.0001, atol=max(τ_solver=2.0e-7, ε*ref_b, ε=1.0e-9); m …
+  ieee123-default  (run)              error:CertificateError   SOCP relaxation INEXACT: worst gap/(atol_b+rtol·|cone|)=1.062285309572047 &gt; 1 (rtol=0.0001, atol=max(τ_solver=2.0e-7, ε*ref_b, ε=1.0e-9); ma …</code></pre><p>The list includes the IEEE-13 FIT row (the batteryless FIT dispatch is infeasible against the head-branch rating; recorded before the flexibility market existed and unchanged), the two TOU-baseline flexibility legs, the IEEE-123 FIT row, the IEEE-123 default-population refusal, and the run-level row of the 784-house mode (no flexibility leg runs there: a house-attributed run cannot carry flex legs, and that mode&#39;s DADP run is itself refused).</p><h2 id="12.-Assumptions-and-limitations"><a class="docs-heading-anchor" href="#12.-Assumptions-and-limitations">12. Assumptions and limitations</a><a id="12.-Assumptions-and-limitations-1"></a><a class="docs-heading-anchor-permalink" href="#12.-Assumptions-and-limitations" title="Permalink"></a></h2><ul><li><strong>Truthful bidding.</strong> Every block is priced at the aggregator&#39;s own utility loss. No bid shading or markup is modelled, so the pay-as-bid result is the truthful-bidder lower bound on payments, not a prediction under strategic bidding.</li><li><strong>Exogenous β only.</strong> Baseline inflation is a fixed sensitivity parameter, not a strategic choice.</li><li><strong>No market power.</strong> Aggregators are price-takers in both stages.</li><li><strong>Hour-separable, divisible bids.</strong> No indivisible or binary blocks, and no intertemporal coupling inside a bid; the delivery shortfall (section 8) measures the cost.</li><li><strong>Heuristic tracking weight.</strong> The delivery penalty weight is ten times the largest price in play, not a proven bound on the tracking multiplier, so the reported total shortfall is an upper bound on the hour-separability loss (totals only, relative to the relaxed battery model, up to solver tolerance); the <code>10w</code> column measures its sensitivity (section 8).</li><li><strong>Refused baseline battery certificates.</strong> The flat-price baseline that offers are measured from is not battery-exact on either IEEE feeder; the refusals are counted, not repaired (section 8).</li><li><strong>Clearing prices are not DLMP estimates</strong> on the IEEE feeders: the gap to the DADP price is far outside the two-bus band (section 2).</li><li><strong>Inelastic reactive power in stage 2</strong> (section 1).</li><li><strong>Devices with their own reactive decision are refused in stage 2</strong> (<code>SmartInverterPV</code>, <code>FourQuadBESS</code>; section 1).</li><li><strong>The V2G EV certificate is reported separately.</strong> The price-taker baseline and the delivery record an EV co-charge status of their own beside the battery status. Like the battery refusals it is counted, never repaired, and it is checked at the tolerance of the ADMM final consolidation.</li><li><strong>Actors are not settled here.</strong> Settling profit-seeking aggregator actors (<code>Portfolio</code> with a <code>ProfitObjective</code>) through the flexibility market or the tariff comparison is a recorded scope decision, left to future work (wedge lines and flexibility payments in one ledger with residual 0). <code>clear_flex_market</code> and <code>compare_tariffs</code> refuse any <code>actors</code> value other than <code>nothing</code> with an <code>ArgumentError</code>, before any solve. A <code>SettlementInput</code> built from an actor run is not detected, so its wedges are not carried into this ledger.</li><li><strong>Lossless flex welfare</strong> against loss-inclusive DADP welfare; use the like-for-like column (section 3).</li></ul><h2 id="13.-Reproduce"><a class="docs-heading-anchor" href="#13.-Reproduce">13. Reproduce</a><a id="13.-Reproduce-1"></a><a class="docs-heading-anchor-permalink" href="#13.-Reproduce" title="Permalink"></a></h2><pre><code class="nohighlight hljs">julia --project=. scripts/tariff_comparison.jl --mode ieee13-ground --flex-market
+julia --project=. scripts/tariff_comparison.jl --mode ieee123 --flex-market   # several minutes
+julia --project=. scripts/tariff_comparison.jl --mode ieee123-default</code></pre><p>The ieee13-ground flex path first checks that the in-run DADP row reproduces the committed one bit for bit and writes nothing otherwise. Rows are upserted by provenance, and a run first deletes the rows of its own mode that it owns, so a re-run replaces its own rows, leaves no stale ones beside them, and keeps the others:</p><ul><li>an IEEE-123 run owns every row of its mode, so the committed <code>ieee123</code> artifact is recorded with <code>--flex-market</code> (a base-only run deletes the flex rows);</li><li>the default ieee13-ground run owns the base rows; it also owns the flex rows, and deletes them, when its dadp row no longer reproduces the committed one or when the run is refused;</li><li>the ieee13-ground flex path owns only the flex rows, and so does its <code>--record-timeout S --flex-market</code> record of a stopped flex run (one <code>flex_(run)</code> row);</li><li>a plain <code>--record-timeout S</code> records a stopped base run and owns every row of the mode.</li></ul><p>The fast item &quot;flex market: committed comparison CSV rows&quot; in <code>test/test_flex_market_ieee.jl</code> checks the committed rows&#39; invariants (statuses, no run-level row beside leg rows, β changes money only, the shortfall sums).</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../settlement_equity/">« Settlement, Tariffs &amp; Equity</a><a class="docs-footer-nextpage" href="../case_a_magnitude/">Case A Magnitude »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 7 November 2026 12:27">Saturday 7 November 2026</span>. Using Julia version 1.12.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

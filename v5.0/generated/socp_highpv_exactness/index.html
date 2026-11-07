@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>SOCP Exactness in High-PV (optimal Q) · TSODSO</title><meta name="title" content="SOCP Exactness in High-PV (optimal Q) · TSODSO"/><meta property="og:title" content="SOCP Exactness in High-PV (optimal Q) · TSODSO"/><meta property="twitter:title" content="SOCP Exactness in High-PV (optimal Q) · TSODSO"/><meta name="description" content="Documentation for TSODSO."/><meta property="og:description" content="Documentation for TSODSO."/><meta property="twitter:description" content="Documentation for TSODSO."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">TSODSO</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Models</span><ul><li><a class="tocitem" href="../toy_dc/">Rung 0: Toy DC</a></li><li><a class="tocitem" href="../lindistflow/">Rung 1-2: LinDistFlow</a></li><li><a class="tocitem" href="../convex_branch_flow/">Rung 3: SOCP + Exactness</a></li><li><a class="tocitem" href="../ac_oracle/">Rung 3: AC-Exactness Oracle</a></li><li><a class="tocitem" href="../restricted_branch_flow/">Rung 3: Overvoltage-Capable Restriction</a></li><li><a class="tocitem" href="../prosumer_welfare/">Rung 3: Devices + GLB-CVX</a></li><li><a class="tocitem" href="../pricing_dlmp/">Rung 4: DADP/DLMP Pricing</a></li><li><a class="tocitem" href="../admm/">Rung 5: ADMM Decomposition</a></li><li><a class="tocitem" href="../ieee123_impedances/">IEEE-123 Real Impedances</a></li><li><a class="tocitem" href="../thesis_reproduction_ieee123/">Thesis Reproduction — IEEE-123</a></li><li><a class="tocitem" href="../thesis_reproduction_assumptions/">Thesis Reproduction — Assumptions</a></li><li><a class="tocitem" href="../socp_applicability/">SOC Relaxation Applicability</a></li><li class="is-active"><a class="tocitem" href>SOCP Exactness in High-PV (optimal Q)</a><ul class="internal"><li><a class="tocitem" href="#What-is-measured"><span>What is measured</span></a></li><li><a class="tocitem" href="#The-Volt-VAR-comparator-(post-hoc,-never-a-constraint)"><span>The Volt-VAR comparator (post hoc, never a constraint)</span></a></li><li><a class="tocitem" href="#Verdicts-and-cone-residual-ratios"><span>Verdicts and cone-residual ratios</span></a></li><li><a class="tocitem" href="#Physics-voltage-and-the-droop-comparator"><span>Physics voltage and the droop comparator</span></a></li></ul></li><li><a class="tocitem" href="../aggregator_actor/">Aggregator as Actor (wedge, behaviour)</a></li><li><a class="tocitem" href="../ieee8500_scaling/">Scaling to IEEE-8500</a></li><li><a class="tocitem" href="../mpc_rolling_horizon/">Rung 8: MPC / Rolling-Horizon RTP</a></li><li><a class="tocitem" href="../stochastic_pv_demand/">Rung 9: Stochastic PV/Demand Uncertainty</a></li><li><a class="tocitem" href="../meshed_reactive_price/">Rung 10: Meshed Networks + Live Reactive Price</a></li></ul></li><li><span class="tocitem">Experiments</span><ul><li><a class="tocitem" href="../experiments/">The Experiment Harness</a></li><li><a class="tocitem" href="../case_a_population/">Case A Population (784 houses)</a></li><li><a class="tocitem" href="../settlement_equity/">Settlement, Tariffs &amp; Equity</a></li><li><a class="tocitem" href="../flex_market/">Flexibility Market vs Price Coordination</a></li><li><a class="tocitem" href="../case_a_magnitude/">Case A Magnitude</a></li></ul></li><li><a class="tocitem" href="../../status_policy/">Status &amp; Exception Policy</a></li><li><span class="tocitem">Planning</span><ul><li><a class="tocitem" href="../stackelberg_benders/">Rung 6: Stackelberg-Benders</a></li><li><a class="tocitem" href="../nash_diagonalization/">Rung 7: Nash Diagonalization &amp; Shared Corridor</a></li><li><a class="tocitem" href="../integer_investment/">Rung 11: Discrete/Integer Investment Expansion</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Models</a></li><li class="is-active"><a href>SOCP Exactness in High-PV (optimal Q)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>SOCP Exactness in High-PV (optimal Q)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="SOCP-exactness-in-the-high-PV-regime,-with-and-without-optimal-Q"><a class="docs-heading-anchor" href="#SOCP-exactness-in-the-high-PV-regime,-with-and-without-optimal-Q">SOCP exactness in the high-PV regime, with and without optimal Q</a><a id="SOCP-exactness-in-the-high-PV-regime,-with-and-without-optimal-Q-1"></a><a class="docs-heading-anchor-permalink" href="#SOCP-exactness-in-the-high-PV-regime,-with-and-without-optimal-Q" title="Permalink"></a></h1><p>Phase 43 (DEV-09) re-measures the SOC branch-flow exactness on the certified 3-bus high-PV stress substrate (<code>high_pv_feeder</code>, copied verbatim, never re-tuned) now that a PV inverter can dispatch reactive power. The measurement is produced by <code>scripts/socp_highpv_remeasure.jl</code> and committed to <code>results/socp_highpv/highpv_exactness.csv</code>; this page reads that committed artifact and recomputes every derived figure live, so no number below is typed by hand.</p><h2 id="What-is-measured"><a class="docs-heading-anchor" href="#What-is-measured">What is measured</a><a id="What-is-measured-1"></a><a class="docs-heading-anchor-permalink" href="#What-is-measured" title="Permalink"></a></h2><ul><li>Seeds <code>20260719..20260723</code>, PV scales <code>0.5</code> (the documented exact regime) and <code>1.2</code> (the stress regime).</li><li>Variants: <code>active_only</code> (the certified population), <code>with_optimal_q</code> (plus one <a href="../../api/#TSODSO.SmartInverterPV"><code>SmartInverterPV</code></a> per house, with its own panel; this also adds active PV, so it is not a pure-Q ablation) and <code>q_only_capability</code> (a zero-panel inverter: pure reactive support).</li><li><strong>Verdicts come only from the standard gate</strong>: <code>solve_welfare</code> runs <code>assert_socp_exact!</code> at <code>rtol_exact = 1e-4</code> with the hybrid floor. A refusal is a recorded outcome, never a failure: <code>refused_socp_exact</code> is the cone certificate refusing; any other <code>refused_&lt;kind&gt;</code> (here <code>refused_battery</code>) is a LATER certificate (battery complementarity) refusing a point whose cone gate had already passed (<code>socp_gate_passed = true</code>, because the cone gate runs first). No tolerance or tau was raised to obtain any outcome.</li></ul><h2 id="The-Volt-VAR-comparator-(post-hoc,-never-a-constraint)"><a class="docs-heading-anchor" href="#The-Volt-VAR-comparator-(post-hoc,-never-a-constraint)">The Volt-VAR comparator (post hoc, never a constraint)</a><a id="The-Volt-VAR-comparator-(post-hoc,-never-a-constraint)-1"></a><a class="docs-heading-anchor-permalink" href="#The-Volt-VAR-comparator-(post-hoc,-never-a-constraint)" title="Permalink"></a></h2><p>On the FIXED active dispatch of each solved point, <code>ac_feasibility_status</code> (<code>ACPowerFlow(; limits = false)</code> physics) yields the per-hour maximum bus voltage. The IEEE 1547-2018 Category-B Volt-VAR curve (<code>(0.92,+0.44) (0.98,0) (1.02,0) (1.08,-0.44)</code> of nameplate) is evaluated point-wise at that voltage, summed over the inverters, and compared with the <code>q</code> the convex optimum dispatched. The physics model excludes the inverter <code>q</code>, so the voltage is what a droop would SEE, not a closed-loop equilibrium. The curve never enters a convex model.</p><pre><code class="language-julia hljs">using TSODSO
+using Printf
+
+function read_csv(path)
+    lines = readlines(path)
+    header = String.(split(first(lines), &#39;,&#39;))
+    idx = Dict(h =&gt; i for (i, h) in enumerate(header))
+    return [
+        (f = split(ln, &#39;,&#39;); Dict(h =&gt; String(strip(f[idx[h]])) for h in header)) for
+        ln in lines[2:end]
+    ]
+end
+num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+
+rows = read_csv(joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;socp_highpv&quot;, &quot;highpv_exactness.csv&quot;))
+println(length(rows), &quot; committed measurement rows&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">30 committed measurement rows</code></pre><h2 id="Verdicts-and-cone-residual-ratios"><a class="docs-heading-anchor" href="#Verdicts-and-cone-residual-ratios">Verdicts and cone-residual ratios</a><a id="Verdicts-and-cone-residual-ratios-1"></a><a class="docs-heading-anchor-permalink" href="#Verdicts-and-cone-residual-ratios" title="Permalink"></a></h2><p><code>max_ratio</code> is the worst <code>gap / (atol_b + rtol*|cone|)</code> over branches and hours (<code>&lt;= 1</code> is the gate&#39;s acceptance). A refused solve returns no context, so for the <code>refused_*</code> rows the cone gap is HARVESTED by a diagnostic re-solve (<code>gap_source = diag_resolve_after_refused_*</code>): for a <code>refused_battery</code> row only the battery tau is relaxed and the cone gate stays at <code>1e-4</code>; for a <code>refused_socp_exact</code> row the cone tolerance is relaxed. The re-solve never decides the verdict. The <code>refused</code> column below is the refused fraction (refused/n) and <code>harvested</code> counts the rows whose ratio comes from such a re-solve, so the maximum is NOT censored to the surviving rows.</p><pre><code class="language-julia hljs">@printf(
+    &quot;%-20s %-18s %5s %7s %9s %10s %12s\n&quot;,
+    &quot;fixture&quot;,
+    &quot;variant&quot;,
+    &quot;n&quot;,
+    &quot;exact&quot;,
+    &quot;refused&quot;,
+    &quot;harvested&quot;,
+    &quot;max ratio&quot;
+)
+for fx in sort(unique(r[&quot;fixture&quot;] for r in rows)),
+    v in (&quot;active_only&quot;, &quot;with_optimal_q&quot;, &quot;q_only_capability&quot;)
+
+    s = filter(r -&gt; r[&quot;fixture&quot;] == fx &amp;&amp; r[&quot;variant&quot;] == v, rows)
+    isempty(s) &amp;&amp; continue
+    nex = count(r -&gt; r[&quot;verdict&quot;] == &quot;exact&quot;, s)
+    rat = [num(r[&quot;max_ratio&quot;]) for r in s if isfinite(num(r[&quot;max_ratio&quot;]))]
+    nharv = count(r -&gt; startswith(get(r, &quot;gap_source&quot;, &quot;&quot;), &quot;diag_resolve&quot;), s)
+    @printf(
+        &quot;%-20s %-18s %5d %7d %9s %10d %12s\n&quot;,
+        fx,
+        v,
+        length(s),
+        nex,
+        @sprintf(&quot;%d/%d&quot;, length(s) - nex, length(s)),
+        nharv,
+        isempty(rat) ? &quot;NA&quot; : @sprintf(&quot;%.3g&quot;, maximum(rat))
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">fixture              variant                n   exact   refused  harvested    max ratio
+highpv_3bus_pv0.5    active_only            5       5       0/5          0       0.0578
+highpv_3bus_pv0.5    with_optimal_q         5       5       0/5          0       0.0563
+highpv_3bus_pv0.5    q_only_capability      5       5       0/5          0        0.159
+highpv_3bus_pv1.2    active_only            5       4       1/5          1       0.0221
+highpv_3bus_pv1.2    with_optimal_q         5       2       3/5          3       0.0687
+highpv_3bus_pv1.2    q_only_capability      5       5       0/5          0       0.0482</code></pre><p>The refusals (if any), with the certificate that issued them:</p><pre><code class="language-julia hljs">for r in filter(r -&gt; r[&quot;verdict&quot;] != &quot;exact&quot;, rows)
+    println(
+        r[&quot;fixture&quot;],
+        &quot; &quot;,
+        r[&quot;variant&quot;],
+        &quot; &quot;,
+        r[&quot;seed&quot;],
+        &quot; -&gt; &quot;,
+        r[&quot;verdict&quot;],
+        &quot; (cone gate passed: &quot;,
+        r[&quot;socp_gate_passed&quot;],
+        &quot;)&quot;,
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">highpv_3bus_pv1.2 active_only 20260722 -&gt; refused_battery (cone gate passed: true)
+highpv_3bus_pv1.2 with_optimal_q 20260721 -&gt; refused_battery (cone gate passed: true)
+highpv_3bus_pv1.2 with_optimal_q 20260722 -&gt; refused_battery (cone gate passed: true)
+highpv_3bus_pv1.2 with_optimal_q 20260723 -&gt; refused_battery (cone gate passed: true)</code></pre><h2 id="Physics-voltage-and-the-droop-comparator"><a class="docs-heading-anchor" href="#Physics-voltage-and-the-droop-comparator">Physics voltage and the droop comparator</a><a id="Physics-voltage-and-the-droop-comparator-1"></a><a class="docs-heading-anchor-permalink" href="#Physics-voltage-and-the-droop-comparator" title="Permalink"></a></h2><pre><code class="language-julia hljs">@printf(
+    &quot;%-20s %-18s %9s %8s %10s %12s\n&quot;,
+    &quot;fixture&quot;,
+    &quot;variant&quot;,
+    &quot;max Vphys&quot;,
+    &quot;hrs&gt;1.02&quot;,
+    &quot;droop~opt&quot;,
+    &quot;rms dq (pu)&quot;
+)
+for fx in sort(unique(r[&quot;fixture&quot;] for r in rows)),
+    v in (&quot;active_only&quot;, &quot;with_optimal_q&quot;, &quot;q_only_capability&quot;)
+
+    s = filter(
+        r -&gt;
+            r[&quot;fixture&quot;] == fx &amp;&amp; r[&quot;variant&quot;] == v &amp;&amp; isfinite(num(r[&quot;physics_vmax&quot;])),
+        rows,
+    )
+    isempty(s) &amp;&amp; continue
+    vmax = maximum(num(r[&quot;physics_vmax&quot;]) for r in s)
+    hrs = sum(num(r[&quot;physics_hours_above_1p02&quot;]) for r in s)
+    agree = sum(filter(isfinite, [num(r[&quot;q_sign_agree_hours&quot;]) for r in s]); init = 0.0)
+    active = sum(filter(isfinite, [num(r[&quot;q_active_hours&quot;]) for r in s]); init = 0.0)
+    rms = filter(isfinite, [num(r[&quot;q_droop_vs_opt_rms&quot;]) for r in s])
+    @printf(
+        &quot;%-20s %-18s %9.4f %8d %10s %12s\n&quot;,
+        fx,
+        v,
+        vmax,
+        hrs,
+        active &gt; 0 ? @sprintf(&quot;%d/%d&quot;, agree, active) : &quot;n/a&quot;,
+        isempty(rms) ? &quot;n/a&quot; : @sprintf(&quot;%.3g&quot;, sum(rms) / length(rms))
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">fixture              variant            max Vphys hrs&gt;1.02  droop~opt  rms dq (pu)
+highpv_3bus_pv0.5    active_only           1.0366       11        n/a          n/a
+highpv_3bus_pv0.5    with_optimal_q        1.0585       28     12/120       0.0889
+highpv_3bus_pv0.5    q_only_capability     1.0366       11      7/120        0.079
+highpv_3bus_pv1.2    active_only           1.0633       40        n/a          n/a
+highpv_3bus_pv1.2    with_optimal_q        1.1187       50     43/120        0.177
+highpv_3bus_pv1.2    q_only_capability     1.1032       39     30/120        0.141</code></pre><p><code>droop~opt</code> counts the hours (summed over seeds) in which the optimal-q dispatch is active and the droop request has the same sign. Read it as measured: where the count is far below the number of active hours, the droop curve (fed the active-only physics voltage) and the convex optimum request different reactive trajectories. The optimal-q dispatch is the benchmark; the droop is reported as a comparator only, and <code>rms dq</code> is the per-point mean of the hourly RMS gap (pu). No claim is made beyond these measured columns.</p><p>Honesty notes: the <code>refused_battery</code> rows are battery-complementarity refusals, not SOCP inexactness; the cone gate had already passed at them. Their cone residual is taken from a diagnostic re-solve (battery tau relaxed, cone gate kept at <code>1e-4</code>), so the stress-regime <code>max ratio</code> covers every seed, refused or not. Any row where that re-solve itself failed would show up in the <code>harvested</code> column as missing and in its <code>detail</code> field; the <code>refused</code> column is the explicit refused fraction of each cell. The harvested value is a diagnostic of the relaxed-tau point, which can differ slightly from the (non-existent) certified point.</p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../socp_applicability/">« SOC Relaxation Applicability</a><a class="docs-footer-nextpage" href="../aggregator_actor/">Aggregator as Actor (wedge, behaviour) »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 7 November 2026 12:27">Saturday 7 November 2026</span>. Using Julia version 1.12.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

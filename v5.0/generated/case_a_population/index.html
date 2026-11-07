@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Case A Population (784 houses) · TSODSO</title><meta name="title" content="Case A Population (784 houses) · TSODSO"/><meta property="og:title" content="Case A Population (784 houses) · TSODSO"/><meta property="twitter:title" content="Case A Population (784 houses) · TSODSO"/><meta name="description" content="Documentation for TSODSO."/><meta property="og:description" content="Documentation for TSODSO."/><meta property="twitter:description" content="Documentation for TSODSO."/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">TSODSO</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Models</span><ul><li><a class="tocitem" href="../toy_dc/">Rung 0: Toy DC</a></li><li><a class="tocitem" href="../lindistflow/">Rung 1-2: LinDistFlow</a></li><li><a class="tocitem" href="../convex_branch_flow/">Rung 3: SOCP + Exactness</a></li><li><a class="tocitem" href="../ac_oracle/">Rung 3: AC-Exactness Oracle</a></li><li><a class="tocitem" href="../restricted_branch_flow/">Rung 3: Overvoltage-Capable Restriction</a></li><li><a class="tocitem" href="../prosumer_welfare/">Rung 3: Devices + GLB-CVX</a></li><li><a class="tocitem" href="../pricing_dlmp/">Rung 4: DADP/DLMP Pricing</a></li><li><a class="tocitem" href="../admm/">Rung 5: ADMM Decomposition</a></li><li><a class="tocitem" href="../ieee123_impedances/">IEEE-123 Real Impedances</a></li><li><a class="tocitem" href="../thesis_reproduction_ieee123/">Thesis Reproduction — IEEE-123</a></li><li><a class="tocitem" href="../thesis_reproduction_assumptions/">Thesis Reproduction — Assumptions</a></li><li><a class="tocitem" href="../socp_applicability/">SOC Relaxation Applicability</a></li><li><a class="tocitem" href="../socp_highpv_exactness/">SOCP Exactness in High-PV (optimal Q)</a></li><li><a class="tocitem" href="../aggregator_actor/">Aggregator as Actor (wedge, behaviour)</a></li><li><a class="tocitem" href="../ieee8500_scaling/">Scaling to IEEE-8500</a></li><li><a class="tocitem" href="../mpc_rolling_horizon/">Rung 8: MPC / Rolling-Horizon RTP</a></li><li><a class="tocitem" href="../stochastic_pv_demand/">Rung 9: Stochastic PV/Demand Uncertainty</a></li><li><a class="tocitem" href="../meshed_reactive_price/">Rung 10: Meshed Networks + Live Reactive Price</a></li></ul></li><li><span class="tocitem">Experiments</span><ul><li><a class="tocitem" href="../experiments/">The Experiment Harness</a></li><li class="is-active"><a class="tocitem" href>Case A Population (784 houses)</a><ul class="internal"><li><a class="tocitem" href="#Construction-rule"><span>Construction rule</span></a></li><li><a class="tocitem" href="#Calibration-provenance"><span>Calibration provenance</span></a></li><li><a class="tocitem" href="#Composition-—-measured-live-from-the-built-population"><span>Composition — measured live from the built population</span></a></li><li><a class="tocitem" href="#Agreement-—-measured-at-the-full-population"><span>Agreement — measured at the full population</span></a></li><li><a class="tocitem" href="#Scaling-—-measured,-not-assumed"><span>Scaling — measured, not assumed</span></a></li><li><a class="tocitem" href="#Thesis-parameters-that-are-NOT-available-—-and-the-rule-that-replaced-each"><span>Thesis parameters that are NOT available — and the rule that replaced each</span></a></li><li><a class="tocitem" href="#Reproducing-every-number-on-this-page"><span>Reproducing every number on this page</span></a></li></ul></li><li><a class="tocitem" href="../settlement_equity/">Settlement, Tariffs &amp; Equity</a></li><li><a class="tocitem" href="../flex_market/">Flexibility Market vs Price Coordination</a></li><li><a class="tocitem" href="../case_a_magnitude/">Case A Magnitude</a></li></ul></li><li><a class="tocitem" href="../../status_policy/">Status &amp; Exception Policy</a></li><li><span class="tocitem">Planning</span><ul><li><a class="tocitem" href="../stackelberg_benders/">Rung 6: Stackelberg-Benders</a></li><li><a class="tocitem" href="../nash_diagonalization/">Rung 7: Nash Diagonalization &amp; Shared Corridor</a></li><li><a class="tocitem" href="../integer_investment/">Rung 11: Discrete/Integer Investment Expansion</a></li></ul></li><li><a class="tocitem" href="../../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Experiments</a></li><li class="is-active"><a href>Case A Population (784 houses)</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Case A Population (784 houses)</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="The-Case-A-population-—-784-houses-over-the-IEEE-13-feeder"><a class="docs-heading-anchor" href="#The-Case-A-population-—-784-houses-over-the-IEEE-13-feeder">The Case A population — 784 houses over the IEEE-13 feeder</a><a id="The-Case-A-population-—-784-houses-over-the-IEEE-13-feeder-1"></a><a class="docs-heading-anchor-permalink" href="#The-Case-A-population-—-784-houses-over-the-IEEE-13-feeder" title="Permalink"></a></h1><p>Every other page of this manual populates its feeder with one residential <code>Aggregator</code> per load bus. The thesis&#39;s Case A study instead works at a true <strong>784-house</strong> population scale — and this page documents, for a reader who never opens the source: how that population is constructed, how it is calibrated, what it actually contains (measured live at docs-build time), what the centralized and decomposed solve engines agree on (measured, and honestly qualified), how solve cost scales with population size and with thread count (measured), and which thesis parameters were NOT available when the population was built — with the exact rule that replaced each one.</p><p>One structural fact shapes the whole design: the decomposed (ADMM) solver requires EXACTLY one aggregator per load node — it throws on any other count — and the centralized price extraction needs one unique bus row per load node. The 784 houses are therefore rolled up, at construction time, into exactly <strong>10 bus-level <code>Aggregator</code>s</strong> (the houses&#39; device lists concatenated, their inelastic demands summed). The house-level granularity is not lost: it lives in the construction itself (every house draws its own seeded profile and its own device parameters), in the pure <code>TSODSO.case_a_household_map</code> accessor, and in the composition statistics below.</p><pre><code class="language-julia hljs">using TSODSO
+using TSODSO:
+    _CASE_A_PV_FRACTION,
+    _CASE_A_TOTAL_HOUSES,
+    _IEEE13_DEV_SCALE,
+    _IEEE13_LOAD_SCALE,
+    _IEEE13_PV_SCALE,
+    build_feeder,
+    build_population,
+    case_a_household_map,
+    sub_seed
+using Printf</code></pre><h2 id="Construction-rule"><a class="docs-heading-anchor" href="#Construction-rule">Construction rule</a><a id="Construction-rule-1"></a><a class="docs-heading-anchor-permalink" href="#Construction-rule" title="Permalink"></a></h2><p><code>TSODSO.build_population(:case_a_784, ...)</code> over the modified IEEE-13 feeder builds the population. Three rules fully determine it; each one is test-enforced in <code>test/test_population_case_a.jl</code>.</p><p><strong>Per-bus house counts.</strong> The houses are distributed over the 10 load buses proportionally to the default population&#39;s per-bus counts — which on this feeder is exactly ONE house per bus (a uniform signal, so &quot;proportional&quot; degenerates to equal shares). Every bus receives the base share <code>total ÷ length(buses)</code>; the residue <code>total % length(buses)</code> is handed out +1 per bus to the FIRST buses in ascending bus-id order. That tiebreak is a documented specialization: the rule&#39;s original &quot;largest buses first&quot; language carries no size signal on a uniform base, so it resolves to bus id. The live tally below prints the resulting table.</p><p><strong>Per-house seeding.</strong> Every house&#39;s profile draw is seeded by <code>Int(hash((s_pop, :house, bus, house_index)) % typemax(UInt32))</code> with <code>s_pop = sub_seed(master_seed, :population)</code> — the materializer&#39;s standard hash idiom extended with a richer tuple. The derivation is deliberately per-HOUSE: the older <code>seed + bus</code> idiom gives every house on a bus the IDENTICAL draw, which would silently collapse this population to ten distinct houses repeated over and over. The tests assert that all 784 seeds are distinct, that rebuilding reproduces the population exactly, and that all 784 full profile draws are distinct.</p><p><strong>The PV-ownership group.</strong> Every household-map row carries a <code>pv_group</code> field from a generic rule (<code>:pv</code> when <code>house_index ≤ ceil(pv_fraction × houses_on_bus)</code>, else <code>:non_pv</code>). At the named constant <code>_CASE_A_PV_FRACTION = 1.0</code> every house is <code>:pv</code> — which is the honest reading of the locked calibration decision below, because the default population is all-PV (every house carries a <code>PVBattery</code>). The field is deliberately generic: a later phase can lower the constant without redesigning anything.</p><p>The live slice below builds the population and tallies the household map. It is build-only work — seeded random draws and struct construction:</p><div class="admonition is-info" id="Sized-against-a-measured-docs-build-baseline,-not-guessed-b0a44f9596535eb2"><header class="admonition-header">Sized against a measured docs-build baseline, not guessed<a class="admonition-anchor" href="#Sized-against-a-measured-docs-build-baseline,-not-guessed-b0a44f9596535eb2" title="Permalink"></a></header><div class="admonition-body"><p><code>julia --project=docs docs/make.jl</code> on the pre-existing (19-page) doc set was MEASURED at <strong>≈6.8 minutes</strong> wall time against this job&#39;s shared <code>timeout-minutes: 30</code> CI budget (the Scaling to IEEE-8500 page recorded that measurement). This page performs <strong>no optimization of any kind</strong> — no model is built, no solver is invoked — and its live slice (784 seeded profile draws plus struct construction) costs seconds. Every solver-derived number on this page is instead READ from the committed CSVs in <code>results/case_a_population/</code>.</p></div></div><pre><code class="language-julia hljs"># The standard Case A seed — the same value every measurement script below
+# records in its CSV provenance columns — and the thesis day length.
+const CASE_A_SEED = 42
+const T_HORIZON = 24
+
+feeder = build_feeder(:ieee13)
+profiles = generate_profiles(; seed = sub_seed(CASE_A_SEED, :profiles), T = T_HORIZON)
+s_pop = sub_seed(CASE_A_SEED, :population)
+aggs = build_population(:case_a_784, feeder, :ieee13, profiles, s_pop)
+households = case_a_household_map(feeder, :ieee13, s_pop)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">784-element Vector{@NamedTuple{house::Int64, bus::Int64, aggregator::Int64, device_set::Symbol, pv_group::Symbol, house_index::Int64}}:
+ (house = 1, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 1)
+ (house = 2, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 2)
+ (house = 3, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 3)
+ (house = 4, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 4)
+ (house = 5, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 5)
+ (house = 6, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 6)
+ (house = 7, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 7)
+ (house = 8, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 8)
+ (house = 9, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 9)
+ (house = 10, bus = 2, aggregator = 2, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 10)
+ ⋮
+ (house = 776, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 70)
+ (house = 777, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 71)
+ (house = 778, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 72)
+ (house = 779, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 73)
+ (house = 780, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 74)
+ (house = 781, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 75)
+ (house = 782, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 76)
+ (house = 783, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 77)
+ (house = 784, bus = 11, aggregator = 11, device_set = :thermostatic_deferrable_pvbattery, pv_group = :pv, house_index = 78)</code></pre><p>The map is seed-independent (assignment structure only — bus / house<em>index / pv</em>group): its seed argument is accepted for call-site symmetry with build<em>population and NOT used; per-house seeding happens only in build</em>population&#39;s profile draws.</p><pre><code class="language-julia hljs">buses = sort(unique(r.bus for r in households))
+per_bus = [(bus = b, houses = count(r -&gt; r.bus == b, households)) for b in buses]
+
+@printf(&quot;households (map rows)       : %d\n&quot;, length(households))
+@printf(&quot;named total constant        : %d\n&quot;, _CASE_A_TOTAL_HOUSES)
+@printf(&quot;bus-level aggregators built : %d\n&quot;, length(aggs))
+@printf(
+    &quot;devices per house           : %d\n&quot;,
+    length(reduce(vcat, (a.devices for a in aggs))) ÷ length(households),
+)
+println(&quot;bus   houses&quot;)
+for row in per_bus
+    @printf(&quot;%3d   %5d\n&quot;, row.bus, row.houses)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">households (map rows)       : 784
+named total constant        : 784
+bus-level aggregators built : 10
+devices per house           : 3
+bus   houses
+  2      79
+  3      79
+  4      79
+  5      79
+  6      78
+  7      78
+  8      78
+  9      78
+ 10      78
+ 11      78</code></pre><h2 id="Calibration-provenance"><a class="docs-heading-anchor" href="#Calibration-provenance">Calibration provenance</a><a id="Calibration-provenance-1"></a><a class="docs-heading-anchor-permalink" href="#Calibration-provenance" title="Permalink"></a></h2><p><strong>Per-house magnitude scale.</strong> Each house&#39;s device magnitudes use the IEEE-13 residential scales DIVIDED by its bus&#39;s house count. The rationale is load-bearing: dividing by houses-per-bus preserves each bus&#39;s aggregate load and PV at the validated default level, keeping both solve engines in the known-good congestion/voltage regime that the one-house-per-bus proxy was calibrated in. Raw per-house scales would instead put roughly 78× the calibrated load through the 6.86 MVA head branch — near-certainly infeasible, which would render every agreement and scaling measurement meaningless. The printout below shows the constants doing the dividing.</p><p><strong>Fractions kept from the default population.</strong> The PV/non-PV split and the elastic/inelastic proportions are the default population&#39;s OWN — continuity with the validated rescaled proxy is the whole calibration principle, and nothing about this population is re-tuned.</p><p><strong>Thesis reference totals, stated as context only.</strong> The thesis&#39;s Case A specification targets PV = 5 MWp, elastic = 6.5 MW and inelastic = 1.5 MW. Those totals are recorded here as PROVENANCE CONTEXT, not as a target: this construction deliberately does NOT chase absolute thesis megawatts. What it preserves is the validated per-bus solve regime at the true house count. Matching the thesis magnitudes is an ablation-study concern for a later phase, and would be a measured, documented change of its own.</p><pre><code class="language-julia hljs">@printf(
+    &quot;IEEE-13 residential scales : load %.3g pu, pv %.3g pu, dev %.3g pu\n&quot;,
+    _IEEE13_LOAD_SCALE,
+    _IEEE13_PV_SCALE,
+    _IEEE13_DEV_SCALE,
+)
+@printf(
+    &quot;PV-fraction constant       : %.1f (all-PV; generic field, see above)\n&quot;,
+    _CASE_A_PV_FRACTION,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">IEEE-13 residential scales : load 0.005 pu, pv 0.03 pu, dev 1 pu
+PV-fraction constant       : 1.0 (all-PV; generic field, see above)</code></pre><h2 id="Composition-—-measured-live-from-the-built-population"><a class="docs-heading-anchor" href="#Composition-—-measured-live-from-the-built-population">Composition — measured live from the built population</a><a id="Composition-—-measured-live-from-the-built-population-1"></a><a class="docs-heading-anchor-permalink" href="#Composition-—-measured-live-from-the-built-population" title="Permalink"></a></h2><p>Everything in the printout below is COMPUTED at build time from the deterministic construction; rebuilding the population reproduces every figure exactly. Units: the IEEE-13 fixture runs on a 100 MVA base, so a per-unit power <code>p</code> corresponds to <code>100·p</code> MW — both are shown. The inelastic figure sums each bus&#39;s Pdc PEAK (its own peak hour), not the all-bus simultaneous peak.</p><pre><code class="language-julia hljs">devices = reduce(vcat, (a.devices for a in aggs))
+n_therm = count(d -&gt; d isa Thermostatic, devices)
+n_defer = count(d -&gt; d isa Deferrable, devices)
+n_batt = count(d -&gt; d isa PVBattery, devices)
+pv_nameplate_pu = sum(maximum(d.Ppv) for d in devices if d isa PVBattery)
+therm_pmax_pu = sum(d.Pmax for d in devices if d isa Thermostatic)
+defer_pmax_pu = sum(d.Pmax for d in devices if d isa Deferrable)
+batt_pmax_pu = sum(d.Pmax for d in devices if d isa PVBattery)
+batt_emax_pu = sum(d.Emax for d in devices if d isa PVBattery)
+pdc_peak_pu = sum(maximum(a.Pdc) for a in aggs)
+
+@printf(&quot;houses                  : %d\n&quot;, length(households))
+@printf(
+    &quot;device mix              : %d Thermostatic, %d Deferrable, %d PVBattery\n&quot;,
+    n_therm,
+    n_defer,
+    n_batt,
+)
+@printf(
+    &quot;total PV nameplate      : %.6g pu = %.6g MW  (Σ per-house peak of Ppv)\n&quot;,
+    pv_nameplate_pu,
+    100 * pv_nameplate_pu,
+)
+@printf(
+    &quot;inelastic load          : %.6g pu = %.6g MW  (Σ over buses of each bus&#39;s Pdc peak)\n&quot;,
+    pdc_peak_pu,
+    100 * pdc_peak_pu,
+)
+@printf(
+    &quot;elastic power bounds    : %.6g MW thermostatic + %.6g MW deferrable  (Σ Pmax)\n&quot;,
+    100 * therm_pmax_pu,
+    100 * defer_pmax_pu,
+)
+@printf(
+    &quot;battery fleet (storage) : %.6g MW power, %.6g MWh energy  (Σ Pmax, Σ Emax)\n&quot;,
+    100 * batt_pmax_pu,
+    100 * batt_emax_pu,
+)
+
+println(&quot;bus  houses  Pdc_peak_pu  Pdc_peak_MW&quot;)
+for row in per_bus
+    a = only(filter(x -&gt; x.bus == row.bus, aggs))
+    @printf(
+        &quot;%3d  %6d  %11.6g  %11.6g\n&quot;,
+        row.bus,
+        row.houses,
+        maximum(a.Pdc),
+        100 * maximum(a.Pdc),
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">houses                  : 784
+device mix              : 784 Thermostatic, 784 Deferrable, 784 PVBattery
+total PV nameplate      : 0.266162 pu = 26.6162 MW  (Σ per-house peak of Ppv)
+inelastic load          : 0.0319722 pu = 3.19722 MW  (Σ over buses of each bus&#39;s Pdc peak)
+elastic power bounds    : 1000 MW thermostatic + 500 MW deferrable  (Σ Pmax)
+battery fleet (storage) : 2.5 MW power, 10 MWh energy  (Σ Pmax, Σ Emax)
+bus  houses  Pdc_peak_pu  Pdc_peak_MW
+  2      79   0.00317089     0.317089
+  3      79   0.00313291     0.313291
+  4      79   0.00317089     0.317089
+  5      79   0.00318987     0.318987
+  6      78   0.00321154     0.321154
+  7      78   0.00315385     0.315385
+  8      78   0.00323077     0.323077
+  9      78   0.00321154     0.321154
+ 10      78      0.00325        0.325
+ 11      78      0.00325        0.325</code></pre><h2 id="Agreement-—-measured-at-the-full-population"><a class="docs-heading-anchor" href="#Agreement-—-measured-at-the-full-population">Agreement — measured at the full population</a><a id="Agreement-—-measured-at-the-full-population-1"></a><a class="docs-heading-anchor-permalink" href="#Agreement-—-measured-at-the-full-population" title="Permalink"></a></h2><p>The protocol is gate-then-golden: run BOTH solve engines on the SAME built population FIRST, record the observed welfare and price deltas, and only then pin any test band derived from that measurement — never pre-loosened, never hand-picked. The band&#39;s home is the <code>:slow</code>-tagged test item in <code>test/test_population_case_a_agreement.jl</code>, deliberately excluded from the default CI lane so the fast suite stays fast.</p><div class="admonition is-info" id="This-section-reads-committed-data;-nothing-is-solved-at-build-time-5123c2947eb58bff"><header class="admonition-header">This section reads committed data; nothing is solved at build time<a class="admonition-anchor" href="#This-section-reads-committed-data;-nothing-is-solved-at-build-time-5123c2947eb58bff" title="Permalink"></a></header><div class="admonition-body"><p>Regenerate the measurement row with:</p><pre><code class="nohighlight hljs">julia --project=. scripts/case_a_agreement.jl --agr-rung gap_1e-10</code></pre><p>The script upserts its row — keyed on Julia version, seed, horizon AND solver rung (<code>agr_tol</code>) — into <code>results/case_a_population/agreement.csv</code>; re-runs replace their own row and never drop others.</p></div></div><p>The measured row, read here at build time:</p><pre><code class="language-julia hljs"># Read a committed measurement CSV with `Base` only — the docs environment pins a
+# deliberately minimal dependency set (no CSV/DataFrames; the same convention as
+# the Scaling to IEEE-8500 page&#39;s reader). These CSVs contain no quoted commas, so
+# a plain per-line split is exact. An EMPTY cell is a deliberately-missing
+# measured value and parses to NaN — never silently to zero.
+function read_case_a_csv(path)
+    lines = readlines(path)
+    header = strip.(split(first(lines), &#39;,&#39;))
+    ncols = length(header)
+    return map(lines[2:end]) do ln
+        cells = split(ln, &#39;,&#39;; limit = ncols)
+        Dict(header[i] =&gt; strip(c) for (i, c) in enumerate(cells))
+    end
+end
+num(s) = (v = tryparse(Float64, s); v === nothing ? NaN : v)
+cell(s) = isempty(s) ? &quot;-&quot; : s
+
+agreement_rows = read_case_a_csv(
+    joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;case_a_population&quot;, &quot;agreement.csv&quot;),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2-element Vector{Dict{SubString{String}, SubString{String}}}:
+ Dict(&quot;welfare_admm&quot; =&gt; &quot;&quot;, &quot;admm_status&quot; =&gt; &quot;error:CertificateError&quot;, &quot;aggregators&quot; =&gt; &quot;10&quot;, &quot;centralized_optimizer&quot; =&gt; &quot;tol_gap_1e-10&quot;, &quot;recommended_atol_price&quot; =&gt; &quot;&quot;, &quot;welfare_centralized&quot; =&gt; &quot;-378163.58894571784&quot;, &quot;admm_exact_maxgap&quot; =&gt; &quot;&quot;, &quot;welfare_abs_delta&quot; =&gt; &quot;&quot;, &quot;agr_tol&quot; =&gt; &quot;default&quot;, &quot;recommended_rtol_welfare&quot; =&gt; &quot;&quot;…)
+ Dict(&quot;welfare_admm&quot; =&gt; &quot;-378163.5654347284&quot;, &quot;admm_status&quot; =&gt; &quot;converged&quot;, &quot;aggregators&quot; =&gt; &quot;10&quot;, &quot;centralized_optimizer&quot; =&gt; &quot;tol_gap_1e-10&quot;, &quot;recommended_atol_price&quot; =&gt; &quot;1.7819846607479022&quot;, &quot;welfare_centralized&quot; =&gt; &quot;-378163.58894571784&quot;, &quot;admm_exact_maxgap&quot; =&gt; &quot;2.773411293424498e-10&quot;, &quot;welfare_abs_delta&quot; =&gt; &quot;0.023510989442002028&quot;, &quot;agr_tol&quot; =&gt; &quot;gap_1e-10&quot;, &quot;recommended_rtol_welfare&quot; =&gt; &quot;6.217147850629488e-7&quot;…)</code></pre><p>Provenance-keyed selection (review WR-03): upsert rows are keyed on (julia<em>version, seed, t</em>horizon, agr<em>tol) and re-runs never drop others, so the CSV grows by design — a <code>--seed 43</code> re-measure or a different horizon must not break this build. This page cites the WINNING LADDER RUNG&#39;s row explicitly: the POP-04 ladder (default → gap</em>1e-10 → gap<em>1e-12 → gapfeas</em>1e-12, stop-on-first-certified) certified the full-population ADMM point at <code>agr_tol = gap_1e-10</code>, and the band was pinned from THAT measurement. Filter to the row identity (constants above + rung) and assert exactly one match — the page still fails loudly if the cited row disappears, or if a re-measure on a newer Julia adds a same-key row (in which case this page&#39;s recorded figures must be refreshed, so failing is the honest outcome).</p><pre><code class="language-julia hljs">agreement = only(
+    filter(
+        r -&gt;
+            r[&quot;seed&quot;] == string(CASE_A_SEED) &amp;&amp;
+            r[&quot;t_horizon&quot;] == string(T_HORIZON) &amp;&amp;
+            get(r, &quot;agr_tol&quot;, &quot;default&quot;) == &quot;gap_1e-10&quot;,
+        agreement_rows,
+    ),
+)
+
+@printf(&quot;centralized leg  optimizer path : %s\n&quot;, cell(agreement[&quot;centralized_optimizer&quot;]),)
+@printf(
+    &quot;centralized leg  welfare        : %s (certified)\n&quot;,
+    cell(agreement[&quot;welfare_centralized&quot;]),
+)
+@printf(&quot;decomposed leg   iterations     : %d\n&quot;, round(Int, num(agreement[&quot;admm_iters&quot;])),)
+@printf(&quot;decomposed leg   status         : %s\n&quot;, cell(agreement[&quot;admm_status&quot;]))
+@printf(
+    &quot;decomposed leg   welfare        : %s (certified)\n&quot;,
+    cell(agreement[&quot;welfare_admm&quot;]),
+)
+@printf(
+    &quot;welfare deltas   abs / rel      : %s / %s\n&quot;,
+    cell(agreement[&quot;welfare_abs_delta&quot;]),
+    cell(agreement[&quot;welfare_rel_delta&quot;]),
+)
+@printf(
+    &quot;price deltas     abs / rel      : %s / %s\n&quot;,
+    cell(agreement[&quot;price_max_abs_delta&quot;]),
+    cell(agreement[&quot;price_max_rel_delta&quot;]),
+)
+@printf(
+    &quot;recommended test band           : %s\n&quot;,
+    cell(agreement[&quot;recommended_rtol_welfare&quot;]),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">centralized leg  optimizer path : tol_gap_1e-10
+centralized leg  welfare        : -378163.58894571784 (certified)
+decomposed leg   iterations     : 80
+decomposed leg   status         : converged
+decomposed leg   welfare        : -378163.5654347284 (certified)
+welfare deltas   abs / rel      : 0.023510989442002028 / 6.217147850629488e-8
+price deltas     abs / rel      : 0.17819846607479023 / 0.17819846607479023
+recommended test band           : 6.217147850629488e-7</code></pre><p>The measured agreement (this row, <code>agr_tol = gap_1e-10</code>): BOTH engines certify the full-population point and they AGREE within a measured, stated tolerance. How the row was earned, honestly: at the plain default AGR factory the ADMM loop converged (80 iterations) but the battery-complementarity certificate refused the point on CERTIFICATE NOISE — the complementarity product sat 0.04% over its ~1e-12 relative band at the per-house-divided battery scale. The repo&#39;s answer was NEVER a gate change: the bounded, pre-planned solver-precision ladder (default → gap<em>1e-10 → gap</em>1e-12 → gapfeas<em>1e-12, stop-on-first-certified, hard stop) tightened the AGR SOLVER&#39;s convergence precision through `solve</em>admm<code>&#39;s</code>agr<em>optimizer<code>seam — and the FIRST rung (</code>gap</em>1e-10<code>) certified the point at the same 80 iterations. Every gate (the battery band, tau_batt, the exactness gate) is byte-identical throughout. The tolerance is MEASURED from the certified pair: the engines&#39; welfare differs by</code>welfare<em>rel</em>delta = 6.217147850629488e-8<code>and prices by at most</code>price<em>max</em>abs<em>delta = price</em>max<em>rel</em>delta = 0.17819846607479023<code>; the pinned test band is 10× those observed deltas, floored at solver noise (welfare rtol 6.217147850629488e-7, price atol/rtol 1.7819846607479022) and asserted LIVE in the</code>:slow` test item — the former tracked skip is lifted.</p><h2 id="Scaling-—-measured,-not-assumed"><a class="docs-heading-anchor" href="#Scaling-—-measured,-not-assumed">Scaling — measured, not assumed</a><a id="Scaling-—-measured,-not-assumed-1"></a><a class="docs-heading-anchor-permalink" href="#Scaling-—-measured,-not-assumed" title="Permalink"></a></h2><div class="admonition is-info" id="These-curves-are-precomputed,-and-deliberately-so-9a83426240f92965"><header class="admonition-header">These curves are precomputed, and deliberately so<a class="admonition-anchor" href="#These-curves-are-precomputed,-and-deliberately-so-9a83426240f92965" title="Permalink"></a></header><div class="admonition-body"><p>Every leg below costs hundreds of seconds of solve wall time per process — far past any docs-build slice budget, and orders past the seconds this page&#39;s build-only slice spends. The legs are therefore LOADED from committed data, not solved on this page. Regenerate them with:</p><pre><code class="nohighlight hljs">scripts/run_case_a_scaling.sh                  # every leg (tens of minutes total)
+scripts/run_case_a_scaling.sh --ladder-only    # the population ladder leg only
+scripts/run_case_a_scaling.sh --sweep-only     # the threads-sweep legs only</code></pre></div></div><p><strong>Population ladder.</strong> Deterministic NESTED PREFIXES of the same seeded population: every rung&#39;s houses are a subset (by house index) of every larger rung&#39;s, drawn from the identical per-house seeds, solved with the identical solver configuration — no per-rung re-tuning, so the ladder measures ONE configuration&#39;s behavior as the population grows.</p><pre><code class="language-julia hljs">ladder = read_case_a_csv(
+    joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;case_a_population&quot;, &quot;scaling_ladder.csv&quot;),
+)
+
+println(&quot;rung   fraction  houses  iters  status                  wall_s&quot;)
+for r in ladder
+    @printf(
+        &quot;%-6s %8.4g  %6d  %5d  %-22s %7.1f\n&quot;,
+        r[&quot;rung_label&quot;],
+        num(r[&quot;fraction&quot;]),
+        round(Int, num(r[&quot;houses_actual&quot;])),
+        round(Int, num(r[&quot;iters&quot;])),
+        r[&quot;status&quot;],
+        num(r[&quot;wall_s&quot;]),
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">rung   fraction  houses  iters  status                  wall_s
+rung1   0.01282      10      2  converged                 27.7
+rung2     0.125      90      4  converged                  4.6
+rung3      0.25     190      5  converged                 14.1
+rung4       0.5     390      5  converged                 28.8
+rung5      0.75     584     91  converged                419.8
+rung6         1     784     80  error:CertificateError   508.4</code></pre><p>The recorded shape: the iteration count is flat through the half-population rung and rises sharply at the three-quarter and full rungs — the heterogeneous-scale iteration growth this population was built to probe is real, and it lands between the last two rungs. The full-population rung CONVERGES at its recorded iteration count and is then refused by the battery-complementarity certificate — the SAME refusal the agreement section&#39;s default-rung history records; the scaling legs ran at the default factory by design (no re-tuning), and the certified <code>gap_1e-10</code> resolution is the agreement section&#39;s. A refused leg is a recorded outcome, kept exactly as measured (the wall time is the solve&#39;s own).</p><p><strong>Threads sweep.</strong> One full-population solve per OS process: thread count is fixed at process start, so the sweep drives ONE <code>julia -t N</code> process per leg through the shell driver above, with the linear-algebra backend pinned to a single thread in every leg for row-to-row comparability and the executor actually used recorded per row.</p><pre><code class="language-julia hljs">sweep = read_case_a_csv(
+    joinpath(pkgdir(TSODSO), &quot;results&quot;, &quot;case_a_population&quot;, &quot;threads_sweep.csv&quot;),
+)
+serial_wall = num(only(filter(r -&gt; r[&quot;executor&quot;] == &quot;serial&quot;, sweep))[&quot;wall_s&quot;])
+
+println(&quot;threads  executor  iters  status                  wall_s    speedup&quot;)
+for r in sweep
+    w = num(r[&quot;wall_s&quot;])
+    @printf(
+        &quot;%7d  %-8s  %5d  %-22s %7.1f  %.2fx\n&quot;,
+        round(Int, num(r[&quot;threads&quot;])),
+        r[&quot;executor&quot;],
+        round(Int, num(r[&quot;iters&quot;])),
+        r[&quot;status&quot;],
+        w,
+        serial_wall / w,
+    )
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">threads  executor  iters  status                  wall_s    speedup
+      1  serial       80  error:CertificateError   593.4  1.00x
+      2  parallel     80  error:CertificateError   478.8  1.24x
+      4  parallel     80  error:CertificateError   410.8  1.44x</code></pre><p>The speedup column is COMPUTED from the measured walls against the serial leg — never assumed. The recorded outcome is a modest positive speedup, consistent with parallelism spanning only the ten bus subproblems while the solver&#39;s own linear-algebra backend stays single-threaded. A negative or null result would have been an equally valid, equally recorded outcome (the project&#39;s honesty policy pre-authorizes it); what is reported is what was measured. Every leg&#39;s status column shows the SAME deterministic certificate refusal at the full population — the recorded state, not a smoothed one.</p><h2 id="Thesis-parameters-that-are-NOT-available-—-and-the-rule-that-replaced-each"><a class="docs-heading-anchor" href="#Thesis-parameters-that-are-NOT-available-—-and-the-rule-that-replaced-each">Thesis parameters that are NOT available — and the rule that replaced each</a><a id="Thesis-parameters-that-are-NOT-available-—-and-the-rule-that-replaced-each-1"></a><a class="docs-heading-anchor-permalink" href="#Thesis-parameters-that-are-NOT-available-—-and-the-rule-that-replaced-each" title="Permalink"></a></h2><p>The thesis specifies its Case A population&#39;s fine structure in an appendix (its Appendix E) that is not public. Building a population at this size without it required an explicit, deterministic replacement for each unavailable parameter — each stated here, so the construction reads as calibration provenance rather than hidden re-tuning:</p><table><tr><th style="text-align: right">Unavailable thesis parameter (Appendix E)</th><th style="text-align: right">Rule that replaces it here</th></tr><tr><td style="text-align: right">Per-house appliance ownership</td><td style="text-align: right">The device set is FIXED for every house: one Thermostatic, one Deferrable, one PVBattery — the default population&#39;s three-device house shape. No ownership heterogeneity is claimed.</td></tr><tr><td style="text-align: right">Per-house PV sizing</td><td style="text-align: right">The PV/non-PV split keeps the default population&#39;s fraction, which is all-PV: every house carries a PV-battery at the divided-by-house-count scale (the <code>_CASE_A_PV_FRACTION = 1.0</code> triviality, stated honestly above).</td></tr><tr><td style="text-align: right">Per-node house counts</td><td style="text-align: right">Counts are proportional to the default population&#39;s per-bus counts (uniform on this feeder, hence equal shares), with the residue assigned +1 per bus to the first buses in ascending bus-id order — the documented tiebreak.</td></tr></table><p>Each replacement is deterministic, test-enforced, and exposed row by row through <code>TSODSO.case_a_household_map</code>, so any reader can audit the resulting assignment without constructing anything.</p><h2 id="Reproducing-every-number-on-this-page"><a class="docs-heading-anchor" href="#Reproducing-every-number-on-this-page">Reproducing every number on this page</a><a id="Reproducing-every-number-on-this-page-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducing-every-number-on-this-page" title="Permalink"></a></h2><pre><code class="nohighlight hljs"># the scaling measurements — ladder + threads sweep (tens of minutes total)
+scripts/run_case_a_scaling.sh
+# ... or leg by leg, one julia process per thread count:
+julia --project=. -t 1 scripts/case_a_scaling.jl --mode ladder
+julia --project=. -t 4 scripts/case_a_scaling.jl --mode threads-sweep --threads 4
+# the agreement measurement — both engines at the full population
+julia --project=. scripts/case_a_agreement.jl
+# the agreement test — slow lane only; the default CI lane stays fast
+TSODSO_TEST_SET=slow julia --project=. -e &#39;import Pkg; Pkg.test()&#39;</code></pre><p>Each script upserts its own rows into <code>results/case_a_population/*.csv</code>, keyed on provenance (Julia version, seed, horizon, thread count, rung) — re-runs replace their own rows and never drop others.</p><p><em>(Appended 2026-10-24. Every figure on this page names its source. The composition figures are computed live at docs-build time from the deterministic construction — seed 42, horizon 24 — and are therefore exact. The agreement figures are read from <code>results/case_a_population/agreement.csv</code>, the winning ladder rung&#39;s row keyed <code>seed=42, t_horizon=24, agr_tol=gap_1e-10</code> (recorded on <code>julia_version=1.12.5</code>); the default-rung row beside it records the honest certificate refusal that motivated the ladder. Rows keyed on other provenance — a <code>--seed 43</code> re-measure, a different horizon, another rung — upsert beside it and do not affect this page. The ladder figures come from <code>results/case_a_population/scaling_ladder.csv</code>, rows <code>rung1</code> through <code>rung6</code>. The threads figures come from <code>results/case_a_population/threads_sweep.csv</code>, one row each at 1, 2 and 4 threads. The population itself is <code>TSODSO.build_population(:case_a_784, ...)</code>; the household-level assignment is <code>TSODSO.case_a_household_map</code>. This page delivers the phase requirement POP-06: composition with calibration provenance and the Appendix-E unavailability list.)</em></p><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../experiments/">« The Experiment Harness</a><a class="docs-footer-nextpage" href="../settlement_equity/">Settlement, Tariffs &amp; Equity »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 7 November 2026 12:27">Saturday 7 November 2026</span>. Using Julia version 1.12.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
