@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
-status: planning
-stopped_at: Phase 47 (audit gap closure) context gathered
-last_updated: "2026-11-06T23:28:03.000Z"
-last_activity: 2026-11-06 -- Phase 46 complete (verified, override recorded)
+status: executing
+stopped_at: Phase 47 planned (3 plans), execution starting
+last_updated: "2026-11-07T01:19:57.215Z"
+last_activity: 2026-11-07 -- Phase 47 execution started
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 45
+  total_plans: 48
   completed_plans: 45
   percent: 89
 ---
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 47 — v5-audit-gap-closure (v5.0 audit gaps_found)
+**Current focus:** Phase 47 — v5-audit-gap-closure
 
 ## Current Position
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
-Phase: 47 (v5-audit-gap-closure) — PLANNING
-Plan: 0 of ?
-Status: Planning Phase 47 (gap closure from v5.0-MILESTONE-AUDIT.md)
-Last activity: 2026-11-06 -- Phase 46 complete; next: milestone audit
+Phase: 47 (v5-audit-gap-closure) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 47
+Last activity: 2026-11-07 -- Phase 47 execution started
 Progress: [██████████] 100%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
