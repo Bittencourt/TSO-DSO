@@ -5,7 +5,7 @@ source: v5.0 milestone audit, tech debt not closed by Phase 47
 area: ci / experiments / api / docs
 ---
 
-The v5.0 milestone audit (`.planning/v5.0-MILESTONE-AUDIT.md`) found two blockers (B1, B2) and nine
+The v5.0 milestone audit (`.planning/milestones/v5.0-MILESTONE-AUDIT.md`) found two blockers (B1, B2) and nine
 integration warnings (W1-W9). Phase 47 closed B1, B2, W2 and W3. The items below are what is left. None of
 them makes a committed result wrong. Each comes with a suggested fix.
 
@@ -37,7 +37,7 @@ them makes a committed result wrong. Each comes with a suggested fix.
   apart from a normal one, so `clear_flex_market` cannot refuse it. Fix: add a provenance field, for example
   `objective_kind`, with a default that keeps existing constructors and digests unchanged, and refuse
   actor-run inputs. This is part of the future requirement SETL-F2 (actor-aware flexibility market and tariff
-  comparison) in `.planning/REQUIREMENTS.md`.
+  comparison) in `.planning/milestones/v5.0-REQUIREMENTS.md` (archived at the v5.0 close).
 - **`TAU_EV_ADMM` docstring.** The docstring in `src/models/complementarity_ev.jl` still says the ADMM
   final-consolidation call site is its only user. The price-taker and flex stage-2 solves now reuse it,
   because they pair it with `τ_batt = 1e-3`. Fix: update the docstring only, with the value unchanged, the next
@@ -45,7 +45,7 @@ them makes a committed result wrong. Each comes with a suggested fix.
 
 ## Info items from the phase-47 code review (iteration 2, accepted, not fixed)
 
-Details are in `.planning/phases/47-v5-audit-gap-closure/47-REVIEW.md`.
+Details are in `.planning/milestones/v5.0-phases/47-v5-audit-gap-closure/47-REVIEW.md`.
 
 - **IN-01:** FourQuadBESS has no co-charge certificate on the price-taker paths. This gap predates the review.
 - **IN-02:** no test covers the rethrow branch of `_certificate_status`.

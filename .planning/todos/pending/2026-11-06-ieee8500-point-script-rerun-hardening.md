@@ -8,7 +8,7 @@ area: scripts / measurement
 Two warnings were left open when Phase 46 closed. Both affect only future re-runs of
 `scripts/run_ieee8500_point.sh` and `scripts/ieee8500_scenario_point.jl`. The committed rows in
 `results/ieee8500_benchmark/` and the docs numbers are not affected. Details are in
-`.planning/phases/46-ieee-8500-headline-measurement-go-no-go/deferred-items.md`, items 5–7.
+`.planning/milestones/v5.0-phases/46-ieee-8500-headline-measurement-go-no-go/deferred-items.md`, items 5–7.
 
 - **WR-01:** with `REPLACE_LABEL=1`, the wrapper overwrites `runs/<label>.*` evidence before the script
   decides whether to keep or replace the existing final row. Fix: write the new run to temporary paths, and
