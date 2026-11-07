@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
-status: milestone_complete
-stopped_at: Milestone complete (Phase 47 was final phase)
-last_updated: 2026-11-07T04:47:38.240Z
-last_activity: 2026-11-07 -- Phase 47 complete (verification passed 4/4); milestone v5.0 ready for re-audit
+status: Awaiting next milestone
+stopped_at: Milestone v5.0 completed and archived
+last_updated: "2026-11-07T12:06:44.837Z"
+last_activity: 2026-11-07 — Milestone v5.0 completed and archived
 progress:
   total_phases: 9
   completed_phases: 9
@@ -18,23 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-08)
+See: .planning/PROJECT.md (updated 2026-11-07)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Milestone complete
+**Current focus:** Planning next milestone (v5.0 shipped 2026-11-07)
 
 ## Current Position
 
-Milestone: v5.0 Aggregator Layer at Scale (Phases 39–47, 34 requirements mapped)
-Phase: 47 (complete)
-Plan: 3/3 complete
-Status: Milestone complete
-Last activity: 2026-11-07
-Progress: [██████████] 100%
-
-v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
-policy (report failed certificates, never loosen the gate; memory-infeasible/refused are valid
-outcomes). See ROADMAP.md v5.0 header.
+Phase: Milestone v5.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-07 — Milestone v5.0 completed and archived
 
 ### Carry-over backlog — ALL CLOSED 2026-08-26 (see Quick Tasks table)
 
@@ -617,15 +611,23 @@ Items acknowledged and carried forward:
 | todo | Todo: LinDistFlow-copy vmax bound breaks the relaxation under reverse flow | Open research decision, carried forward | v4.0 close (2026-10-08) |
 | verification_gap | Phases 37/38 `human_needed` | Guide prose + compare writeup checked and fixed (quick 261008-clo); GitHub CI checked by the v4.0 tag run | v4.0 close (2026-10-08) |
 | tech_debt | W3 literate pages (bilevel / VE / integer Nash); Phase 29 WR-01/IN-01; held-out tol_gap 1e-8 vs 5e-10 (documented); `/gsd-secure-phase` not run for 29–38 | Deferred (see milestones/v4.0-MILESTONE-AUDIT.md) | v4.0 close (2026-10-08) |
+| quick_task | 32 quick tasks reported `status: missing` by `audit-open` | Not open work — same frontmatter-convention gap as at the v3.0/v4.0 closes; all have committed SUMMARYs | v5.0 close (2026-11-07) |
+| todo | Todo: EV overnight (wrap-session) cyclic-SOC model (`2026-11-02-ev-overnight-cyclic-soc-model.md`) | Open todo, carried forward | v5.0 close (2026-11-07) |
+| todo | Todo: actor ΔW as a result field (`2026-11-03-actor-delta-w-in-result.md`) | Open todo, carried forward | v5.0 close (2026-11-07) |
+| todo | Todo: IEEE-8500 point-script rerun hardening, WR-01/WR-02 (`2026-11-06-ieee8500-point-script-rerun-hardening.md`) | Open todo, carried forward | v5.0 close (2026-11-07) |
+| todo | Todo: v5.0 integration backlog — W1, W4–W9, N1–N4, Phase 47 review IN-01..09, two docs `@ref` warnings (`2026-11-06-v5-integration-check-backlog.md`) | Open todo, carried forward | v5.0 close (2026-11-07) |
+| todo | The three v4.0-close todos above (seed-42 demo, 1.12.7 `fit_baseline`, LinDistFlow-copy vmax) | Still open, carried forward again | v5.0 close (2026-11-07) |
+| future_req | SETL-F2 actor-aware flex market / tariff comparison; IEEE-8500 T=24 GO (memory levers); reactive q in flex stage 2 | Deferred to a future milestone (see milestones/v5.0-REQUIREMENTS.md) | v5.0 close (2026-11-07) |
+| tech_debt | Nyquist: VALIDATION.md missing for phases 42–43, partial for 44 | Discovery only; `/gsd-validate-phase` not run | v5.0 close (2026-11-07) |
 
 *(Removed from this table 2026-09-28: `INT-STRETCH` integer Nash diagonalization is now in scope as BILEV-07, v4.0 Phase 31.)*
 
 ## Session Continuity
 
-Last session: 2026-11-05T04:18:23.165Z
-Stopped at: Completed 45-06-PLAN.md
+Last session: 2026-11-07
+Stopped at: Milestone v5.0 completed and archived
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 39 with /gsd-plan-phase 39 (research flags: Clarabel concurrency spike, `direct_model`, 8500 attribution)
+- Start the next milestone with /gsd-new-milestone

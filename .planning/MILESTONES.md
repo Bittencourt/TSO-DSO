@@ -1,5 +1,49 @@
 # Milestones
 
+## v5.0 Aggregator Layer at Scale (Shipped: 2026-11-07)
+
+**Phases completed:** 9 phases (39–47), 48 plans, 90 tasks · 34/34 requirements (PAR-01..05,
+SCALE-06..08, POP-01..06, SETL-01..08, REPRO-03..05, DEV-06..10, ACTOR-01..04)
+
+**Delivered:** the aggregator layer scaled to the thesis's 784-house population with a parallel-ready
+ADMM, a per-actor settlement ledger with equity metrics and a five-scheme tariff/flexibility-market
+comparison, new flexible devices and profit-seeking aggregator actors, and an honest, measured
+IEEE-8500 go/no-go.
+
+**Key accomplishments:**
+
+- Parallel-ready ADMM: opt-in threaded AGR executor (`parallel`), serial vs threaded bitwise-equal on
+  IEEE-13 at `-t 4`, threads recorded in run provenance, IEEE-8500 memory growth attributed to named
+  components.
+- 784-house thesis population: `:case_a_784` selector (10 bus aggregators), scaling and threads sweep
+  (1.44× at `-t 4`), and POP-04 closed by measurement through an additive `agr_optimizer` precision
+  seam; the default path stayed byte-identical.
+- Settlement & equity: double-entry `SettlementLedger` with exact money conservation, Gini, Theil,
+  Atkinson and Palma on bills and on surplus, revenue-neutral flat/TOU tariffs, and `compare_tariffs`
+  across DADP, flat, TOU and FIT.
+- Case A magnitude, pre-registered: W_DADP certified on 5/5 seeds. The FIT counterfactual is
+  infeasible at the registered mix, so the headline Δ% is reported as undefined; the DSO-surplus sign
+  flip is confirmed.
+- Devices and actors: binary-free `ElectricVehicle` (V1G/V2G with a co-charge certificate),
+  `HeatPump` 2R2C and `SmartInverterPV`, via capability traits. Welfare vs profit-wedge aggregator
+  objectives, multi-bus `Portfolio`s, and seeded behaviour wrappers (compliance, opt-out, rebound).
+- Flexibility market: two-stage block-bid `clear_flex_market` (uniform or pay-as-bid, explicit
+  baseline) with flex payments as mirrored ledger pairs (residual 0.0), plus the cross-scheme table on
+  IEEE-13 and IEEE-123.
+- IEEE-8500: NO-GO for the d=0.1 T=24 headline recorded from data (11.209 GiB VmHWM above the
+  threshold, lower-bounded requirement). The T=10 point was measured through `Scenario`, and refused
+  with a certificate.
+- Audit closure (Phase 47): honest V2G certificates on the price-taker and flex paths, loud refusals
+  for actors in the flex market and tariff comparison (scope recorded as SETL-F2) and for
+  reactive-decision devices in stage 2. Full suite 37134/0/0/7; canary unchanged at 56 iterations /
+  −4823.66604824162.
+
+**Known deferred items at close:** 7 backlog todos (see STATE.md Deferred Items), integration
+warnings W1, W4–W9 and N1–N4, two docs `@ref` warnings, and Nyquist validation missing for phases 42–43
+and partial for 44 (see milestones/v5.0-MILESTONE-AUDIT.md).
+
+---
+
 ## v4.0 Correctness & Depth (Shipped: 2026-10-08)
 
 **Phases completed:** 13 phases (26–38), 131 plans, 126 tasks · 37/37 requirements (FIX-01..11, BILEV-01..08, ARCH-01..10, HYG-01..08)
@@ -13,17 +57,22 @@ architecture, and a hygienic, CI-split, JET-ratcheted codebase.
 - Network & device correctness: Gan–Low exactness-copy direction as default (`thesis_literal=true`
   opt-in), receiving-end limit 3.37 (`:smax_rev`) in SOCP, AC and DLMP, whole-horizon SOC with
   terminal pin, power-factor reactive draw for flexible loads, DLMP `cone`/`drop` naming.
+
 - Pricing certificates: hybrid exactness floor `max(2e-7, 1e-9·ref_b)` shared by every gate (now
   including the MPC first tier and the held-out stochastic draws); FIT and MPC settlement against a
   limits-free AC power flow; LL cuts with true joint T>1 recourse.
+
 - Planning depth: one-shot bilevel KKT-MILP certified by three independent oracles; SOCP-in-the-loop
   Benders on IEEE-13 with `:auto` master bounds and oracle feasibility cuts; GNE/variational
   equilibrium selection; integer N>1 Nash.
+
 - Architecture: `Scenario` + typed strategies (`Centralized`/`ADMM`/`MPC`/`Stochastic`) dispatched by
   `TSODSO.run`, `supports_pf` trait, shared `AbstractFeeder`/`close_balance!`/`ModelContext`, typed
   errors and a documented status vocabulary; IEEE-8500 re-measured after the refactor.
+
 - Hygiene: exports 192 → 90 with `public` API, planning-ID guard, JET ratchet in CI, fast/slow test
   split with an expected-broken guard, scripts index and archive, root Manifest dropped.
+
 - Audit closure (Phase 38 + quick tasks): both cross-phase blockers closed; full suite 32379/0/0/5 on
   Julia 1.12.5, canary iters 56 never re-pinned, JET 0 NEW, docs green.
 

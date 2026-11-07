@@ -19,7 +19,16 @@ open-source solver, and get trustworthy, reproducible results and prices — wit
 assumption documented and every layer swappable.** If everything else fails, this must work:
 correct, validated optimization models that are easy to extend for research.
 
-## Current Milestone: v5.0 Aggregator Layer at Scale
+## Last Shipped Milestone: v5.0 Aggregator Layer at Scale (shipped 2026-11-07)
+
+**Outcome:** 9 phases (39–47), 48 plans, 34/34 requirements. The audit closed as `tech_debt` with no
+blockers. Full suite 37134/0/0/7 on Julia 1.12.5, knife-edge canary unchanged (56 / −4823.66604824162),
+docs green. Every target feature shipped, and two of the measured outcomes are honest non-headlines:
+the Case A Δ% is **undefined** at the registered mix, because the FIT counterfactual is infeasible on
+all 5 seeds; and the IEEE-8500 d=0.1 T=24 headline is **NO-GO on this host** (11.209 GiB VmHWM), with
+the T=10 point measured and refused by its certificate. See `milestones/v5.0-ROADMAP.md` and
+`milestones/v5.0-MILESTONE-AUDIT.md`.
+
 
 **Goal:** Make the DSO⇄aggregators operational layer realistic and publishable at true population
 scale — real prosumer populations solved in parallel, aggregators modeled as actors with their own
@@ -43,7 +52,7 @@ objectives, per-actor settlement and equity outputs, and richer flexible devices
 **Out of this milestone:** TSO network model and T&D coupling; DSO physics work (OLTC/switched
 capacitors, unbalanced 3-phase, systematic back-feed exactness study).
 
-## Last Shipped Milestone: v4.0 Correctness & Depth (shipped 2026-10-08)
+## Shipped Milestone: v4.0 Correctness & Depth (2026-10-08)
 
 **Goal:** Fix the modeling defects confirmed by the 2026-09-28 full-project quality audit, deepen
 the planning layer into a genuine bilevel TSO–DSO game on a real network, then restructure the
@@ -171,9 +180,30 @@ See `milestones/v2.1-ROADMAP.md` and `milestones/v2.1-MILESTONE-AUDIT.md`, and
       IEEE-8500 re-measured) — v4.0
 - ✓ Goldens re-derivation & thesis restatement (FIX-11) and hygiene (HYG-01..08: no planning IDs in
       source, lean `public` exports, JET ratchet, fast/slow CI split, scripts index) — v4.0
+- ✓ Parallel-ready ADMM (PAR-01..05: opt-in threaded AGR executor, serial == threaded bitwise,
+      thread provenance, per-aggregator result keys) and IEEE-8500 memory attribution (SCALE-06) — v5.0
+- ✓ True 784-house Case A population (POP-01..06: `:case_a_784` selector, household map,
+      centralized-vs-ADMM agreement pinned through the `agr_optimizer` precision seam, scaling report) — v5.0
+- ✓ Settlement, ledger & equity (SETL-01..06: conserved per-actor double-entry ledger, flat/TOU/FIT/DADP
+      legs, AC-feasibility status, Gini/Theil/Atkinson/Palma, rebound) — v5.0
+- ✓ Pre-registered Case A magnitude + gap ablation (REPRO-03..05: W_DADP certified 5/5 seeds; Δ%
+      honestly UNDEFINED at the registered mix) — v5.0
+- ✓ Flexible devices (DEV-06..10: capability traits, V1G/V2G `ElectricVehicle` with co-charge certificate,
+      `HeatPump` 2R2C, `SmartInverterPV`) — v5.0
+- ✓ Aggregator as actor (ACTOR-01..04: welfare vs profit-wedge objectives, multi-bus `Portfolio`,
+      seeded behaviour wrappers, wedge ledger lines) — v5.0
+- ✓ Flexibility market vs price coordination (SETL-07/08: two-stage block-bid `clear_flex_market`,
+      five-scheme comparison table; actor settlement scoped out as SETL-F2) — v5.0
+- ✓ IEEE-8500 go/no-go (SCALE-07/08: NO-GO recorded from data; T=10 measured through `Scenario`) — v5.0
 ### Active
 
-v5.0 Aggregator Layer at Scale — requirements in `.planning/REQUIREMENTS.md` (scale + real population, aggregator as actor, settlement & equity, new devices, Case A magnitude).
+No milestone in progress; the next one is defined with `/gsd-new-milestone`. Candidate directions carried
+from v5.0 (see `milestones/v5.0-REQUIREMENTS.md` future requirements and the backlog todos):
+
+- [ ] SETL-F2: actor-aware flexibility market and tariff comparison (wedges and flex payments in one ledger)
+- [ ] IEEE-8500 T=24 headline GO (memory levers or a bigger host)
+- [ ] Reactive (q) dispatch in flex stage 2; overnight cyclic-SOC EV model; ΔW as a result field
+- [ ] v5.0 integration backlog (W1, W4–W9, N1–N4) and Nyquist validation for phases 42–44
 
 ### Out of Scope
 
@@ -209,6 +239,12 @@ v5.0 Aggregator Layer at Scale — requirements in `.planning/REQUIREMENTS.md` (
   dynamic tariff signals coordinating many devices without compromising network security.
 
 ## Current State
+
+**v5.0 Aggregator Layer at Scale SHIPPED 2026-11-07** (Phases 39–47, 34/34 requirements). Full suite
+37134/0/0/7 on Julia 1.12.5, knife-edge canary unchanged (56 iterations), JET 20 baseline / 0 new, docs
+green (two backlogged internal `@ref` warnings). Deferred at close: 7 backlog todos, integration warnings
+W1, W4–W9 and N1–N4, Nyquist gaps 42–44, SETL-F2. Details are in STATE.md Deferred Items and
+`milestones/v5.0-MILESTONE-AUDIT.md`.
 
 **v4.0 Correctness & Depth SHIPPED 2026-10-08** (Phases 26–38, 37/37 requirements). Full suite
 32379/0/0/5 on Julia 1.12.5, knife-edge canary unchanged (iters 56), JET 0 NEW, docs green. Deferred at
@@ -574,6 +610,11 @@ flow; linking price = interconnection dual ≈ DLMP.
 | **Reactive dual read "for free" off a certified `:balance_q`** — no live μ dual-ascent loop | Thesis A3 makes DERs active-only, so `qag_dso` is a fixed constant; a one-shot certified dual suffices and avoids over-building | ✓ Good — v2.1; `assert_no_slack` gate makes the reactive DLMP trustworthy; `Scenario.jl` golden-hash untouched |
 | **Real IEEE-123 impedances via a dependency-free regex parser** (PMD dropped entirely, not weakdep) | The `.dss` files are simple; a ~50-line parser satisfies "PMD out of runtime deps" trivially and is more reproducible | ✓ Good — v2.1; zero new deps; linecode.1 sanity-pinned (R1≈0.05797) |
 | **Thesis golden pinned on the DSO-surplus SIGN FLIP, not the welfare ratio** | The aggregate `welfare_dadp/welfare_fit` ratio sign-inverts on negative welfare; the surplus sign flip is the thesis's own framing and is sign-safe | ✓ Good — v2.1; honest directional-only result — +25% magnitude does not transfer (~+0.263%, restated Phase 28 CR-01 from the stale ~+0.045% figure), stated plainly |
+| **Golden + honesty policies for v5.0**: default path byte-identical, canary never re-pinned; a failed certificate is a reported status, never a loosened gate | Scale work must not silently move validated results; refusals and memory-infeasibility are valid measurements | ✓ Good — canary at 56 / −4823.66604824162 through all 9 phases; refusals surfaced (784-house battery certificate, 8500 T=10, FIT infeasible) |
+| **Pre-registration before the Case A magnitude run** | Prevents tuning toward the thesis's +25%; the protocol froze the config, seeds and ablation axes before any code | ✓ Good — Δ% reported as UNDEFINED rather than forced |
+| **Capability traits** (`storage_kind`, `has_reactive_decision`) over type lists for device routing | New devices (EV, heat pump, smart inverter) plug in without touching every certificate site | ⚠️ Revisit — a shape-predicate leftover caused the false V2G `:ok` (audit B1, fixed in Phase 47); route every certificate decision through traits |
+| **Actor settlement through the flex market / tariff comparison scoped out (SETL-F2)**, guarded by an `actors` `ArgumentError` | A real integration needs wedge + flex payment in one ledger; a loud refusal beats a silent mis-settlement | — Pending — future milestone |
+| **IEEE-8500 headline decided go/no-go from committed measurements**, not re-engineered in-milestone | Memory levers are a separate research task; the decision record states a measured lower bound | ✓ Good — NO-GO recorded; T=10 measured through `Scenario` |
 
 ## Evolution
 
@@ -593,6 +634,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
+*Last updated: 2026-11-07 after the v5.0 milestone (Aggregator Layer at Scale shipped; archived to milestones/v5.0-*).*
 *Last updated: 2026-11-07 — Phase 47 (v5.0 Audit Gap Closure) complete: honest V2G certificates on `price_taker_dispatch` and the flex-market `_deliver` path (trait-routed `_storage_certificates`, `ev_certificate` at `TAU_EV_ADMM`, `:refused` on the negative-price co-charge fixture, battery certificate never `:ok` for an EV-only population); loud refusals before any solve — `actors` keyword on `compare_tariffs`/`clear_flex_market` (actor settlement recorded as future work SETL-F2), up-front unsupported-device check in `compare_tariffs`, reactive-decision devices refused in flex stage 2. No default path, golden, canary or committed CSV changed. Suite 37134/0/0/7.*
 *Last updated: 2026-11-06 — Phase 46 (IEEE-8500 Headline Measurement, go/no-go) complete: NO-GO recorded from data for the d=0.1 T=24 headline (peak 11.209 GiB VmHWM / 11.520 GiB MaxRSS vs ~10 GiB threshold; B1 = 11.520 GiB measured lower bound, B2 = 13.324 GiB estimate on MemAvailable); `Scenario` widened additively to `:ieee8500`/`:ieee8500_mv` with `:default_10pct` population selector and ArgumentError guards; measured T=10 point through `Scenario` (4,866 buses, 122 aggregators, build 26.9 s, solve 152.9 s, 5 iters, peak 5.738 GiB) refused with certificate (ratio 309.7), labelled not 1:1 comparable with the harness. No tolerance changed. Suite 36980/0/0/7.*
 *Last updated: 2026-11-05 — Phase 45 (Flexibility Market vs Price Coordination) complete: `AbstractCoordination`/`PriceBased`/`FlexMarket` + `clear_flex_market` (two-stage block-bid clearing, explicit flat/TOU baseline, uniform vs pay-as-bid, exogenous β baseline inflation), flex payments booked as mirrored ledger pairs (residual 0.0), `compare_tariffs(...; flex_market)` cross-scheme table on IEEE-13 and IEEE-123 (results/settlement_comparison). Measured: flex welfare slightly below DADP on the lossless footing (−0.02 / −1.81); uniform clearing prices are not DLMP estimates on the IEEE feeders; TOU-baseline IEEE-13 legs and IEEE-123 default population recorded as refusals. Suite 36668/0/0/7.*
