@@ -1074,10 +1074,21 @@ end
             v2g = true,
             c_deg = 0.05,
         )
-        agg = Aggregator(2, 0.9, AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), ev], Pdc)
+        agg = Aggregator(
+            2,
+            0.9,
+            AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), ev],
+            Pdc,
+        )
         feeder = TwoBusFixtures.two_bus_feeder()
-        ctx, _, _ =
-            solve_welfare(feeder, ConvexBranchFlow(), [agg]; T = T, λ₀ = swing, allow_export = true)
+        ctx, _, _ = solve_welfare(
+            feeder,
+            ConvexBranchFlow(),
+            [agg];
+            T = T,
+            λ₀ = swing,
+            allow_export = true,
+        )
         input = settlement_input(ctx; T = T)
         return clear_flex_market(
             feeder,

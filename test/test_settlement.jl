@@ -722,8 +722,14 @@ end
     agg = Aggregator(2, 0.9, AbstractDevice[ev], zeros(T))
     r = price_taker_dispatch(agg, fill(-50.0, T))
 
-    @test keys(r) ==
-          (:net, :utility, :battery_certificate, :battery_message, :ev_certificate, :ev_message)
+    @test keys(r) == (
+        :net,
+        :utility,
+        :battery_certificate,
+        :battery_message,
+        :ev_certificate,
+        :ev_message,
+    )
     @test all(isfinite, r.net)
     @test r.battery_certificate === :not_checked
     @test r.battery_message == ""
@@ -778,15 +784,21 @@ end
     )
 
     # V1G (no discharge leg): nothing to certify for co-charge, and no battery present.
-    v1g = ElectricVehicle(2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 1, 4)
-    r_v1g = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[v1g], zeros(6)), fill(1.0, 6))
+    v1g =
+        ElectricVehicle(2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 1, 4)
+    r_v1g = price_taker_dispatch(
+        Aggregator(2, 0.9, AbstractDevice[v1g], zeros(6)),
+        fill(1.0, 6),
+    )
     @test r_v1g.ev_certificate === :not_checked
     @test r_v1g.ev_message == ""
     @test r_v1g.battery_certificate === :not_checked
 
     # Compliant V2G at the swing price: the EV check runs and passes.
-    r_ok = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[compliant_ev()], Pdc), swing)
-    @info "price-taker compliant V2G EV certificate" ev = r_ok.ev_certificate msg = r_ok.ev_message
+    r_ok =
+        price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[compliant_ev()], Pdc), swing)
+    @info "price-taker compliant V2G EV certificate" ev = r_ok.ev_certificate msg =
+        r_ok.ev_message
     @test r_ok.ev_certificate === :ok
     @test r_ok.ev_message == ""
     @test r_ok.battery_certificate === :not_checked
@@ -799,8 +811,10 @@ end
 
     # A battery and a V2G EV in one population: both checks run, independently.
     batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
-    r_both =
-        price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[batt, compliant_ev()], Pdc), swing)
+    r_both = price_taker_dispatch(
+        Aggregator(2, 0.9, AbstractDevice[batt, compliant_ev()], Pdc),
+        swing,
+    )
     @test r_both.battery_certificate !== :not_checked
     @test r_both.ev_certificate !== :not_checked
 
@@ -808,7 +822,10 @@ end
     ev_neg = negative_ev()
     bs = TSODSO._device_baseline(ev_neg, 24)
     wrapped = PartialCompliance(ev_neg, 0.5, bs.b, bs.Ub)
-    r_wrap = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[wrapped], zeros(24)), fill(-50.0, 24))
+    r_wrap = price_taker_dispatch(
+        Aggregator(2, 0.9, AbstractDevice[wrapped], zeros(24)),
+        fill(-50.0, 24),
+    )
     @test r_wrap.ev_certificate in (:ok, :refused)
     @test r_wrap.battery_certificate === :not_checked
 end
