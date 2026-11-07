@@ -70,7 +70,7 @@ const FIT_SITE3_ALMOST_GAP_TOL = 7.74884392740205e-5
 # Internal: the devices FIT-OPT and the MPC loop have no model for (the one device set shared
 # by `_reject_unsupported_flex_devices` and the up-front check of `compare_tariffs`).
 const _FitUnsupportedDevice =
-    Union{ElectricVehicle,HeatPump,SmartInverterPV,PartialCompliance,OptOut,Rebound}
+    Union{ElectricVehicle, HeatPump, SmartInverterPV, PartialCompliance, OptOut, Rebound}
 
 # Internal: the unique type names of the devices in `devices` that FIT-OPT cannot model.
 _fit_unsupported_device_names(devices) =
@@ -80,8 +80,7 @@ _fit_unsupported_device_names(devices) =
     _reject_unsupported_flex_devices(devices, caller) -> Nothing
 
 Phase-43 guard (WR-05): the FIT-OPT and the MPC loop have NO model for the opt-in
-`ElectricVehicle` / `HeatPump` / `SmartInverterPV` devices (`build_population(...;
-flex_devices = ...)`) and for the phase-44 behavioural wrappers `PartialCompliance` / `OptOut` /
+`ElectricVehicle` / `HeatPump` / `SmartInverterPV` devices (`build_population(...; flex_devices = ...)`) and for the phase-44 behavioural wrappers `PartialCompliance` / `OptOut` /
 `Rebound` (`apply_behaviour`). Without this guard the FIT "flexible load" branch would silently
 treat a `SmartInverterPV` as negative consumption (its generation read as load reduction, its
 `q` ignored) and V2G EV discharge as negative load. Throws `ArgumentError` naming the
