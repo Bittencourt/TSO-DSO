@@ -236,6 +236,71 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 
 ---
 
+## Milestone: v5.0 — Aggregator Layer at Scale
+
+**Shipped:** 2026-11-07
+**Phases:** 9 (39–47) | **Plans:** 48
+
+### What Was Built
+- Parallel-ready ADMM: an opt-in threaded AGR executor, bitwise serial == threaded, thread provenance,
+  and the IEEE-8500 memory growth attributed to named components.
+- The true 784-house Case A population (`:case_a_784`), with centralized-vs-ADMM agreement pinned
+  through the `agr_optimizer` precision seam.
+- A conserved per-actor settlement ledger with equity metrics, flat/TOU/FIT/DADP legs, and
+  `compare_tariffs`.
+- A pre-registered Case A magnitude run: W_DADP certified on 5/5 seeds; Δ% honestly undefined
+  because FIT is infeasible.
+- V1G/V2G EVs, 2R2C heat pumps and smart inverters behind capability traits. Aggregators as actors
+  with profit wedges, portfolios and behaviour wrappers.
+- A two-stage flexibility market and a five-scheme comparison. An IEEE-8500 NO-GO recorded from data,
+  with the T=10 point measured through `Scenario`.
+
+### What Worked
+- **The golden canary held across 9 phases.** Every new feature went behind a keyword, selector or
+  type, so the default path stayed byte-identical with no re-pins.
+- **Pre-registration before the headline measurement.** The protocol made "Δ% undefined" a
+  publishable outcome instead of a tuning target.
+- **Milestone audit → gap-closure phase → re-audit, again.** The integration checker found a false
+  V2G `:ok` certificate (B1) that every per-phase verification had passed. Phase 47 fixed it in 3 plans.
+- **Detached full suite with a DONE marker and a background waiter.** About 103 min per gate, never
+  orphaned, never overlapped with other Julia runs.
+
+### What Was Inefficient
+- **IEEE-8500 runs were bounded by host RAM.** Several sessions waited on free memory, and launch
+  floors needed user overrides. Measurement phases on this host need a memory pre-flight from the
+  start.
+- **`phase.add` / `phase.complete` / `milestone.complete` left stale STATE fields and noisy
+  MILESTONES output.** Each needed manual cleanup, for example `stopped_at` stuck at "Completed
+  45-06" and blank "One-liner:" lines.
+- **Literal trait semantics surprised the research step.** `has_reactive_decision` defaults to true
+  for every flexible load, so the W3 guard needed a refined predicate.
+
+### Patterns Established
+- **One trait-routed certificate helper per record family** (`_storage_certificates`). A check that
+  did not run reports `:not_checked`, never `:ok`.
+- **Unsupported combinations are refused before any solve,** with an `ArgumentError` that names the
+  scope decision, and every guard is pinned by a zero-solve test.
+- **Measured go/no-go records** (threshold, measured value, verdict, lower bound) instead of
+  in-milestone re-engineering.
+- **Additive precision seams** (`agr_optimizer`) that let a measurement ladder run without touching
+  defaults.
+
+### Key Lessons
+1. A shape predicate and a trait predicate can disagree silently. Route the "did this check run"
+   decision through the same selection the check itself uses.
+2. Treat "refused with certificate", "memory-infeasible" and "undefined" as first-class measured
+   outcomes; they kept every v5.0 headline honest.
+3. When a trait's default is broader than its name, check its real truth table before writing a
+   guard on it.
+
+### Cost Observations
+- Model mix: orchestration on Opus; researchers, planners, executors, reviewers and verifiers on the
+  quality profile.
+- Notable: full-suite gates (~103 min) and the docs builds (~9 min) dominated wall-clock; the
+  8500-point runs dominated host memory.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -246,6 +311,7 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 | v2.0 | 5 | Autonomous phase pipeline (smart discuss → plan → parallel worktree execute → review/fix loop → verify); certify-before-build for ambiguous game semantics; execution-based (not read-only) verification |
 | v2.1 | 4 | Fully background autonomous run (plan+execute+verify all 4 phases in one session); pipelined planning during execution; honest-finding-as-deliverable; manual verifier finalize when executors stalled on the long suite |
 | v4.0 | 13 | Audit-driven correctness milestone; milestone audit → gap-closure phase → re-audit loop; sequential executors on main tree with detached suite + stale-run guard |
+| v5.0 | 9 | Pre-registered headline measurement; recorded go/no-go from committed data; additive opt-in seams under a never-re-pinned canary; audit → Phase 47 closure → re-audit |
 
 ### Cumulative Quality
 
@@ -255,6 +321,7 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 | v2.0 | 2276 pass / 0 fail* | 3 | 3 broken = CairoMakie-weakdep skips; *1 local-only Aqua failure from user-local uncommitted Project.toml drift (committed state clean); docs build green incl. 2 new planning pages |
 | v2.1 | 2348 pass / 2 fail* | 3 | *2 fail = pre-existing user-local CairoMakie/Makie Project.toml drift (Aqua stale-deps + persistent-tasks), not regressions; +72 tests over v2.0; docs build green incl. 3 new pages (ac_oracle, ieee123_impedances, thesis_reproduction ×2) |
 | v4.0 | 32379 pass / 0 fail | 5 | Julia 1.12.5 (32299/0/0/5 at the 1.12.7 gate); fast/slow split 484/38 items; JET 0 NEW; docs green |
+| v5.0 | 37134 pass / 0 fail | 7 | Julia 1.12.5; canary 56 / −4823.66604824162 unchanged; JET 20 baseline / 0 new; docs green (2 backlogged `@ref` warnings) |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -265,3 +332,4 @@ the thesis +25% welfare magnitude does not transfer to real data (only the sign 
 5. (v2.1) An honestly-framed negative/boundary result is a stronger deliverable than a tuned-green pass — and independent phases hitting the same boundary (SOCP overvoltage inexactness on IEEE-13 and real IEEE-123) is corroboration.
 6. (v2.1) Pin economic goldens on sign-safe quantities (surplus sign flip), never ratios of possibly-negative aggregates — and poll detached long-running processes to completion by PID within the turn, or the finalize step silently gets skipped.
 7. (v4.0) A cross-phase integration audit catches fixes that never reached older code — every per-phase verification had passed both v4.0 blockers.
+8. (v5.0) A certificate's "ran" flag must use the same device selection as the check itself — a shape predicate let V2G EVs report a battery `:ok` no check produced; the cross-phase audit caught it again.
