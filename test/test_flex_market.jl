@@ -1109,14 +1109,14 @@ end
     res = compliant_clear()
     @info "flex clear with a compliant V2G EV" status = res.status baseline_ev =
         res.physics.baseline.ev_certificate
-    @test res.status in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
-          startswith(res.status, "error:")
+    # The clear status is pinned to its measured value; the EV certificate value itself
+    # stays in (:ok, :refused) (see ev_fields_ok). The delivered record is checked
+    # unconditionally: it is the only test of the EV fields of physics.delivered.
+    @test res.status == "ok"
     @test res.physics.baseline !== nothing
     @test ev_fields_ok(res.physics.baseline)
-    res.status == "ok" && @test res.physics.delivered !== nothing
-    if res.physics.delivered !== nothing
-        @test ev_fields_ok(res.physics.delivered)
-    end
+    @test res.physics.delivered !== nothing
+    res.physics.delivered === nothing || @test ev_fields_ok(res.physics.delivered)
 end
 
 @testitem "flex market: delivery on a coupled aggregator" setup = [FlexMarketFixtures] tags =
