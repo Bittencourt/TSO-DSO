@@ -472,6 +472,12 @@ end
         @test ru.n == 0
         @test ru.e isa ArgumentError && occursin("compare_tariffs", ru.e.msg)
         @test ru.e isa ArgumentError && occursin(dev_name, ru.e.msg)
+        # the message names the working route and carries no planning IDs
+        @test ru.e isa ArgumentError && occursin("tariff comparison does not support", ru.e.msg)
+        @test ru.e isa ArgumentError && occursin("solve_welfare or solve_admm", ru.e.msg)
+        @test ru.e isa ArgumentError && occursin("clear_flex_market", ru.e.msg)
+        @test ru.e isa ArgumentError && occursin("price_taker_dispatch", ru.e.msg)
+        @test ru.e isa ArgumentError && !occursin(r"phase-?\d", ru.e.msg)
     end
     # with flex_market, a device with its own reactive decision is refused like the
     # capacitor. In compare_tariffs only FourQuadBESS reaches that stage-2 guard: the

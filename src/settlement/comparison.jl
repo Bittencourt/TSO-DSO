@@ -296,9 +296,12 @@ aggregator per bus, an unknown engine, or a `λ₀` length ≠ `T` throws `Argum
 BEFORE any solving (T-41-19).
 
 Devices the fit leg cannot model (`ElectricVehicle`, `HeatPump`, `SmartInverterPV` and the
-behavioural wrappers `PartialCompliance` / `OptOut` / `Rebound`) are refused with the same
-`ArgumentError` as `fit_baseline`, but before any solve: the check runs per aggregator in the
-boundary guards, not inside the fit leg after the DADP, flat and TOU solves.
+behavioural wrappers `PartialCompliance` / `OptOut` / `Rebound`) are the ones `fit_baseline`
+refuses, and here they are refused before any solve: the check runs per aggregator in the
+boundary guards, not inside the fit leg after the DADP, flat and TOU solves. Its
+`ArgumentError` names the aggregator and the device types, and points to the route that
+works for them: `solve_welfare` / `solve_admm`, then `price_taker_dispatch` or
+`clear_flex_market` directly (`clear_flex_market` refuses `SmartInverterPV`).
 
 `actors` must be `nothing` (the default, a no-op). Any other value throws `ArgumentError`
 before any solve: settling profit-seeking aggregator actors (`Portfolio` /
@@ -396,10 +399,23 @@ function compare_tariffs(
         ),
     )
     # The fit leg (fit_baseline / FIT-OPT) cannot model these devices; refuse them here, before
-    # the DADP, flat and TOU solves, rather than inside the fit leg after them.
-    fit_caller = "compare_tariffs (the fit leg runs fit_baseline / FIT-OPT)"
-    for a in aggs
-        _reject_unsupported_flex_devices(a.devices, fit_caller)
+    # the DADP, flat and TOU solves, rather than inside the fit leg after them. The device set
+    # is the one fit_baseline refuses; the message names the route that does work.
+    for (k, a) in enumerate(aggs)
+        bad = _fit_unsupported_device_names(a.devices)
+        isempty(bad) || throw(
+            ArgumentError(
+                "compare_tariffs: aggregator[$k] (bus $(a.bus)) holds " *
+                "$(join(string.(bad), ", ")), which the tariff comparison does not " *
+                "support: its fit leg (fit_baseline / FIT-OPT) has no model for these " *
+                "devices, and every comparison runs it. For this population, solve the " *
+                "day-ahead market with solve_welfare or solve_admm, then call " *
+                "price_taker_dispatch (the response to a given tariff) or clear_flex_market " *
+                "(the flexibility market) directly. clear_flex_market accepts electric " *
+                "vehicles, heat pumps and behaviour-wrapped devices, but refuses a " *
+                "SmartInverterPV, whose reactive power its stage 2 cannot represent.",
+            ),
+        )
     end
     if houses === nothing
         map_rows === nothing || throw(

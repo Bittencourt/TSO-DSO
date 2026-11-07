@@ -67,6 +67,15 @@ const FIT_λ_SELF = 5.6     # self-consumed PV                (λ_s,  page 93)
 # duality gap itself sits fractionally above `tol_gap=1e-10`.
 const FIT_SITE3_ALMOST_GAP_TOL = 7.74884392740205e-5
 
+# Internal: the devices FIT-OPT and the MPC loop have no model for (the one device set shared
+# by `_reject_unsupported_flex_devices` and the up-front check of `compare_tariffs`).
+const _FitUnsupportedDevice =
+    Union{ElectricVehicle,HeatPump,SmartInverterPV,PartialCompliance,OptOut,Rebound}
+
+# Internal: the unique type names of the devices in `devices` that FIT-OPT cannot model.
+_fit_unsupported_device_names(devices) =
+    unique(nameof(typeof(d)) for d in devices if d isa _FitUnsupportedDevice)
+
 """
     _reject_unsupported_flex_devices(devices, caller) -> Nothing
 
@@ -79,12 +88,7 @@ treat a `SmartInverterPV` as negative consumption (its generation read as load r
 offending device types.
 """
 function _reject_unsupported_flex_devices(devices, caller::AbstractString)
-    bad = unique(
-        nameof(typeof(d)) for
-        d in devices if d isa Union{
-            ElectricVehicle,HeatPump,SmartInverterPV,PartialCompliance,OptOut,Rebound,
-        }
-    )
+    bad = _fit_unsupported_device_names(devices)
     isempty(bad) || throw(
         ArgumentError(
             "$caller does not support the phase-43 flexible devices / phase-44 behavioural wrappers " *
