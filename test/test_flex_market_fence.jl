@@ -353,7 +353,10 @@ end
         ("ElectricVehicle", plus(TSODSO._flex_ev(1_234_567, 2, 1, M.T_INT; scale = 0.02))),
         ("HeatPump", plus(TSODSO._flex_heatpump(1_234_567, 2, 1, M.T_INT; scale = 0.02))),
         ("SmartInverterPV", plus(TSODSO.SmartInverterPV(2, 0.5, fill(0.1, M.T_INT)))),
-        ("PartialCompliance", plus(PartialCompliance(inter(), 0.5, bs_inter.b, bs_inter.Ub))),
+        (
+            "PartialCompliance",
+            plus(PartialCompliance(inter(), 0.5, bs_inter.b, bs_inter.Ub)),
+        ),
     ]
     fourq = plus(FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0))
     cases = [
@@ -383,10 +386,17 @@ end
         ),
         ("empty", g -> tight([t.agg]; flex_market = FlexMarket[], welfare_optimizer = g)),
         ("capacitor", g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)),
-        ("fourquad", g -> tight([fourq]; flex_market = FlexMarket(), welfare_optimizer = g)),
+        (
+            "fourquad",
+            g -> tight([fourq]; flex_market = FlexMarket(), welfare_optimizer = g),
+        ),
         (
             "smartinverterpv_flex",
-            g -> tight([unsupported[3][2]]; flex_market = FlexMarket(), welfare_optimizer = g),
+            g -> tight(
+                [unsupported[3][2]];
+                flex_market = FlexMarket(),
+                welfare_optimizer = g,
+            ),
         ),
         ("actors", g -> tight([t.agg]; actors = portfolio, welfare_optimizer = g)),
         ("actors_not_a_vector", g -> tight([t.agg]; actors = :x, welfare_optimizer = g)),

@@ -1647,7 +1647,8 @@ end
                 T = M.T_INT,
                 λ₀ = f.π0,
                 actors = actors === :portfolio ?
-                         [Portfolio(agg; objective = ProfitObjective(0.5))] : actors,
+                         [Portfolio(agg; objective = ProfitObjective(0.5))] :
+                         actors,
             ),
         )
         return (; e, calls = dev.calls[])
@@ -1688,7 +1689,10 @@ end
     M = FlexMarketFixtures
 
     reactive = [
-        ("FourQuadBESS", FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)),
+        (
+            "FourQuadBESS",
+            FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0),
+        ),
         ("SmartInverterPV", SmartInverterPV(2, 0.5, fill(0.1, M.T_INT))),
     ]
 
@@ -1696,8 +1700,15 @@ end
     function stage2_refusal(d)
         f = M.tight_agg(M.SEEDS[1])
         fb = M.zero_bids(M.T_INT, 2)
-        agg = Aggregator(2, 1.0, AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), d], f.Pdc)
-        return M.caught(() -> TSODSO._stage2_aggregators([agg], [f.base], [fb]; T = M.T_INT))
+        agg = Aggregator(
+            2,
+            1.0,
+            AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), d],
+            f.Pdc,
+        )
+        return M.caught(
+            () -> TSODSO._stage2_aggregators([agg], [f.base], [fb]; T = M.T_INT),
+        )
     end
     for (dev_name, d) in reactive
         e6 = stage2_refusal(d)
