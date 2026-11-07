@@ -68,7 +68,7 @@
 # literal thesis-transcribed variant (i.e. `v̂ ≥ V²min` binds as a genuine restriction
 # under the literal, defective sign, not merely a redundant bound).
 #
-# ## Amendment: the DEFAULT is a restriction, not "a genuine relaxation"
+# ## Amendment: the DEFAULT is a per-branch inner approximation, not "a genuine relaxation"
 #
 # Earlier text (an earlier draft of this Verdict
 # subsection) called the corrected default (`v̂ ≥ v`, above) "a genuine relaxation." This
@@ -81,10 +81,17 @@
 # ```
 #
 # The default SCORES LOWER than a feasible AC point, so it is provably a RESTRICTION, not a
-# relaxation — specifically Gan-Low's own "modified OPF": `v̂ ≤ V²max` is load-bearing (the
-# `test_convex_branch_flow.jl` load-bearing/redundant-bound regression demonstrates this)
-# and conservatively enforces `v ≤ V²max`, exact by theorem, with a measurable (~0.05% here)
-# welfare loss. The OLD thesis-literal copy (`ConvexBranchFlow(; thesis_literal=true)`)
+# relaxation. The default copy satisfies `v̂ − v = Σ_{b∈path(j)} (r_b²+x_b²)·l_b ≥ 0`, so
+# `v̂ ≤ V²max` (which the `test_convex_branch_flow.jl` binding-bound regression demonstrates
+# binds first) enforces `v ≤ V²max − Σ_path |z|²·l`: a per-branch INNER APPROXIMATION of the
+# upper voltage band, with a measurable (~0.05% here) welfare loss. It is NOT Gan-Low's
+# "modified OPF" (OPF-m uses the lossless shadow voltage `v̂_GL(s)`, implemented as
+# [`RestrictedBranchFlow`](@ref)) and NOT exact by theorem: each branch's copy removes only
+# its own loss, so `v̂` at a bus decreases with downstream branch currents. On this fixture
+# the cone is tight at `pv_scale=1.2`, but for `pv_scale ≥ 1.3` the default is cone-inexact
+# (gap 0.22 to 7.95) and the exactness gate refuses it, so no inexact prices are returned
+# silently. On the realistic fixtures (IEEE-13, its PV-boom sweep, IEEE-123) the bound is
+# never active. The OLD thesis-literal copy (`ConvexBranchFlow(; thesis_literal=true)`)
 # restricts the LOWER voltage band instead. **NEITHER form is a genuine relaxation.**
 #
 # Consequence: the "SOCP knife-edge under high-PV reverse flow" finding previously measured

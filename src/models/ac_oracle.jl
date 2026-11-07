@@ -124,10 +124,12 @@ variable and invokes no solver, and writes nothing back to `ctx`. It reads
 `v̂_GL(s)` is the squared voltage that WOULD result from the same power injections `s` if
 every branch's loss current `ℓ ≡ 0` (i.e. the lossless LinDistFlow voltage for the SAME
 dispatch). Lemma 1 (Gan-Low 2015) proves `v ≤ v̂_GL(s)` always — the loss-free shadow is
-always an UPPER bound on the true voltage — the OPPOSITE sign relationship from this
-project's EXISTING thesis exactness copy `v̂` (thesis 3.43/3.45), which is a LOWER-bound
-shadow (`v ≥ v̂`, spot-checked in `test/test_restricted_branch_flow.jl`'s first `@testitem`).
-These are two genuinely DISTINCT mechanisms; do not conflate them.
+always an UPPER bound on the true voltage. The project's DEFAULT per-branch exactness copy `v̂`
+(thesis 3.43/3.45, `ConvexBranchFlow`) has the SAME sign (`v̂ ≥ v`, since the copy-direction
+change; `v̂ − v = Σ_path (r²+x²)·l`, asserted in `test/test_convex_branch_flow.jl`), but it is
+a different quantity: it removes only each branch's OWN loss, so it depends on downstream
+currents, whereas `v̂_GL(s)` depends on the injections alone. These are two genuinely DISTINCT
+mechanisms; do not conflate them (only `v̂_GL` underlies Gan-Low's exactness theorem).
 
 Method (unrolling the branch-flow recursion against THIS project's actual `:Rp`/`:Rq`
 balance convention — loss charged at the child, `pin[j] − pout[j] = −inj[j]` — rather than
@@ -263,7 +265,7 @@ end
     assert_ac_exact!(ctx_socp::ModelContext, ctx_ac::ModelContext;
                      rtol::Real = 1e-4, atol::Real = 1e-6) -> (; obj_gap, hours)
 
-Certify the SOC branch-flow relaxation EXACT by comparing a solved [`ConvexBranchFlow`](@ref)
+Certify the SOC branch-flow model EXACT (or measure how far it is from exact) by comparing a solved [`ConvexBranchFlow`](@ref)
 `ModelContext` (`ctx_socp`) against a solved [`ACPowerFlow`](@ref) `ModelContext` (`ctx_ac`) —
 both built from the IDENTICAL problem data and each independently re-optimized (the LOCKED
 "same operating point" contract) — on per-hour objective, voltage, and branch-flow gaps.
@@ -280,7 +282,9 @@ signal the two contexts are not the same operating point, which makes any "gap" 
 Returns `(; obj_gap, hours)`, NEVER a bare `Bool`:
 
   - `obj_gap = objective_value(ctx_socp.model) − objective_value(ctx_ac.model)` — the welfare gap
-    between the relaxed and the true nonconvex optimum;
+    between the SOCP optimum and the true nonconvex AC optimum. It is `≥ 0` only when the SOCP
+    is a genuine relaxation (e.g. the bound-free SOCP); under the DEFAULT copy (`v̂ ≤ vmax²`,
+    an inner approximation of the upper band) it can be NEGATIVE where that bound binds;
   - `hours::Vector{NamedTuple}` — one row `(; t, vgap, pgap, qgap, exact)` per hour, where
     `vgap`/`pgap`/`qgap` are the max-over-buses/branches absolute SOCP−AC gaps in squared
     voltage / active / reactive branch flow, and `exact = vgap ≤ atol + rtol·vmag && pgap ≤ atol + rtol·pmag` uses the SAME combined scale-free bound `assert_socp_exact!` uses (applied

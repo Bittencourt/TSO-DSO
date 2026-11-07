@@ -66,7 +66,7 @@ end
 end
 
 # The DEFAULT (thesis_literal=false) exactness copy of ConvexBranchFlow()
-# must satisfy v̂ ≥ v (the Gan-Low direction) at the solution.
+# must satisfy v̂ ≥ v (the Gan-Low copy direction) at the solution.
 @testitem "socp: default ConvexBranchFlow() satisfies v̂ ≥ v" tags = [:socp] begin
     using TSODSO
     using TSODSO: Bus, Branch, Feeder
@@ -95,8 +95,9 @@ end
     @test mingap >= -1e-9   # v̂ ≥ v everywhere (Gan-Low direction)
 end
 
-# Load-bearing/redundant bound check: under the CORRECTED direction, `v̂ ≤ V²max` is
-# the LOAD-BEARING (exactness-driving) bound and `v ≤ V²max` is redundant (implied by
+# Binding-bound check: under the CORRECTED direction, `v̂ ≤ V²max` is the bound that binds
+# first (an inner restriction `v ≤ V²max − Σ_path |z|²l` of the upper band, not an
+# exactness guarantee) and `v ≤ V²max` is redundant (implied by
 # `v ≤ v̂ ≤ V²max`) — matching ConvexBranchFlow's corrected docstring claim. Demonstrated by
 # maximizing the squared branch current `l` (which increases `v̂` TWICE as fast as `v` per
 # unit `l`, since both start from the SAME root value and `v̂`'s copy-drop coefficient on `l`

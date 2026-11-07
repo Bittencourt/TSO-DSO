@@ -1,11 +1,12 @@
 # # Rung 3 — AC-Exactness Oracle: Certifying the SOCP Relaxation Against a True Nonconvex AC-OPF
 #
-# The previous page proved [`ConvexBranchFlow`](@ref)'s SOC branch-flow relaxation EXACT on a
+# The previous page proved [`ConvexBranchFlow`](@ref)'s SOC branch-flow model EXACT on a
 # benign radial feeder via its internal exactness certificate. This page goes one step further:
-# it certifies the relaxation against a GENUINELY INDEPENDENT nonconvex formulation
+# it certifies the model against a GENUINELY INDEPENDENT nonconvex formulation
 # ([`ACPowerFlow`](@ref), which enforces the branch-flow relation `l·v = P²+Q²` as a true
 # EQUALITY solved with Ipopt) rather than re-solving the same relaxed cone through a different
-# solver — and it does so in the one regime the relaxation is documented to fail.
+# solver — and it does so in the regime where the default copy's `v̂ ≤ V²max` bound can bind
+# (an inner approximation of the upper voltage band, not a relaxation of AC).
 #
 # ## Why an independent oracle
 #
@@ -185,7 +186,8 @@ ctx_socp.meta[:socp_maxgap]
 # NOT the mechanism here: it is EXACT, not "orders of magnitude larger than the benign feeder's" as
 # an earlier draft of this page claimed (see "## Restated: gate 1 versus gate 2" below for the
 # measured numbers and gate-qualified correction). The genuine mechanism at these hours is the
-# DEFAULT's Gan-Low modified-OPF RESTRICTION actively binding (`v̂ ≤ V²max`), which excludes the
+# DEFAULT copy's per-branch inner approximation actively binding (`v̂ ≤ V²max`, with
+# `v̂ − v = Σ_path (r²+x²)·l`; not Gan-Low's OPF-m), which excludes the
 # true AC optimum from its own feasible set — a restriction-induced dispatch-suboptimality
 # (gate 2), not a slack/loose cone (gate 1). `solve_welfare` still REFUSES this solution under its
 # default `rtol_exact` gate, since that internal gate is deliberately conservative about ANY

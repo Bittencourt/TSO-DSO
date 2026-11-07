@@ -209,16 +209,17 @@ end
         # the true AC-OPF, not cone physical-consistency. Under the DEFAULT (this testitem's own
         # `ConvexBranchFlow()` call below), gate 2 IS genuinely inexact (`inexact_hours =
         # 6:15`, `diagnosed = true`, cost_socp = -921.754 vs cost_ac = -921.277) — but the
-        # MECHANISM is restriction-induced dispatch-suboptimality, not cone slack: the default is
-        # Gan-Low's modified-OPF RESTRICTION (`v̂ ≤ V²max` binds during the high-PV window), which
-        # can be cone-exact (its own solution is physically self-consistent) while still excluding
+        # MECHANISM is restriction-induced dispatch-suboptimality, not cone slack: the default
+        # copy is a per-branch inner approximation (`v̂ − v = Σ_path |z|²l`, so `v̂ ≤ V²max` binds
+        # during the high-PV window; not Gan-Low's OPF-m), which can be cone-exact (its own
+        # solution is physically self-consistent) while still excluding
         # the true AC optimum from its own feasible set. Directly re-measured
         # under `ConvexBranchFlow(; thesis_literal=true)` on this SAME fixture: gate 2
         # is ALSO EXACT there (`inexact_hours = []`, cost_socp = -921.27700 vs cost_ac = -921.27699
         # — matching within 1e-4), because the thesis-literal copy's own optimum coincides with the
         # true AC optimum at pv_scale=1.2 (consistent with the earlier "-921.277 matches the true AC
         # optimum exactly"). So on THIS fixture at pv_scale=1.2, gate-2 inexactness is a property of
-        # the DEFAULT restriction, not of "the SOC relaxation" generically, and does NOT reproduce
+        # the DEFAULT inner approximation, not of "the SOC relaxation" generically, and does NOT reproduce
         # under thesis_literal=true — the OPPOSITE of what this comment previously implied. (The
         # historic v2.1 "genuine cone-inexactness" finding is a SEPARATE phenomenon that still
         # reproduces, but only under thesis_literal=true at a DIFFERENT, higher pv_scale — e.g.
@@ -307,10 +308,10 @@ end
         # 6–15), with bus voltage pinned at V²max = 1.1025 and reverse (PV back-feed) branch flow.
         # GATE 1 (`assert_socp_exact!`'s cone-residual check, `ctx_socp.meta[:socp_maxgap]`) is NOT
         # the mechanism here — it is EXACT under the default (measured socp_maxgap ≈ 2.6e-8, well
-        # under the hybrid exactness floor). The genuine mechanism is Gan-Low's
-        # modified-OPF RESTRICTION actively binding (`v̂ ≤ V²max`) during this window, which
-        # excludes the true AC optimum (cost_socp = -921.754 vs cost_ac = -921.277) from the
-        # restricted formulation's own feasible set — a restriction-induced dispatch-suboptimality,
+        # under the hybrid exactness floor). The genuine mechanism is the default copy's
+        # inner approximation actively binding (`v̂ ≤ V²max`, with `v̂ − v = Σ_path |z|²l`) during
+        # this window, which excludes the true AC optimum (cost_socp = -921.754 vs cost_ac =
+        # -921.277) from the default formulation's own feasible set — a restriction-induced dispatch-suboptimality,
         # not a slack/loose cone. The two independent AC starts agree (no local-optimum artifact),
         # so the gap is a genuine formulation property, not solver noise.
         #

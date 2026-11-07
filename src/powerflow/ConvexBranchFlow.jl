@@ -26,13 +26,22 @@
 # direction, `v̂ ≥ v`).
 #
 # Labelling note:
-# this DEFAULT is honestly Gan-Low's MODIFIED OPF — a conservative RESTRICTION on the UPPER
-# voltage band (`v̂ ≤ V²max` is load-bearing, conservatively enforcing `v ≤ V²max`), exact by
-# theorem, with a measurable (~0.05% on the high-PV reference fixture: default optimum -921.754 vs true AC optimum
-# -921.277) welfare loss — NEVER "a genuine relaxation" (a relaxation of a maximization can
-# never score BELOW a feasible AC point, yet the default does here). The OLD thesis-literal
-# copy restricts the LOWER band instead — NEITHER form is a genuine relaxation. The LITERAL
-# thesis formula remains available as an explicit, clearly-labelled RESTRICTION via
+# this DEFAULT is a per-branch INNER APPROXIMATION of the upper voltage band, NOT Gan-Low's
+# modified OPF (OPF-m) and NOT exact by theorem. The default copy satisfies
+# `v̂ − v = Σ_{b∈path(j)} (r_b²+x_b²)·l_b ≥ 0` (coefficient 1, not 2), so `v̂ ≤ V²max`
+# enforces `v ≤ V²max − Σ_path |z|²·l`: an inner restriction that grows with the accumulated
+# path losses. Each branch's copy removes only that branch's OWN loss, so `v̂` at a bus
+# decreases with DOWNSTREAM branch currents; Gan-Low's OPF-m instead uses the lossless
+# shadow voltage `v̂_GL(s)` (see `RestrictedBranchFlow` / `recover_lossfree_shadow_voltage`),
+# and its exactness theorem therefore does not apply beyond single-branch paths. On the
+# 3-bus high-PV stress fixture, `pv_scale=1.2` is cone-tight but scores welfare -921.754 vs
+# the true AC optimum -921.277 (a restriction, never a genuine relaxation: a relaxation of a
+# maximization cannot score BELOW a feasible AC point); at `pv_scale ≥ 1.3` the default is
+# cone-inexact (gap 0.22 to 7.95) and the exactness gate refuses it, so no inexact prices
+# are returned silently. On the realistic fixtures measured (IEEE-13, IEEE-13 PV-boom sweep,
+# IEEE-123) the bound is never active. The OLD thesis-literal copy restricts the LOWER band
+# instead — NEITHER form is a genuine relaxation. The LITERAL thesis formula remains
+# available as an explicit, clearly-labelled RESTRICTION via
 # `ConvexBranchFlow(; thesis_literal=true)`.
 #
 # This file also adds `problem_class(::ConvexBranchFlow) = SOCP()` so the cone routes to
@@ -80,9 +89,9 @@ Thesis equations implemented (all traced in [`contribute!`](@ref)):
   - 3.39 — the SOC relaxation `l_ij·v_i ≥ P² + Q²`, written as a rotated second-order cone
     `[0.5·l, v_i, P, Q] ∈ RotatedSecondOrderCone()` (‖x‖² ≤ 2·t·u ⇒ P²+Q² ≤ 2·(0.5l)·v = l·v);
   - 3.43 — the exactness-copy voltage drop. DEFAULT (`thesis_literal=false`):
-    `v̂_j = v̂_i − 2{r(P−rl) + x(Q−xl)}` (the Gan-Low direction, `v̂ ≥ v` — Gan-Low's
-    MODIFIED OPF, a conservative RESTRICTION on the upper voltage band, exact by theorem,
-    with a measurable (~0.05% on the high-PV reference fixture) welfare loss — see the verdict below). Opt-in
+    `v̂_j = v̂_i − 2{r(P−rl) + x(Q−xl)}` (the Gan-Low copy direction, `v̂ ≥ v` — a per-branch
+    INNER APPROXIMATION of the upper voltage band, not Gan-Low's OPF-m and not exact by
+    theorem; see the labelling note below). Opt-in
     (`thesis_literal=true`): the LITERAL transcribed formula `v̂_j = v̂_i − 2{r(P+rl) + x(Q+xl)}` (`v̂ ≤ v`, a RESTRICTION on the LOWER band instead, kept only for reproducing
     the thesis's own defective algebra). NEITHER form is a genuine relaxation. Both written
     purely in the ORIGINAL `P, Q, l` plus the single copy `v̂` (no separate `P̂/Q̂`);
@@ -96,11 +105,13 @@ terms `−r·l`/`−x·l` in the balances; the `+(r²+x²)·l` term in the true 
 to 3.36.
 
 Why the exactness copy is not decorative: the true drop
-3.33 carries `+(r²+x²)·l`. Under the DEFAULT corrected copy drop (`v̂ ≥ v`), the LOAD-BEARING
-bound is `v̂ ≤ V²max` (3.45) — it is what drives the loss current `l` down until the cone
-3.39 holds with equality (exact) at the optimum, while `v̂ ≥ V²min` is redundant (implied by
-`v̂ ≥ v ≥ V²min`). Omit the copy and the recovered DADP prices are physically meaningless in
-exactly the high-PV / over-voltage regimes the research targets.
+3.33 carries `+(r²+x²)·l`. Under the DEFAULT corrected copy drop (`v̂ ≥ v`), the bound that
+can bind is `v̂ ≤ V²max` (3.45): since `v̂ − v = Σ_path (r²+x²)·l ≥ 0` it enforces
+`v ≤ V²max − Σ_path |z|²·l`, an inner restriction of the upper band that penalises
+accumulated path losses, while `v̂ ≥ V²min` is redundant (implied by `v̂ ≥ v ≥ V²min`). It
+is NOT a guarantee that the cone 3.39 holds with equality: the exactness gate checks that
+at the optimum and refuses inexact cases. Where the bound is slack (all realistic fixtures
+measured) the model is the plain SOC relaxation.
 
 Verdict (see `docs/literate/convex_branch_flow.jl` for the full derivation): the
 thesis's own text (page ~84) claims `v ≤ V²max` (3.35) becomes redundant after imposing the
@@ -113,15 +124,21 @@ explicit opt-in via `thesis_literal=true`, clearly labelled a RESTRICTION (never
 default).
 
 Labelling note: the DEFAULT
-above is honestly a RESTRICTION, not "a genuine relaxation" — a relaxation of a maximization
-can never score BELOW a feasible AC point, yet on the high-PV reference fixture (`pv_scale=1.2`) the default SOCP
-optimum is **-921.754** while the TRUE AC optimum is **-921.277**, so the default is provably
-Gan-Low's own "modified OPF": `v̂ ≤ V²max` is load-bearing and conservatively enforces
-`v ≤ V²max`, exact by theorem, with a measurable (~0.05% here) welfare loss. The OLD
-thesis-literal copy restricted the LOWER voltage band instead — NEITHER form is a genuine
-relaxation. This also means the v2.1 "SOCP knife-edge under high-PV reverse flow" finding
-no longer reproduces under this default (it IS exact now); it still reproduces
-under the explicit `thesis_literal=true` opt-in (see `docs/literate/convex_branch_flow.jl`).
+above is a per-branch INNER APPROXIMATION, not "a genuine relaxation" and not Gan-Low's
+OPF-m. A relaxation of a maximization can never score BELOW a feasible AC point, yet on the
+high-PV reference fixture (`pv_scale=1.2`) the default SOCP optimum is **-921.754** while the
+TRUE AC optimum is **-921.277**. The cause is `v̂ ≤ V²max` excluding the AC optimum, because
+`v̂ − v = Σ_path (r²+x²)·l ≥ 0`. This is not Gan-Low's OPF-m: OPF-m uses the lossless shadow
+voltage `v̂_GL(s)` (implemented as [`RestrictedBranchFlow`](@ref)), whereas each branch's copy here
+removes only that branch's own loss, so `v̂` at a bus decreases with downstream branch
+currents and the Gan-Low exactness theorem does not apply beyond single-branch paths. On the
+stress fixture the cone is tight at `pv_scale=1.2` but the default is cone-inexact for
+`pv_scale ≥ 1.3` (gap 0.22 to 7.95), and the exactness gate refuses those cases. On the
+realistic fixtures (IEEE-13 seed 7, IEEE-13 PV-boom sweep, IEEE-123 seed 7) the bound is
+never active. The OLD thesis-literal copy restricted the LOWER voltage band instead —
+NEITHER form is a genuine relaxation. The v2.1 "SOCP knife-edge under high-PV reverse flow"
+finding does not reproduce under this default at `pv_scale=1.2`; it still reproduces under
+the explicit `thesis_literal=true` opt-in (see `docs/literate/convex_branch_flow.jl`).
 
 Shared helper where the forms coincide: the
 thesis 3.37 receiving-end power `(P−r·l, Q−x·l)` is algebraically IDENTICAL to `cpydrop`'s
@@ -142,10 +159,11 @@ end
     ConvexBranchFlow(; thesis_literal::Bool = false)
 
 Outer kwarg constructor. `thesis_literal = false` (the DEFAULT) implements the
-corrected exactness-copy sign (`v̂ ≥ v`, the Gan-Low direction — Gan-Low's MODIFIED
-OPF, a conservative RESTRICTION on the upper voltage band, exact by theorem, with a
-measurable (~0.05%) welfare loss on the high-PV reference fixture, default optimum -921.754 vs true AC optimum
--921.277 — NOT "a genuine relaxation"). `thesis_literal = true` reproduces the LITERAL,
+corrected exactness-copy sign (`v̂ ≥ v`, the Gan-Low copy direction), a per-branch INNER
+APPROXIMATION of the upper voltage band (`v̂ − v = Σ_path (r²+x²)·l`), not Gan-Low's OPF-m
+and not exact by theorem. On the high-PV reference fixture (`pv_scale=1.2`) the default
+optimum is -921.754 vs true AC optimum -921.277 — NOT "a genuine relaxation"; for
+`pv_scale ≥ 1.3` it is cone-inexact and refused by the exactness gate. `thesis_literal = true` reproduces the LITERAL,
 defective thesis eq. 3.43 formula (`v̂ ≤ v`), an explicit, documented RESTRICTION on the
 LOWER band instead — never the default. NEITHER form is a genuine relaxation. The zero-arg
 call `ConvexBranchFlow()` remains valid and now defaults to the CORRECTED (restriction, not
@@ -247,8 +265,9 @@ function _contribute_convex!(
     fix.(v̂[feeder.root, :], 1.0; force = true)
 
     # Squared voltage bounds on BOTH v and v̂ at every non-root bus (thesis 3.45;
-    # SQUARE the pu magnitude bounds). Bounding v̂ ≤ V²max is what drives the cone tight
-    # (exact) — this is the load-bearing half of the exactness copy, not decoration.
+    # SQUARE the pu magnitude bounds). Under the default copy v̂ − v = Σ_path |z|²·l ≥ 0, so
+    # v̂ ≤ V²max is an inner restriction v ≤ V²max − Σ_path |z|²·l of the upper band; it is
+    # slack on realistic fixtures and guarantees nothing about cone tightness by itself.
     for j in 1:N, t in 1:T
         j == feeder.root && continue
         vb = feeder.buses[j]

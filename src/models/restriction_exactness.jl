@@ -197,10 +197,11 @@ At these measured defaults, `assert_restriction_exact!(ctx_restricted, ctx_ac; u
 returns **`ac_feasible = true`** (the restricted solution's OWN cone is tight — a genuine
 branch-flow point, reproducing the unrestricted `socp_maxgap = 2.08e-8`), **`matches_ac_optimum = false`** (hours 7–15 diverge from the independently-solved AC optimum), and a substantial,
 NEGATIVE `optimality_loss` (measured ≈ `-1.4326`, i.e. `cost_restricted − cost_unrestricted`:
-the restricted welfare sits genuinely below the unrestricted SOCP bound — SIGN CONVENTION:
-negative means the restriction cost the researcher welfare relative to the looser,
-inexact bound; it is never positive because `RestrictedBranchFlow`'s feasible set is a
-genuine SUBSET of the unrestricted relaxation's). This is the EXPECTED, PROVABLE
+the restricted welfare sits genuinely below the unrestricted (default-copy) SOCP optimum — SIGN CONVENTION:
+negative means the restriction cost the researcher welfare relative to the looser
+default model (itself a per-branch inner approximation, not a relaxation of AC); it is never
+positive because `RestrictedBranchFlow`'s feasible set is a
+genuine SUBSET of the default SOCP's). This is the EXPECTED, PROVABLE
 consequence of OPF-m being a genuine restriction whose added constraint actively
 binds during the high-PV over-voltage window — confirmed causally via the nonzero
 `:opfm_shadow_voltage` constraint duals (up to `-24.18` at bus 3, hour 9), not merely

@@ -1,11 +1,13 @@
-# # Rung 3 — Overvoltage-Capable Relaxation: A Gan-Low OPF-m Restriction
+# # Rung 3 — Overvoltage-Capable Restriction: A Gan-Low OPF-m Restriction
 #
-# The previous page ("Rung 3: AC-Exactness Oracle") documented a genuine SOC-relaxation
-# inexactness on a high-PV, reverse-flow feeder: the SOCP relaxation pins a bus
-# voltage at its squared upper bound and inflates a fictitious squared branch current
-# `l` so that `l·v > P²+Q²` strictly, and `solve_welfare` correctly REFUSES the resulting
-# prices under its default exactness gate. This page documents the mechanism that resolves
-# that finding: [`RestrictedBranchFlow`](@ref), a genuine feasible-set RESTRICTION implementing
+# The previous page ("Rung 3: AC-Exactness Oracle") documented how the DEFAULT
+# [`ConvexBranchFlow`](@ref) behaves on a high-PV, reverse-flow feeder. The default exactness
+# copy is a per-branch INNER APPROXIMATION of the upper voltage band (`v̂ − v = Σ_path
+# (r²+x²)·l`, so `v̂ ≤ V²max` restricts `v`), NOT Gan-Low's OPF-m: it can exclude the true AC
+# optimum, and at higher PV a bus voltage pinned at its bound lets the solver inflate a
+# fictitious squared branch current `l` so that `l·v > P²+Q²` strictly, in which case
+# `solve_welfare` correctly REFUSES the resulting prices under its default exactness gate.
+# This page documents the theorem-backed alternative: [`RestrictedBranchFlow`](@ref), a genuine feasible-set RESTRICTION implementing
 # Gan, Li, Topcu & Low's (2015) "Modified OPF" construction — *"Exact Convex Relaxation of
 # Optimal Power Flow in Radial Networks,"* IEEE Trans. Automatic Control 60(1):72-87, 2015
 # (arXiv:1311.7170) — Theorem 1, Theorem 2, Lemma 1, and Definition 3 (eq. 18). Every number
@@ -227,7 +229,7 @@ ctx_socp.meta[:socp_maxgap]
 
 ctx_restricted.meta[:socp_maxgap]
 
-# The unrestricted relaxation's gap is orders of magnitude above the benign-feeder noise floor —
+# The unrestricted (default-copy) SOCP's gap is orders of magnitude above the benign-feeder noise floor —
 # the direct numerical signature of the fictitious over-current the previous page documents.
 # `RestrictedBranchFlow`'s gap collapses to noise-floor scale, a FREE validation signal requiring
 # zero new certificate code: OPF-m's structural `v̂_GL(s) ≤ v̄` constraint forces the SOC cone
@@ -239,7 +241,7 @@ ctx_restricted.meta[:socp_maxgap]
 # and `assert_ac_exact!`) that certifies the PHYSICAL AC-feasibility of the restricted solution
 # (the same cone-tightness residual as `assert_socp_exact!`, but with its OWN independently-measured
 # tolerances) and separately reports whether the restricted DISPATCH matches the independently-
-# solved AC optimum, plus the optimality loss versus an unrestricted bound. Called live here
+# solved AC optimum, plus the optimality loss versus the unrestricted (default-copy) SOCP optimum. Called live here
 # with `report = true` so a genuine certificate failure would print a diagnostic instead of
 # throwing (it does not fail on this fixture, but the call is defensive regardless):
 
@@ -270,7 +272,8 @@ restriction_report.optimality_loss
 # oracle finds optimal?" — on this fixture the answer is NO during the high-PV window, because
 # Gan-Low's restriction is a genuine, provable feasible-set SUBSET (`F_{OPF-m} ⊆ F_OPF`) that
 # excludes the true AC optimum exactly where it actively binds. `optimality_loss` quantifies
-# that divergence in welfare terms against the unrestricted (loose) SOCP relaxation's own bound.
+# that divergence in welfare terms against the unrestricted (default-copy) SOCP optimum, which is
+# itself a per-branch inner approximation rather than a relaxation of AC.
 
 # ## Fallback semantics
 #
@@ -312,7 +315,7 @@ restriction_report.optimality_loss
 # fixture where the simpler mechanism alone might suffice.
 #
 # The measured optimality loss (`restriction_report.optimality_loss` above) quantifies exactly
-# how far the restricted dispatch's welfare diverges from the unrestricted relaxation's own bound
+# how far the restricted dispatch's welfare diverges from the unrestricted (default-copy) SOCP optimum
 # during the window where OPF-m's restriction genuinely binds — a real, principled, honestly
 # reported number, not zero, because `matches_ac_optimum = false` there. The fallback semantics
 # section above documents when a DIFFERENT fixture or scenario should route to
@@ -338,9 +341,10 @@ restriction_report.optimality_loss
 # section above demonstrates). What genuinely disagrees under the DEFAULT is **gate 2**
 # (`assert_ac_exact!`'s AC-dispatch comparison, the SAME mechanism `restriction_report`'s own
 # `matches_ac_optimum = false` reports above) — the plain, UNRESTRICTED `ConvexBranchFlow()`'s
-# optimum (`-921.754`) diverges from the true AC optimum (`-921.277`) precisely because the
-# unrestricted relaxation, absent OPF-m's added `v̂_GL(s) ≤ v̄` constraint, is loose enough at these
-# hours that its own optimum sits at a DIFFERENT point than either OPF-m's restricted optimum or
+# optimum (`-921.754`) diverges from the true AC optimum (`-921.277`) precisely because its
+# per-branch copy bound `v̂ ≤ V²max` (an inner approximation of the upper band, `v̂ − v =
+# Σ_path (r²+x²)·l`), unlike OPF-m's lossless `v̂_GL(s) ≤ v̄` constraint, excludes the AC optimum at these
+# hours, so its own optimum sits at a DIFFERENT point than either OPF-m's restricted optimum or
 # the true AC optimum — even though its OWN cone residual is small (gate 1 exact). Under
 # `thesis_literal = true` on this SAME fixture, gate 2 is ALSO exact (measured here:
 # `cost_socp = -921.27700` matches `cost_ac = -921.27699` within `rtol = 1e-4`) — this specific
