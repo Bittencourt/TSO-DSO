@@ -390,14 +390,6 @@ end
             "fourquad",
             g -> tight([fourq]; flex_market = FlexMarket(), welfare_optimizer = g),
         ),
-        (
-            "smartinverterpv_flex",
-            g -> tight(
-                [unsupported[3][2]];
-                flex_market = FlexMarket(),
-                welfare_optimizer = g,
-            ),
-        ),
         ("actors", g -> tight([t.agg]; actors = portfolio, welfare_optimizer = g)),
         ("actors_not_a_vector", g -> tight([t.agg]; actors = :x, welfare_optimizer = g)),
         ("ev", g -> tight([unsupported[1][2]]; welfare_optimizer = g)),
@@ -481,15 +473,39 @@ end
         @test ru.e isa ArgumentError && occursin("compare_tariffs", ru.e.msg)
         @test ru.e isa ArgumentError && occursin(dev_name, ru.e.msg)
     end
-    # with flex_market, a device with its own reactive decision is refused like the capacitor
+    # with flex_market, a device with its own reactive decision is refused like the
+    # capacitor. In compare_tariffs only FourQuadBESS reaches that stage-2 guard: the
+    # fit-leg device guard runs first and refuses SmartInverterPV, flex_market or not.
     e_4q = refused(g -> tight([fourq]; flex_market = FlexMarket(), welfare_optimizer = g)).e
     @test e_4q isa ArgumentError && occursin("FourQuadBESS", e_4q.msg)
-    @test e_4q isa ArgumentError && occursin("reactive", e_4q.msg)
+    @test e_4q isa ArgumentError && occursin("own reactive decision", e_4q.msg)
     r_sipv = refused(
         g -> tight([unsupported[3][2]]; flex_market = FlexMarket(), welfare_optimizer = g),
     )
     @test r_sipv.n == 0
     @test r_sipv.e isa ArgumentError && occursin("SmartInverterPV", r_sipv.e.msg)
+    @test r_sipv.e isa ArgumentError && occursin("fit leg", r_sipv.e.msg)
+    @test r_sipv.e isa ArgumentError && !occursin("own reactive decision", r_sipv.e.msg)
+    # clear_flex_market has no fit leg, so there SmartInverterPV does reach the stage-2
+    # reactive-decision guard, before any solve
+    input_t = M.market_dadp(t).input
+    r_sipv_clear = refused(
+        g -> clear_flex_market(
+            M.feeder2(t.smax),
+            ConvexBranchFlow(),
+            [unsupported[3][2]],
+            input_t,
+            FlexMarket();
+            T = M.T_INT,
+            λ₀ = t.π0,
+            optimizer = g,
+        ),
+    )
+    @test r_sipv_clear.n == 0
+    @test r_sipv_clear.e isa ArgumentError &&
+          occursin("SmartInverterPV", r_sipv_clear.e.msg)
+    @test r_sipv_clear.e isa ArgumentError &&
+          occursin("own reactive decision", r_sipv_clear.e.msg)
     # the same inputs without flex_market keep the default path (no new guard there)
     r_pf = compare_tariffs(
         M.feeder2(t.smax),

@@ -345,8 +345,10 @@ formulation other than `ConvexBranchFlow` (the congested-hour split reads its co
 duals), a `λ₀` with a non-finite or non-positive entry (it normalises the congestion
 score), aggregators that are not in ascending bus order, any aggregator holding a
 `FixedCapacitor` (its constant reactive injection has no stage-2 representation), and any
-aggregator holding a device with its own reactive decision (`SmartInverterPV`,
-`FourQuadBESS`): stage 2 holds reactive power at the inelastic draw.
+aggregator holding a `FourQuadBESS` (a device with its own reactive decision): stage 2 holds
+reactive power at the inelastic draw. A `SmartInverterPV` also has its own reactive
+decision, but it never reaches that check here: the up-front device check above refuses it
+whether or not `flex_market` is set.
 """
 function compare_tariffs(
     feeder::AbstractFeeder,
