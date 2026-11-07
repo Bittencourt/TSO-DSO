@@ -690,6 +690,129 @@ end
     @test res.battery_message == ""
 end
 
+@testitem "price-taker: a V2G EV at a negative price reports :refused on its own EV certificate, never a battery :ok" tags =
+    [:settlement] begin
+    using TSODSO
+
+    # A V2G ElectricVehicle has the battery's variable shape (p_ch, p_dch, no q), so a
+    # shape-based battery predicate would claim a battery check ran on it while the
+    # trait-routed battery certificate skipped it. At a deeply negative price with η < 1 an
+    # SOC-neutral round trip is the optimum (measured ratio about 183 × the EV tolerance),
+    # so the EV co-charge certificate must refuse, and the battery certificate must say
+    # it did not run.
+    T = 24
+    ev = ElectricVehicle(
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        20.0,
+        20.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        1,
+        24;
+        v2g = true,
+        c_deg = 0.01,
+    )
+    agg = Aggregator(2, 0.9, AbstractDevice[ev], zeros(T))
+    r = price_taker_dispatch(agg, fill(-50.0, T))
+
+    @test keys(r) ==
+          (:net, :utility, :battery_certificate, :battery_message, :ev_certificate, :ev_message)
+    @test all(isfinite, r.net)
+    @test r.battery_certificate === :not_checked
+    @test r.battery_message == ""
+    @test r.ev_certificate === :refused
+    @test occursin("EV complementarity", r.ev_message)
+end
+
+@testitem "price-taker: EV certificate routing for V1G, compliant V2G, EV-free, battery plus V2G and wrapped V2G populations" setup =
+    [TwoBusFixtures] tags = [:settlement] begin
+    using TSODSO
+
+    T = TwoBusFixtures.T
+    swing = [(t in 5:8) ? 12.0 : ((t >= 18 || t <= 4) ? 1.0 : 4.0) for t in 1:T]
+    Pdc =
+        TwoBusFixtures.LOAD_SCALE_2BUS .*
+        generate_profiles(seed = TwoBusFixtures.SEED_2BUS + 2, T = T).demand
+    compliant_ev() = ElectricVehicle(
+        2,
+        0.95,
+        1.0,
+        0.02,
+        0.0,
+        0.08,
+        0.06,
+        0.06,
+        1e3,
+        TwoBusFixtures.BATT_λ_MIN,
+        TwoBusFixtures.BATT_λ_MED,
+        TwoBusFixtures.BATT_λ_MAX,
+        18,
+        8;
+        v2g = true,
+        c_deg = 0.05,
+    )
+    negative_ev() = ElectricVehicle(
+        2,
+        0.9,
+        1.0,
+        5.0,
+        0.0,
+        40.0,
+        20.0,
+        20.0,
+        10.0,
+        1.0,
+        4.0,
+        9.0,
+        1,
+        24;
+        v2g = true,
+        c_deg = 0.01,
+    )
+
+    # V1G (no discharge leg): nothing to certify for co-charge, and no battery present.
+    v1g = ElectricVehicle(2, 0.9, 1.0, 5.0, 0.0, 40.0, 10.0, 30.0, 10.0, 1.0, 4.0, 9.0, 1, 4)
+    r_v1g = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[v1g], zeros(6)), fill(1.0, 6))
+    @test r_v1g.ev_certificate === :not_checked
+    @test r_v1g.ev_message == ""
+    @test r_v1g.battery_certificate === :not_checked
+
+    # Compliant V2G at the swing price: the EV check runs and passes.
+    r_ok = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[compliant_ev()], Pdc), swing)
+    @info "price-taker compliant V2G EV certificate" ev = r_ok.ev_certificate msg = r_ok.ev_message
+    @test r_ok.ev_certificate === :ok
+    @test r_ok.ev_message == ""
+    @test r_ok.battery_certificate === :not_checked
+
+    # EV-free (thermostatic only): neither certificate runs.
+    therm = Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(25.0, 3))
+    r_free = price_taker_dispatch(Aggregator(2, 0.9, [therm], fill(0.1, 3)), fill(30.0, 3))
+    @test r_free.ev_certificate === :not_checked
+    @test r_free.battery_certificate === :not_checked
+
+    # A battery and a V2G EV in one population: both checks run, independently.
+    batt = PVBattery(2, 0.95, 1.0, 0.5, 0.0, 2.0, 1.0, 1.0, 2.0, 3.0, fill(0.2, T))
+    r_both =
+        price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[batt, compliant_ev()], Pdc), swing)
+    @test r_both.battery_certificate !== :not_checked
+    @test r_both.ev_certificate !== :not_checked
+
+    # A behaviour-wrapped V2G EV is routed to the EV certificate through the wrapper's trait.
+    ev_neg = negative_ev()
+    bs = TSODSO._device_baseline(ev_neg, 24)
+    wrapped = PartialCompliance(ev_neg, 0.5, bs.b, bs.Ub)
+    r_wrap = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[wrapped], zeros(24)), fill(-50.0, 24))
+    @test r_wrap.ev_certificate in (:ok, :refused)
+    @test r_wrap.battery_certificate === :not_checked
+end
+
 @testitem "price-taker: penalty-free arbitrage — charge-low/sell-high at rated bounds" tags =
     [:settlement] begin
     using TSODSO

@@ -31,6 +31,8 @@
 # the result — `battery_certificate = :refused` + the message. A refusal is a
 # MEASURED OUTCOME (Phase-40 refusal precedent), never a dropped dispatch, and τ is
 # NEVER loosened: it stays at the ADMM-consolidation discipline `τ_batt = 1e-3`.
+# V2G EVs get the EV co-charge certificate the same way, recorded as its own
+# `ev_certificate` at `TAU_EV_ADMM`, the EV tolerance that call site pairs with `τ_batt`.
 #
 # SIGN CONVENTION (matches `agr_prices` and `welfare_accounting`'s transfer): `p`
 # is the PUBLISHED price; a net exporter (`pag > 0`) EARNS `p·pag`, an importer
@@ -42,11 +44,75 @@
 
 export price_taker_dispatch, price_taker_dispatches
 
+# Internal: run one certificate as a RECORDED status. `(:not_checked, "")` when the device
+# class it certifies is absent (`present == false`, so `f` is never called); otherwise
+# `(:ok, "")` when `f()` returns, or `(:refused, msg)` when it throws `CertificateError`.
+# Any other exception is a genuine failure and is rethrown.
+function _certificate_status(f, present::Bool)
+    present || return (:not_checked, "")
+    try
+        f()
+    catch err
+        err isa CertificateError || rethrow()
+        return (:refused, err.msg)
+    end
+    return (:ok, "")
+end
+
+# Internal: the storage certificates of a solved price-taker-shaped dispatch, as recorded
+# statuses — `(; battery_certificate, battery_message, ev_certificate, ev_message)`.
+#
+# Report semantics: each check runs with `on_violation = :error` and its `CertificateError`
+# is caught and recorded (`:refused` + the message), never rethrown, and τ is never loosened
+# to turn a refusal into `:ok`. A check that did not run is `:not_checked`, never `:ok`.
+#
+# Selection: presence is decided by the `storage_kind` trait over the type-paired stash
+# (`_stash_entry_has_kind`), the same selection the certificates themselves use, and never
+# by variable shape: a V2G `ElectricVehicle` has the battery's shape (`p_ch`, `p_dch`, no
+# `q`), so a shape test would report a battery check that skipped the EV. The legacy shape
+# applies only to hand-built stash entries without type provenance, so those keep their
+# classification. A V2G EV is an `:ev` entry with a `:p_dch` leg (V1G vars have none), the
+# certificate's own selection. Presence is read from these predicates, never from the EV
+# certificate's returned ratio (a clean V2G EV can return about 0).
+#
+# Both price-taker-shaped solves (`price_taker_dispatch` and the flexibility delivery
+# `_deliver`) call this one routine, so their certificate reports cannot diverge.
+#
+# EV tolerance: these standalone price-taker and stage-2 solves take `τ_batt = 1e-3` from
+# the ADMM final consolidation, and that call site pairs it with `TAU_EV_ADMM`; the same rule
+# picks `TAU_EV_ADMM` here, reused by name. The centralized EV default tolerance (the
+# certificate's own keyword default) would refuse compliant price-taker solves. (The
+# `TAU_EV_ADMM` docstring still names the consolidation call site only.)
+function _storage_certificates(ctx::ModelContext; T::Int, τ_batt::Real, τ_ev::Real)
+    battery_shape(v) = haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q)
+    has_battery = false
+    has_v2g = false
+    for (bus, varlist) in ctx.agg_device_vars
+        types = get(ctx.agg_device_types, bus, nothing)
+        for (i, v) in enumerate(varlist)
+            if _stash_entry_has_kind(types, v, i, :battery, battery_shape)
+                has_battery = true
+            end
+            if _stash_entry_has_kind(types, v, i, :ev, _ -> false) && haskey(v, :p_dch)
+                has_v2g = true
+            end
+        end
+    end
+    battery_certificate, battery_message = _certificate_status(has_battery) do
+        assert_battery_complementarity!(ctx; τ = τ_batt, T = T, on_violation = :error)
+    end
+    ev_certificate, ev_message = _certificate_status(has_v2g) do
+        assert_ev_complementarity!(ctx; τ = τ_ev, T = T, on_violation = :error)
+    end
+    return (; battery_certificate, battery_message, ev_certificate, ev_message)
+end
+
 """
     price_taker_dispatch(agg::Aggregator, price::AbstractVector{<:Real};
-                         T = length(price), τ_batt = 1e-3) ->
+                         T = length(price), τ_batt = 1e-3, τ_ev = TAU_EV_ADMM) ->
         (; net::Vector{Float64}, utility::Float64,
-           battery_certificate::Symbol, battery_message::String)
+           battery_certificate::Symbol, battery_message::String,
+           ev_certificate::Symbol, ev_message::String)
 
 Thin penalty-free counterfactual dispatch of ONE aggregator at the FIXED exogenous
 price vector `price` (length `T`): `Max U_ag(devices) + Σ_t price[t]·pag[t]` s.t.
@@ -67,11 +133,19 @@ Returns:
     together with `battery_message`; a MEASURED OUTCOME, never rethrown, never
     tuned away — under a constant `:flat` price the arbitrage problem is degenerate
     and interior-point solvers can co-activate charge/discharge), or `:not_checked`
-    when the aggregator carries no battery vars (the check is a no-op then);
-  - `battery_message` — the refusal message (`""` otherwise).
+    when the population holds no device whose `storage_kind` is `:battery` (the check
+    does not run then);
+  - `battery_message` — the refusal message (`""` otherwise);
+  - `ev_certificate` — `:ok` when the EV co-charge certificate passed for every V2G
+    `ElectricVehicle`, `:refused` when it threw `CertificateError` (recorded together
+    with `ev_message`, never rethrown), or `:not_checked` when the population holds no
+    V2G EV, including V1G-only populations (no discharge leg to certify);
+  - `ev_message` — the EV refusal message (`""` otherwise).
 
 `τ_batt = 1e-3` is the ADMM-consolidation discipline — NEVER loosen it to make a
 leg pass (the honesty policy; Phase-40 refusal precedent).
+`τ_ev = TAU_EV_ADMM` is the EV tolerance paired with `τ_batt = 1e-3` at the ADMM final
+consolidation, the same rule that picks `τ_batt` here, and must never be loosened either.
 
 Guards: `length(price) == T`, all prices finite, and the aggregator's `Pdc` length
 (`contribute!`'s own guard) — each a loud `ArgumentError`.
@@ -81,6 +155,7 @@ function price_taker_dispatch(
     price::AbstractVector{<:Real};
     T::Int = length(price),
     τ_batt::Real = 1e-3,
+    τ_ev::Real = TAU_EV_ADMM,
 )
     length(price) == T || throw(
         ArgumentError(
@@ -116,31 +191,16 @@ function price_taker_dispatch(
     net = Float64[value(pag[t]) for t in 1:T]
     utility = value(ctx.objective)
 
-    # Battery complementarity as a RECORDED status (report semantics over the
-    # existing (:error, :warn) API — try/catch the :error branch; never rethrow,
-    # never loosen τ). :not_checked when the aggregator carries NO BATTERY vars —
-    # detected with the check's OWN predicate (p_ch ∧ p_dch ∧ ¬q), NOT by
-    # agg_device_vars emptiness: that stash holds ALL device variables, so a
-    # thermostatic/deferrable-only population would otherwise take the :ok branch
-    # and report a complementarity check that never ran (review WR-03).
-    has_battery = any(
-        haskey(v, :p_ch) && haskey(v, :p_dch) && !haskey(v, :q) for
-        varlist in values(ctx.agg_device_vars) for v in varlist
-    )
-    battery_certificate = :not_checked
-    battery_message = ""
-    if has_battery
-        battery_certificate = :ok
-        try
-            assert_battery_complementarity!(ctx; τ = τ_batt, T = T, on_violation = :error)
-        catch err
-            err isa CertificateError || rethrow()
-            battery_certificate = :refused
-            battery_message = err.msg
-        end
-    end
+    certs = _storage_certificates(ctx; T = T, τ_batt = τ_batt, τ_ev = τ_ev)
 
-    return (; net, utility, battery_certificate, battery_message)
+    return (;
+        net,
+        utility,
+        certs.battery_certificate,
+        certs.battery_message,
+        certs.ev_certificate,
+        certs.ev_message,
+    )
 end
 
 """
@@ -149,7 +209,7 @@ end
 
 [`price_taker_dispatch`](@ref) mapped over `aggs` at the SAME fixed price vector —
 the per-aggregator counterfactual rows the tariff-comparison harness assembles.
-`kwargs` forward (`T`, `τ_batt`). An empty vector throws an `ArgumentError` (a
+`kwargs` forward (`T`, `τ_batt`, `τ_ev`). An empty vector throws an `ArgumentError` (a
 comparison with no aggregators is a caller bug, not an empty result).
 """
 function price_taker_dispatches(
