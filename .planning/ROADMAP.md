@@ -7,7 +7,7 @@
 - ✅ **v2.1 Validation & Reproduction** — Phases 15–18 (shipped 2026-07-26)
 - ✅ **v3.0 Research Extension Rungs** — Phases 19–25 (shipped 2026-08-24)
 - ✅ **v4.0 Correctness & Depth** — Phases 26–38 (shipped 2026-10-08)
-- 🚧 **v5.0 Aggregator Layer at Scale** — Phases 39–46 (in progress)
+- 🚧 **v5.0 Aggregator Layer at Scale** — Phases 39–47 (in progress)
 
 Full phase details, decisions, and per-phase artifacts for shipped milestones are archived in
 [`milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md),
@@ -37,7 +37,7 @@ Full phase details, decisions, and per-phase artifacts for shipped milestones ar
 
 </details>
 
-### 🚧 v5.0 Aggregator Layer at Scale (Phases 39–46)
+### 🚧 v5.0 Aggregator Layer at Scale (Phases 39–47)
 
 **Milestone goal:** Make the DSO⇄aggregators operational layer realistic and publishable at true
 population scale: real prosumer populations solved in parallel, aggregators modeled as actors with
@@ -66,6 +66,7 @@ aggregator actor, flexibility market, and the IEEE-8500 headline last behind a g
 - [x] **Phase 44: Aggregator as Actor** - Welfare vs profit (wedge) objectives, multi-bus portfolios, exogenous compliance/opt-out/rebound (completed 2026-11-03)
 - [x] **Phase 45: Flexibility Market vs Price Coordination** - DSO flexibility market with explicit baseline/payment rule and the cross-scheme comparison table (completed 2026-11-05)
 - [x] **Phase 46: IEEE-8500 Headline Measurement (go/no-go)** - Recorded go/no-go and a measured 8500 table through `Scenario` (completed 2026-11-05)
+- [ ] **Phase 47: v5.0 Audit Gap Closure** - Honest V2G certificates on the flex-market and price-taker paths; loud refusal of actors and reactive/flex devices where unsupported (gap closure from v5.0-MILESTONE-AUDIT.md)
 
 ## Phase Details
 
@@ -282,6 +283,21 @@ Plans:
 - [x] 46-04-PLAN.md — Launch-readiness check + orchestrator-launched detached T = 10 IEEE-8500 point (user-approved 7.1 GiB launch; outcome refused_certificate) — SCALE-08
 - [x] 46-05-PLAN.md — Committed measured rows, dated docs section computed from the CSVs (NO-GO threshold verdict, B1/B2, Scenario-path table, divergences, supersessions), gates, requirement closure — SCALE-07/08
 
+### Phase 47: v5.0 Audit Gap Closure
+
+**Goal**: Every certificate on the price-taker and flex-market paths reports only checks that actually ran, and every combination the milestone did not wire is refused loudly instead of silently mis-handled.
+**Depends on**: Phase 43, Phase 44, Phase 45
+**Requirements**: DEV-07, SETL-07, SETL-08 (gap closure; audit items B1, B2, W2, W3 in `.planning/v5.0-MILESTONE-AUDIT.md`)
+**Gap Closure**: Closes B1 (V2G EV certificate falsely `:ok` on `price_taker_dispatch` / `clear_flex_market`), B2 (actor objectives not wired into the flex market or `compare_tariffs`: recorded scope decision + guard), W2 (`compare_tariffs` refuses Phase-43 devices only after expensive solves), W3 (reactive-capable devices' q silently dropped in flex stage 2).
+**Success Criteria** (what must be TRUE):
+
+  1. On `price_taker_dispatch` and `clear_flex_market`, battery-certificate selection uses the device-type trait (not the variable shape), and populations with V2G EVs get the EV co-charge certificate run and reported as its own recorded status. A V2G fixture on each path (including a negative-price co-charge case) shows the certificate reporting, never a false `:ok`.
+  2. `compare_tariffs` and `clear_flex_market` refuse actor inputs (non-welfare objectives / portfolios) with an `ArgumentError`, and the scope decision "actors × flexibility market / tariff comparison is future work" is recorded in REQUIREMENTS.md, the audit and the docs limitations.
+  3. `compare_tariffs` refuses unsupported Phase-43 devices before any solve; flex stage 2 refuses devices with a reactive decision (`SmartInverterPV`, `FourQuadBESS`) the same way it refuses `FixedCapacitor`. Each guard is tested.
+  4. Default paths, goldens and the knife-edge canary stay byte-identical; no tolerance, τ, ε or hybrid floor changes; committed result CSVs are unchanged.
+
+**Plans**: TBD
+
 ### Coherence notes (departures from the research order)
 
 None: the eight phases follow the reconciled build order exactly. Two placement choices worth
@@ -301,6 +317,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 44. Aggregator as Actor | 7/7 | Complete    | 2026-11-03 |
 | 45. Flexibility Market vs Price Coordination | 7/7 | Complete    | 2026-11-05 |
 | 46. IEEE-8500 Headline Measurement (go/no-go) | 5/5 | Complete    | 2026-11-06 |
+| 47. v5.0 Audit Gap Closure | 0/? | Not started | - |
 
 ## Deferred / Future-Milestone Notes
 

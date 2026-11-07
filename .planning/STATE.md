@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
-status: milestone_complete
-stopped_at: Milestone complete (Phase 46 was final phase)
+status: planning
+stopped_at: Phase 47 (audit gap closure) context gathered
 last_updated: "2026-11-06T23:28:03.000Z"
 last_activity: 2026-11-06 -- Phase 46 complete (verified, override recorded)
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 8
   total_plans: 45
   completed_plans: 45
-  percent: 100
+  percent: 89
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Milestone complete
+**Current focus:** Phase 47 — v5-audit-gap-closure (v5.0 audit gaps_found)
 
 ## Current Position
 
 Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
-Phase: 46 (ieee-8500-headline-measurement-go-no-go) — COMPLETE
-Plan: 5 of 5
-Status: Milestone complete
+Phase: 47 (v5-audit-gap-closure) — PLANNING
+Plan: 0 of ?
+Status: Planning Phase 47 (gap closure from v5.0-MILESTONE-AUDIT.md)
 Last activity: 2026-11-06 -- Phase 46 complete; next: milestone audit
 Progress: [██████████] 100%
 
