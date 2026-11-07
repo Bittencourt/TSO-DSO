@@ -140,3 +140,32 @@ No tolerance, τ, ε or hybrid floor changes.
 - Reactive (q) dispatch in flex stage 2.
 - Integration-check items W1, W4–W9: backlog todo.
 </deferred>
+
+## Post-Research Corrections (2026-11-06)
+
+`47-RESEARCH.md` measured the following. These points supersede the decisions above where they differ. The
+user's intent is unchanged: refuse SmartInverterPV and FourQuadBESS in stage 2, and make certificates honest.
+
+- **W3 predicate.** The `has_reactive_decision` trait defaults to `is_flexible_load(d)`, so it is true for
+  every flexible load: Interruptible, Thermostatic, Deferrable and HeatPump. The literal trait would
+  therefore refuse the default IEEE-13/123 houses and every committed `flex_*` row. Stage 2 drops the
+  flexible-load q on purpose.
+  - **Decision:** refuse on `has_reactive_decision(d) && !is_flexible_load(d)`. This is still trait-based,
+    and it selects exactly SmartInverterPV and FourQuadBESS. Neither appears in any committed result or
+    flex test, so there is no STOP.
+- **EV τ.** These paths take `τ_batt = 1e-3` from the ADMM final consolidation, and that call site pairs it
+  with `TAU_EV_ADMM`. Use `TAU_EV_ADMM`, which is 3.6e-3 and already measured.
+  - On 75 compliant price-taker solves the worst ratio was 1.2e-3, so it refused none of them;
+    `TAU_EV` would have falsely refused 19.
+  - The negative-price fixture gives 0.66, which is 183× the tolerance, so the test asserts `:refused`.
+  - Do **not** pin `:ok` on a flat-baseline flex clear, where the ratio is 0.71 of the tolerance.
+- **CSV and digest impact:** none. The one test to update is the `_deliver` field-list assertion in
+  `test/test_flex_market.jl` around line 939. It is an additive schema check, not a golden.
+- **B2 guard:**
+  - Add an explicit `actors = nothing` keyword to `compare_tariffs` and `clear_flex_market` that throws an
+    `ArgumentError` naming the scope decision. This meets ROADMAP success criterion 2.
+  - A `SettlementInput` built from an actor run cannot be told apart from a normal one without changing
+    that type, which is out of scope. **Document it as a limitation; do not guard it.**
+  - Behaviour wrappers are not an actor channel: they clear `ok` with residual 0.0, so they are not refused.
+- **W2:** `_reject_unsupported_flex_devices` is at `src/pricing/fit.jl:81-97`. Call it per aggregator in the
+  `comparison.jl` boundary-guard block, between the shared-bus check and `_flex_market_list`.
