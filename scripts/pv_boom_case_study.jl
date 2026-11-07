@@ -461,15 +461,18 @@ function a2_ac_implied_vhat(t)
 end
 a2_ac_vhat = [a2_ac_implied_vhat(t) for t in 1:T_FULL]
 a2_ac_vhat_max = maximum(maximum(a2_ac_vhat[t][j] for j in a2_nonroot) for t in 1:T_FULL)
-a2_ac_vhat_violation_hours =
-    [t for t in 1:T_FULL if any(j -> a2_ac_vhat[t][j] > a2_vmax2[j] + A2_BOUND_TOL, a2_nonroot)]
+a2_ac_vhat_violation_hours = [
+    t for
+    t in 1:T_FULL if any(j -> a2_ac_vhat[t][j] > a2_vmax2[j] + A2_BOUND_TOL, a2_nonroot)
+]
 for j in a2_nonroot, t in 1:T_FULL
     delete_upper_bound(a2_pvs.v̂[j, t])
 end
 optimize!(ctx_socp.model)
 a2_cf_status = string(termination_status(ctx_socp.model))
 a2_cf_ok = a2_cf_status == "OPTIMAL"
-a2_cf_obj_gap = a2_cf_ok ? objective_value(ctx_socp.model) - objective_value(ctx_ac.model) : NaN
+a2_cf_obj_gap =
+    a2_cf_ok ? objective_value(ctx_socp.model) - objective_value(ctx_ac.model) : NaN
 a2_cf_cone_maxgap =
     a2_cf_ok ?
     maximum(
@@ -481,8 +484,8 @@ a2_cf_cone_maxgap =
 a2_cf_inexact_hours =
     a2_cf_ok ?
     [
-        row.t for row in
-        TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6).hours if
+        row.t for
+        row in TSODSO.assert_ac_exact!(ctx_socp, ctx_ac; rtol = 1e-4, atol = 1e-6).hours if
         !row.exact
     ] : Int[]
 # Share of the negative gap that deleting the v̂ bound removes.
@@ -521,7 +524,9 @@ a2_all_exact = isempty(inexact_hours)
 a2_not_relaxation = ac_report.obj_gap < -A2_WORDING_TOL
 a2_cone_tight = a2_socp_maxgap <= A2_WORDING_TOL
 a2_cause_measured =
-    a2_not_relaxation && a2_cf_ok && !isempty(a2_vhat_bound_hours) &&
+    a2_not_relaxation &&
+    a2_cf_ok &&
+    !isempty(a2_vhat_bound_hours) &&
     a2_cf_share >= A2_CAUSE_SHARE
 # The bound-deleted residual, classified with the SAME A2_WORDING_TOL rule as obj_gap
 # (wording only; no threshold is changed or added).
@@ -546,17 +551,21 @@ a2_case =
     a2_all_exact ? "all_exact" :
     a2_not_relaxation ? "not_relaxation" : a2_cone_tight ? "tight_differ" : "inexact"
 a2_cone_txt =
-    (a2_cone_tight ? "tight" : "NOT tight") * " (socp_maxgap = $(@sprintf("%.3e", a2_socp_maxgap)))"
+    (a2_cone_tight ? "tight" : "NOT tight") *
+    " (socp_maxgap = $(@sprintf("%.3e", a2_socp_maxgap)))"
 a2_summary = if a2_all_exact
     "SOCP and AC agree at all $T_FULL hours (assert_ac_exact! rtol = 1e-4); the SOC cone is " *
-    a2_cone_txt * "."
+    a2_cone_txt *
+    "."
 elseif a2_not_relaxation
     "SOCP and AC differ at $(length(inexact_hours))/$T_FULL hours $inexact_hours, and the " *
     "SOCP optimum is WORSE than the AC solution (obj_gap = SOCP welfare - AC welfare = " *
     "$(@sprintf("%.4e", ac_report.obj_gap)) < 0; both maximize welfare). So the SOCP model " *
     "as configured is NOT a relaxation of this AC model on this fixture: a relaxation's " *
     "optimum cannot be below any AC-feasible point, so local versus global AC optimality " *
-    "cannot produce this. The SOC cone is " * a2_cone_txt * ", so this is not evidence " *
+    "cannot produce this. The SOC cone is " *
+    a2_cone_txt *
+    ", so this is not evidence " *
     "of SOC relaxation inexactness. " *
     (
         a2_cause_measured ?
@@ -575,23 +584,29 @@ elseif a2_not_relaxation
             isempty(a2_cf_inexact_hours) ? "no hour where SOCP and AC differ." :
             "$(length(a2_cf_inexact_hours)) hour(s) $a2_cf_inexact_hours where SOCP and AC " *
             "still differ (solver-tolerance noise on a flat hour; see the residual note below)."
-        ) * " " * a2_cf_residual_txt :
+        ) *
+        " " *
+        a2_cf_residual_txt :
         "Cause not established; candidate: the exactness-copy bound v̂ <= vmax^2 " *
         "(src/powerflow/ConvexBranchFlow.jl, thesis 3.45), absent from the AC model. " *
         "Diagnostic: v̂ bound active at hours $a2_vhat_bound_hours; deleting it gives " *
         "status $a2_cf_status, obj_gap $(@sprintf("%.3e", a2_cf_obj_gap))."
-    ) * " The gap is by design: under the default copy v̂ - v = sum over the path of |z|^2 l >= 0, " *
+    ) *
+    " The gap is by design: under the default copy v̂ - v = sum over the path of |z|^2 l >= 0, " *
     "so v̂ <= vmax^2 is a per-branch inner approximation of the upper voltage band " *
     "(v <= vmax^2 - sum |z|^2 l), not Gan-Low's OPF-m and not a relaxation of AC."
 elseif a2_cone_tight
     "SOCP and AC differ at $(length(inexact_hours))/$T_FULL hours $inexact_hours with " *
     "obj_gap = $(@sprintf("%.4e", ac_report.obj_gap)) >= 0, but the SOC cone is " *
-    a2_cone_txt * ": the SOCP point satisfies the AC branch equations, so the difference is " *
+    a2_cone_txt *
+    ": the SOCP point satisfies the AC branch equations, so the difference is " *
     "not SOC relaxation inexactness (cause not established)."
 else
     "The SOC branch-flow relaxation is INEXACT on this fixture: SOCP and AC differ at " *
     "$(length(inexact_hours))/$T_FULL hours $inexact_hours, obj_gap = " *
-    "$(@sprintf("%.4e", ac_report.obj_gap)) >= 0, and the SOC cone is " * a2_cone_txt * "."
+    "$(@sprintf("%.4e", ac_report.obj_gap)) >= 0, and the SOC cone is " *
+    a2_cone_txt *
+    "."
 end
 println("  -> ", a2_summary)
 
@@ -935,11 +950,17 @@ open(findings_path, "w") do io
         "On the certified 3-bus high-PV stress fixture (pv_scale=1.2, load_scale=0.2, " *
         "vmax=1.05, r=x=0.05 branches — test/fixtures_ieee13.jl high_pv_feeder / " *
         "build_high_pv_aggregators; SOCP solved with the documented rtol_exact=1.0 " *
-        "diagnostic override, AC with ACPowerFlow): " * a2_summary,
+        "diagnostic override, AC with ACPowerFlow): " *
+        a2_summary,
     )
     @printf(io, "obj_gap (SOCP welfare - AC welfare) = %.6e\n", ac_report.obj_gap)
     @printf(io, "socp_maxgap                         = %.6e\n", a2_socp_maxgap)
-    @printf(io, "obj_gap without v̂ <= vmax^2         = %.6e  (%s)\n", a2_cf_obj_gap, a2_cf_status)
+    @printf(
+        io,
+        "obj_gap without v̂ <= vmax^2         = %.6e  (%s)\n",
+        a2_cf_obj_gap,
+        a2_cf_status
+    )
     println(io)
     println(io, "Part B — planning-layer Stackelberg-Nash investment response")
     println(io, "-"^80)
