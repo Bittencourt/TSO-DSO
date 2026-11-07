@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Aggregator Layer at Scale
-status: executing
-stopped_at: Phase 47 planned (3 plans), execution starting
-last_updated: "2026-11-07T01:19:57.215Z"
-last_activity: 2026-11-07 -- Phase 47 execution started
+status: milestone_complete
+stopped_at: Milestone complete (Phase 47 was final phase)
+last_updated: 2026-11-07T04:47:38.240Z
+last_activity: 2026-11-07 -- Phase 47 complete (verification passed 4/4); milestone v5.0 ready for re-audit
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 48
-  completed_plans: 45
-  percent: 89
+  completed_plans: 48
+  percent: 100
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** A researcher expresses a scenario and model variant declaratively, runs it end-to-end with an open-source solver, and gets trustworthy, reproducible results and prices — every assumption documented, every layer swappable.
-**Current focus:** Phase 47 — v5-audit-gap-closure
+**Current focus:** Milestone complete
 
 ## Current Position
 
-Milestone: v5.0 Aggregator Layer at Scale (Phases 39–46, 34 requirements mapped)
-Phase: 47 (v5-audit-gap-closure) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 47
-Last activity: 2026-11-07 -- Phase 47 execution started
+Milestone: v5.0 Aggregator Layer at Scale (Phases 39–47, 34 requirements mapped)
+Phase: 47 (complete)
+Plan: 3/3 complete
+Status: Milestone complete
+Last activity: 2026-11-07
 Progress: [██████████] 100%
 
 v5.0 policies: golden policy (default path byte-identical, canary never re-pinned) and honesty
@@ -121,7 +121,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 
 **Velocity:**
 
-- Total plans completed: 268 (v1.0: 43, v2.0: 13, v2.1: 14)
+- Total plans completed: 271 (v1.0: 43, v2.0: 13, v2.1: 14)
 - Average duration: —
 - Total execution time: 0 hours (v3.0)
 
@@ -191,6 +191,7 @@ Still genuinely open past v4.0: the large-lattice integer termination criterion 
 | 44 | 7 | - | - |
 | 45 | 7 | - | - |
 | 46 | 5 | - | - |
+| 47 | 3 | - | - |
 
 **Recent Trend:**
 
