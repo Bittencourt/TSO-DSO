@@ -296,7 +296,12 @@ Plans:
   3. `compare_tariffs` refuses unsupported Phase-43 devices before any solve; flex stage 2 refuses devices with a reactive decision (`SmartInverterPV`, `FourQuadBESS`) the same way it refuses `FixedCapacitor`. Each guard is tested.
   4. Default paths, goldens and the knife-edge canary stay byte-identical; no tolerance, τ, ε or hybrid floor changes; committed result CSVs are unchanged.
 
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves (sequential)
+
+Plans:
+- [ ] 47-01-PLAN.md — B1: shared trait-routed certificate helper (`_storage_certificates`) on `price_taker_dispatch` and `_deliver`; `ev_certificate`/`ev_message` at `TAU_EV_ADMM`; additive `_dispatch_record` EV fields in the flex physics records; V2G negative-price, V1G, compliant and wrapped fixtures on both paths — DEV-07, SETL-07
+- [ ] 47-02-PLAN.md — Guards before any solve: untyped `actors = nothing` keyword refusing with an `ArgumentError` naming the scope decision (B2); up-front `_reject_unsupported_flex_devices` in `compare_tariffs` (W2); `_refuse_reactive_decision` (`has_reactive_decision && !is_flexible_load`) beside the FixedCapacitor refusal (W3); zero-solve tests — SETL-07, SETL-08
+- [ ] 47-03-PLAN.md — Closure: docs limitations and the stage-2 reactive sentence, REQUIREMENTS.md SETL-F2 and row notes, audit gap-closure section, integration backlog todo, phase gate (canary, fences, committed CSVs, SC3), requirement closure — DEV-07, SETL-07, SETL-08
 
 ### Coherence notes (departures from the research order)
 
@@ -317,7 +322,7 @@ SCALE-07/08 (decision and run) in Phase 46, splitting measurement from the headl
 | 44. Aggregator as Actor | 7/7 | Complete    | 2026-11-03 |
 | 45. Flexibility Market vs Price Coordination | 7/7 | Complete    | 2026-11-05 |
 | 46. IEEE-8500 Headline Measurement (go/no-go) | 5/5 | Complete    | 2026-11-06 |
-| 47. v5.0 Audit Gap Closure | 0/? | Not started | - |
+| 47. v5.0 Audit Gap Closure | 0/3 | Planned | - |
 
 ## Deferred / Future-Milestone Notes
 

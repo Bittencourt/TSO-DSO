@@ -37,15 +37,21 @@ time, in the foreground; split a batch if it nears the 10-minute foreground limi
 
 - **After every task commit:** the touched file's fast set (plan 01: `test_settlement.jl`, then
   `test_flex_market.jl`; plan 02: `test_flex_market_fence.jl,test_flex_market.jl`).
-- **After every plan:** plan 01 runs `test_settlement.jl,test_electricvehicle.jl` and
-  `test_flex_market.jl,test_flex_market_fence.jl`; plan 02 runs
-  `test_flex_market_fence.jl,test_behaviour.jl,test_flex_population.jl` and
-  `test_settlement.jl,test_device_traits.jl`; then the formatter (touched files only), content-loss,
-  planning-ID (≤ 355), scripts-index and JET (20 baseline, 0 new) checks.
+- **After every plan:** plan 01 runs `test_settlement.jl,test_electricvehicle.jl,test_admm_knifeedge_canary.jl`
+  and `test_flex_market.jl,test_flex_market_fence.jl`; plan 02 runs
+  `test_flex_market_fence.jl,test_admm_knifeedge_canary.jl`,
+  `test_behaviour.jl,test_flex_population.jl,test_settlement.jl,test_device_traits.jl` and
+  `test_flex_market.jl`; then the formatter (touched files only), content-loss (on the uncommitted
+  formatted tree, before the `style(47)` commit), planning-ID (≤ 355, 0 stale, OK/FAIL line required),
+  scripts-index, τ (`τ_batt::Real = 1e-3` count equal at 9e9b709 and HEAD), golden-pin and JET
+  (20 baseline, 0 new) checks.
+- **Golden-pin gates (plans 01–03):** `test/test_flex_market_fence.jl` only gains lines;
+  `test/test_admm_knifeedge_canary.jl` and `test/test_actor_default_fence.jl` unchanged since 9e9b709;
+  at most 2 removed lines in `test/test_flex_market.jl` (the two-line `_deliver` key-set statement).
 - **Phase gate (plan 03):** `test_admm_knifeedge_canary.jl,test_actor_default_fence.jl` and
   `test_flex_market_ieee.jl,test_exports.jl,test_electricvehicle.jl`; SC3 diff
-  `git diff 9e9b709..HEAD -- src/admm src/models/exactness.jl src/solver/factory.jl test/expected_broken.txt`
-  empty; `git diff 9e9b709..HEAD --stat -- results src/models src/admm` empty.
+  `git diff 9e9b709 -- src/admm src/models/exactness.jl src/solver/factory.jl test/expected_broken.txt`
+  empty; `git diff 9e9b709 --stat -- results src/models src/admm` empty.
 - **Max feedback latency:** ~300 s for a targeted file.
 
 ---

@@ -540,15 +540,18 @@ r = price_taker_dispatch(Aggregator(2, 0.9, AbstractDevice[ev], zeros(24)), fill
 | A4 | Updating the `_deliver` key-set pin (`test_flex_market.jl:939-940`) is not "re-pinning a golden" | Answer 3 | Low: it is a schema assertion, not a digest. Flag it in the plan |
 | A5 | `τ_ev` is exposed only on `price_taker_dispatch` / `_deliver`, not threaded through `clear_flex_market` / `compare_tariffs` | Answer 2 | Low: an API-surface choice only; the value is fixed |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **The W3 predicate (blocking).**
    - Known: the literal trait selects every flexible load; the refined trait selects exactly {4Q, SIPV}.
    - Recommendation: the planner adopts the refined predicate and records it as a confirmation item, with a `checkpoint:human-verify` before the W3 task, or asks in the plan-check.
+   - **RESOLVED:** the user confirmed the refined predicate `has_reactive_decision(d) && !is_flexible_load(d)` in the 47-CONTEXT.md Post-Research Corrections; implemented in 47-02 Task 2.
 2. **The SettlementInput actor channel.**
    - Known: it is silent today and cannot be detected without a type change.
    - Recommendation: document it in the docstring, docs §12 and the audit, and add one line to the backlog todo (a SettlementInput provenance flag).
+   - **RESOLVED:** the 47-CONTEXT.md Post-Research Corrections choose "document as a limitation, do not guard"; docstring in 47-02 Task 1, docs §12 / audit / backlog line / SETL-F2 in 47-03 Task 1.
 3. **Should `_shortfall_diagnostic`'s 10w re-delivery also expose EV status?** It only reads `.shortfall` (`flex_clear.jl:479`). Recommendation: no change. It now runs the EV check but ignores it, which costs nothing.
+   - **RESOLVED:** no change; 47-01 leaves `_shortfall_diagnostic` untouched (it keeps reading only `.shortfall`).
 
 ## Environment Availability
 
