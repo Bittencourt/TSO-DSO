@@ -355,6 +355,7 @@ end
         ("SmartInverterPV", plus(TSODSO.SmartInverterPV(2, 0.5, fill(0.1, M.T_INT)))),
         ("PartialCompliance", plus(PartialCompliance(inter(), 0.5, bs_inter.b, bs_inter.Ub))),
     ]
+    fourq = plus(FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0))
     cases = [
         ("admm", g -> tight([t.agg]; engine = :admm, welfare_optimizer = g)),
         (
@@ -382,6 +383,11 @@ end
         ),
         ("empty", g -> tight([t.agg]; flex_market = FlexMarket[], welfare_optimizer = g)),
         ("capacitor", g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)),
+        ("fourquad", g -> tight([fourq]; flex_market = FlexMarket(), welfare_optimizer = g)),
+        (
+            "smartinverterpv_flex",
+            g -> tight([unsupported[3][2]]; flex_market = FlexMarket(), welfare_optimizer = g),
+        ),
         ("actors", g -> tight([t.agg]; actors = portfolio, welfare_optimizer = g)),
         ("actors_not_a_vector", g -> tight([t.agg]; actors = :x, welfare_optimizer = g)),
         ("ev", g -> tight([unsupported[1][2]]; welfare_optimizer = g)),
@@ -465,6 +471,15 @@ end
         @test ru.e isa ArgumentError && occursin("compare_tariffs", ru.e.msg)
         @test ru.e isa ArgumentError && occursin(dev_name, ru.e.msg)
     end
+    # with flex_market, a device with its own reactive decision is refused like the capacitor
+    e_4q = refused(g -> tight([fourq]; flex_market = FlexMarket(), welfare_optimizer = g)).e
+    @test e_4q isa ArgumentError && occursin("FourQuadBESS", e_4q.msg)
+    @test e_4q isa ArgumentError && occursin("reactive", e_4q.msg)
+    r_sipv = refused(
+        g -> tight([unsupported[3][2]]; flex_market = FlexMarket(), welfare_optimizer = g),
+    )
+    @test r_sipv.n == 0
+    @test r_sipv.e isa ArgumentError && occursin("SmartInverterPV", r_sipv.e.msg)
     # the same inputs without flex_market keep the default path (no new guard there)
     r_pf = compare_tariffs(
         M.feeder2(t.smax),

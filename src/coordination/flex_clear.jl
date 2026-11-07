@@ -21,8 +21,9 @@
 # the full baseline q instead, including the flexible-load draw p·tanφ, would make stage 2
 # infeasible for reasons unrelated to the flex product (on IEEE-13 that draw is two orders of
 # magnitude above the head-branch rating). The flex product is ACTIVE power only. A constant
-# reactive injection (`FixedCapacitor`) is not represented by the pseudo-device, so populations
-# that contain one are refused before any solve.
+# reactive injection (`FixedCapacitor`) is not represented by the pseudo-device, and neither is
+# the reactive decision of a `SmartInverterPV` or `FourQuadBESS`, so populations that contain
+# one are refused before any solve.
 #
 # DELIVERY. Bids are hour-separable, but the devices behind them are not (state of charge,
 # deferrable energy, thermal state), so the activated targets b + Δ need not be jointly
@@ -169,6 +170,27 @@ function _refuse_fixed_capacitor(aggs, who::AbstractString)
     return nothing
 end
 
+# Internal: refuse a population holding a device with its own reactive decision variable
+# (`SmartInverterPV`, `FourQuadBESS`). The predicate is `has_reactive_decision(d) &&
+# !is_flexible_load(d)`: the trait alone is also true for every flexible load, whose
+# power-factor draw p·tanφ stage 2 drops on purpose (see the header), so flexible loads,
+# `PVBattery` and the behavioural wrappers pass. Runs before any solve.
+function _refuse_reactive_decision(aggs, who::AbstractString)
+    for (k, a) in enumerate(aggs)
+        for d in a.devices
+            (has_reactive_decision(d) && !is_flexible_load(d)) && throw(
+                ArgumentError(
+                    "$who: aggregator[$k] (bus $(a.bus)) holds a $(nameof(typeof(d))), which " *
+                    "has its own reactive decision; the stage-2 bid pseudo-device holds " *
+                    "reactive power at the inelastic −Pdc·tanφ (the flex product is active " *
+                    "power only).",
+                ),
+            )
+        end
+    end
+    return nothing
+end
+
 """
     _stage2_aggregators(aggs, b, bids; T) -> Vector{Aggregator}
 
@@ -176,7 +198,8 @@ One pseudo-aggregator per real aggregator, in the SAME order (ascending buses, a
 `settlement_input` requires). Pseudo-aggregator `k` keeps the bus, `φ` and `Pdc` of
 `aggs[k]` and holds the single device `FlexBidDevice(b[k] + Pdc, bids[k])`, so its net
 injection is `b[k] + Δ`. Throws `ArgumentError` on length mismatches, a non-ascending
-bus order, or a `FixedCapacitor` in the population.
+bus order, or a `FixedCapacitor`, `SmartInverterPV` or `FourQuadBESS` (any device with its
+own reactive decision) in the population.
 """
 function _stage2_aggregators(
     aggs::AbstractVector{<:Aggregator},
@@ -199,6 +222,7 @@ function _stage2_aggregators(
         ),
     )
     _refuse_fixed_capacitor(aggs, "_stage2_aggregators")
+    _refuse_reactive_decision(aggs, "_stage2_aggregators")
     out = Vector{Aggregator}(undef, n)
     for (k, a) in enumerate(aggs)
         length(b[k]) == T || throw(
@@ -628,7 +652,8 @@ Throws `ArgumentError` before any solve on an empty population, a `price` or `λ
 wrong length or with a non-finite entry, a `λ₀` with a non-positive entry (it normalises the
 congestion score), `n_blocks < 1`, a power-flow formulation other than `ConvexBranchFlow`
 (the congested-hour split reads its constraint duals), aggregator buses that are not
-ascending, or a `FixedCapacitor` in the population.
+ascending, or a `FixedCapacitor`, `SmartInverterPV` or `FourQuadBESS` (any device with its own
+reactive decision) in the population.
 """
 function _flex_physics(
     feeder::AbstractFeeder,
@@ -672,6 +697,7 @@ function _flex_physics(
         ),
     )
     _refuse_fixed_capacitor(aggs, "_flex_physics")
+    _refuse_reactive_decision(aggs, "_flex_physics")
     p = Float64[price[t] for t in 1:T]
     λ = Float64[λ₀[t] for t in 1:T]
 

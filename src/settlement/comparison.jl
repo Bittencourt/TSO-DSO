@@ -343,8 +343,10 @@ rows; so does a failure of the congested-hour price split after the redispatch
 an entry that is not a `FlexMarket`, two entries with the same row name, a power-flow
 formulation other than `ConvexBranchFlow` (the congested-hour split reads its constraint
 duals), a `λ₀` with a non-finite or non-positive entry (it normalises the congestion
-score), aggregators that are not in ascending bus order, and any aggregator holding a
-`FixedCapacitor` (its constant reactive injection has no stage-2 representation).
+score), aggregators that are not in ascending bus order, any aggregator holding a
+`FixedCapacitor` (its constant reactive injection has no stage-2 representation), and any
+aggregator holding a device with its own reactive decision (`SmartInverterPV`,
+`FourQuadBESS`): stage 2 holds reactive power at the inelastic draw.
 """
 function compare_tariffs(
     feeder::AbstractFeeder,
@@ -459,6 +461,7 @@ function compare_tariffs(
             ),
         )
         _refuse_fixed_capacitor(aggs, "compare_tariffs")
+        _refuse_reactive_decision(aggs, "compare_tariffs")
     end
     λ₀vec = Float64[float(λ₀[t]) for t in 1:T]
 

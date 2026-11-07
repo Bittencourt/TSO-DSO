@@ -1682,6 +1682,91 @@ end
     end
 end
 
+@testitem "flex market: devices with their own reactive decision are refused in stage 2" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    reactive = [
+        ("FourQuadBESS", FourQuadBESS(2, 0.95, 1.0, 4.0, 5.0, 6.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0)),
+        ("SmartInverterPV", SmartInverterPV(2, 0.5, fill(0.1, M.T_INT))),
+    ]
+
+    # the stage-2 builder refuses them next to the FixedCapacitor
+    function stage2_refusal(d)
+        f = M.tight_agg(M.SEEDS[1])
+        fb = M.zero_bids(M.T_INT, 2)
+        agg = Aggregator(2, 1.0, AbstractDevice[Interruptible(2, 0.0, 2.0, 6.0, 1.0), d], f.Pdc)
+        return M.caught(() -> TSODSO._stage2_aggregators([agg], [f.base], [fb]; T = M.T_INT))
+    end
+    for (dev_name, d) in reactive
+        e6 = stage2_refusal(d)
+        @test e6 isa ArgumentError
+        @test e6 isa ArgumentError && occursin(dev_name, e6.msg)
+        @test e6 isa ArgumentError && occursin("reactive", e6.msg)
+    end
+
+    # the physics pipeline and the clear refuse them before any solve: the counting device
+    # comes first, so any contribute! before the guard would have counted
+    f = M.market_agg(M.SEEDS[1])
+    input = M.market_dadp(f).input
+    function counted(d)
+        agg, dev = M.failing_agg(f, 0)
+        return (; bad = Aggregator(2, 1.0, AbstractDevice[dev, d], f.Pdc), dev)
+    end
+    function physics_refusal(d)
+        c = counted(d)
+        e = M.caught(
+            () -> TSODSO._flex_physics(
+                M.feeder2(f.smax),
+                ConvexBranchFlow(),
+                [c.bad],
+                f.π0;
+                T = M.T_INT,
+                λ₀ = f.π0,
+                n_blocks = 4,
+            ),
+        )
+        return (; e, calls = c.dev.calls[])
+    end
+    function clear_refusal(d)
+        c = counted(d)
+        e = M.caught(
+            () -> clear_flex_market(
+                M.feeder2(f.smax),
+                ConvexBranchFlow(),
+                [c.bad],
+                input,
+                FlexMarket();
+                T = M.T_INT,
+                λ₀ = f.π0,
+            ),
+        )
+        return (; e, calls = c.dev.calls[])
+    end
+    for (dev_name, d) in reactive, r7 in (physics_refusal(d), clear_refusal(d))
+        @test r7.e isa ArgumentError
+        @test r7.calls == 0
+        @test r7.e isa ArgumentError && occursin(dev_name, r7.e.msg)
+        @test r7.e isa ArgumentError && occursin("reactive", r7.e.msg)
+    end
+
+    # flexible loads, PVBattery and the counting wrapper pass the guard (no solve here)
+    pdc = fill(0.1, M.T_INT)
+    passing = AbstractDevice[
+        Interruptible(2, 0.0, 2.0, 6.0, 1.0),
+        Thermostatic(2, 0.2, 0.05, 15.0, 30.0, 22.0, 0.0, 1.0, 0.5, fill(20.0, 24)),
+        Deferrable(2, 8, 16, 1.0, 0.5, 0.5),
+        TSODSO._flex_heatpump(1_234_567, 2, 1, M.T_INT; scale = 0.02),
+        PVBattery(2, 0.95, 1.0, 5.0, 0.0, 10.0, 2.0, 1.0, 4.0, 9.0, fill(5.0, 4)),
+        last(M.failing_agg(f, 0)),
+    ]
+    for d in passing
+        agg9 = Aggregator(2, 1.0, AbstractDevice[d], pdc)
+        @test TSODSO._refuse_reactive_decision([agg9], "x") === nothing
+    end
+end
+
 @testitem "flex market: baseline inflation changes money only" setup = [FlexMarketFixtures] tags =
     [:flex_market] begin
     using TSODSO

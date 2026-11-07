@@ -283,7 +283,9 @@ instead (losses included) and is exact only when the delivery shortfall is 0.
 
 **Reactive power.** Stage 2 holds each bus's reactive draw at the inelastic `−Pdc·tanφ`; the
 flexibility product is active power only. The AC check runs on the delivered nets with the
-original aggregators (`ac_feasibility_status`) and reports, never gates.
+original aggregators (`ac_feasibility_status`) and reports, never gates. Populations with a
+constant reactive injection (`FixedCapacitor`) or with their own reactive decision
+(`SmartInverterPV`, `FourQuadBESS`) are refused before any solve.
 
 **Actors.** Settling profit-seeking aggregator actors (`Portfolio` / `ProfitObjective`) here
 is a recorded scope decision (future work), so `actors` must be `nothing`. An `input` built
