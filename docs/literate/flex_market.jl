@@ -136,7 +136,10 @@ end
 # `p·tanφ` at the low flat price) makes the redispatch infeasible on these feeders. The
 # documented difference from DADP is that the centralized DADP solve includes the flexible-load
 # reactive draw and stage 2 does not. A population with a constant reactive injection
-# (`FixedCapacitor`) is refused, because the pseudo-device cannot represent it.
+# (`FixedCapacitor`) or with a device that has its own reactive decision (`SmartInverterPV`,
+# `FourQuadBESS`) is refused before any solve, because the pseudo-device cannot represent it.
+# Flexible loads are not refused: their power-factor draw is exactly the term stage 2 drops on
+# purpose.
 
 # ## 2. First-welfare-theorem framing (read this before any number)
 #
@@ -682,6 +685,18 @@ end
 # - **Clearing prices are not DLMP estimates** on the IEEE feeders: the gap to the DADP price
 #   is far outside the two-bus band (section 2).
 # - **Inelastic reactive power in stage 2** (section 1).
+# - **Devices with their own reactive decision are refused in stage 2** (`SmartInverterPV`,
+#   `FourQuadBESS`; section 1).
+# - **The V2G EV certificate is reported separately.** The price-taker baseline and the
+#   delivery record an EV co-charge status of their own beside the battery status. Like the
+#   battery refusals it is counted, never repaired, and it is checked at the tolerance of the
+#   ADMM final consolidation.
+# - **Actors are not settled here.** Settling profit-seeking aggregator actors (`Portfolio`
+#   with a `ProfitObjective`) through the flexibility market or the tariff comparison is a
+#   recorded scope decision, left to future work (wedge lines and flexibility payments in one
+#   ledger with residual 0). `clear_flex_market` and `compare_tariffs` refuse any `actors`
+#   value other than `nothing` with an `ArgumentError`, before any solve. A `SettlementInput`
+#   built from an actor run is not detected, so its wedges are not carried into this ledger.
 # - **Lossless flex welfare** against loss-inclusive DADP welfare; use the like-for-like column
 #   (section 3).
 

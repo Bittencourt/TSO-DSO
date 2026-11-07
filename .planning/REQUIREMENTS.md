@@ -85,6 +85,7 @@ Deferred; tracked but not in this roadmap.
 - **ACTOR-F2**: Portfolio-coupled aggregator subproblem (shared constraints across a portfolio's buses).
 - **ACTOR-F3**: Endogenous participation equilibrium (outer fixed point on opt-out).
 - **SETL-F1**: Aggregate-flexibility polytope bids; equity compensation mechanisms.
+- **SETL-F2**: Actor-aware flexibility market and tariff comparison: settle profit-seeking aggregator actors (`Portfolio` / `ProfitObjective` wedges) through `clear_flex_market` and `compare_tariffs`, with wedge lines and flexibility payments in one ledger and residual 0; includes a provenance flag on `SettlementInput` so an actor-run input can be told apart. (Recorded scope decision, v5.0 audit B2; guarded by an `ArgumentError` since Phase 47.)
 - **DEV-F1**: Volt-VAR droop as an outer fixed-point control loop.
 - **PAR-F1**: Parallel / hour-split DSO network solve (only if 8500 attribution supports it).
 
@@ -127,7 +128,7 @@ Deferred; tracked but not in this roadmap.
 | REPRO-04 | Phase 42 | Complete |
 | REPRO-05 | Phase 42 | Complete |
 | DEV-06 | Phase 43 | Complete |
-| DEV-07 | Phase 43 | Complete |
+| DEV-07 | Phase 43 | Complete (Phase 47 gap closure: EV co-charge certificate reported as its own status on the price-taker and flex-market paths) |
 | DEV-08 | Phase 43 | Complete |
 | DEV-09 | Phase 43 | Complete |
 | DEV-10 | Phase 43 | Complete |
@@ -135,8 +136,8 @@ Deferred; tracked but not in this roadmap.
 | ACTOR-02 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
 | ACTOR-03 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
 | ACTOR-04 | Phase 44 | Complete (plans 44-01..44-07; results/actor_behaviour/actor_behaviour_sweep.csv) |
-| SETL-07 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv) |
-| SETL-08 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv) |
+| SETL-07 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv; Phase 47 gap closure: scope = ledger actors DSO / aggregators / wholesale; profit-seeking actors refused with ArgumentError (see SETL-F2); V2G EV certificate recorded in the flex physics records; devices with their own reactive decision refused in stage 2) |
+| SETL-08 | Phase 45 | Complete (plans 45-01..45-07; results/settlement_comparison/tariff_comparison.csv; Phase 47 gap closure: scope = ledger actors DSO / aggregators / wholesale; profit-seeking actors refused with ArgumentError (see SETL-F2); unsupported flexible devices refused before any solve) |
 | SCALE-07 | Phase 46 | Complete (plans 46-01..46-05; results/ieee8500_benchmark/scenario_table.csv recorded_no_go row; docs/literate/ieee8500_scaling.jl "Headline measurement and go/no-go") |
 | SCALE-08 | Phase 46 | Complete (plans 46-01..46-05; results/ieee8500_benchmark/scenario_table.csv measured row p46-scn-ieee8500-d10-T10, refused_certificate; docs/literate/ieee8500_scaling.jl "Headline measurement and go/no-go") |
 
