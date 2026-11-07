@@ -18,3 +18,13 @@ Decision needed (modelling): keep thesis-literal 3.45 (document that it can cut 
 reverse flow), or relax/condition the v̂ bound (affects exactness claims, goldens, thesis reproduction).
 Relates to memory note v2.1-socp-inexactness-and-thesis-repro and the "exactness copy" fixes of v4.0
 Phase 26. Do not change silently — goldens and the knife-edge canary depend on the current model.
+
+## Resolution (2026-11-07)
+
+Resolved by re-documentation (Option A) per the debug session
+`.planning/debug/lindistflow-vmax-reverse-flow.md`. The default copy is a per-branch inner
+approximation of the upper voltage band (`v̂ − v = Σ_path |z|²l ≥ 0`, so `v̂ ≤ vmax²` enforces
+`v ≤ vmax² − Σ_path |z|²l`); it is not Gan-Low's OPF-m and not exact by theorem. The exactness gate
+refuses the inexact cases (`pv_scale ≥ 1.3` on the stress fixture), so no silent wrong prices. No
+behaviour change: goldens, canary and digest fences are untouched. The −9.73e-6 residual after
+deleting the bound was solver tolerance (Ipopt bound_relax_factor + Clarabel tol_gap), not a model gap.
