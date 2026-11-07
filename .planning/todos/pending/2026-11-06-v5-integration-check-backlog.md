@@ -42,3 +42,17 @@ them makes a committed result wrong. Each comes with a suggested fix.
   final-consolidation call site is its only user. The price-taker and flex stage-2 solves now reuse it,
   because they pair it with `τ_batt = 1e-3`. Fix: update the docstring only, with the value unchanged, the next
   time `src/models` is opened.
+
+## Info items from the phase-47 code review (iteration 2, accepted, not fixed)
+
+Details are in `.planning/phases/47-v5-audit-gap-closure/47-REVIEW.md`.
+
+- **IN-01:** FourQuadBESS has no co-charge certificate on the price-taker paths. This gap predates the review.
+- **IN-02:** no test covers the rethrow branch of `_certificate_status`.
+- **IN-03:** the stage-2 reactive-decision refusal assumes no flexible load has its own reactive output. No test pins that assumption.
+- **IN-04:** `τ_ev` is not threaded alongside `τ_batt`. This was a decision, but `clear_flex_market` does not document it.
+- **IN-05:** the flex-market docs page does not say that `compare_tariffs` refuses EV, HeatPump, SmartInverterPV and wrapped populations up front.
+- **IN-06:** `test_flex_market.jl` repeats a status assert.
+- **IN-07:** the `compare_tariffs` refusal message names only SmartInverterPV among the devices `clear_flex_market` refuses. It also refuses FourQuadBESS and FixedCapacitor. No test runs a full flex clear on a heat-pump population.
+- **IN-08:** the SmartInverterPV fence case uses a counted optimizer that only stage 2 uses. Pinning the `"_flex_physics:"` message prefix would prove directly that the refusal happens before any solve.
+- **IN-09:** the shared `fit_baseline` refusal message (`src/pricing/fit.jl`) still says "phase-43 / phase-44" and suggests dropping `flex_devices`, which is the wrong fix for behaviour wrappers.
