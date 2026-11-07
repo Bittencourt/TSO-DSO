@@ -268,6 +268,13 @@ end
         @test isequal(r.equity_breakouts, r0.equity_breakouts)
         @test isequal(r.rebound, r0.rebound)
     end
+    # an explicit actors = nothing is the default call
+    r_act = compare(; actors = nothing)
+    @test names(r_act.summary) == F.SUMMARY_COLUMNS
+    @test isequal(r_act.summary, r0.summary)
+    @test isequal(r_act.household_bills, r0.household_bills)
+    @test isequal(r_act.equity_breakouts, r0.equity_breakouts)
+    @test isequal(r_act.rebound, r0.rebound)
 end
 
 @testitem "flex market: welfare_optimizer contract and guards" setup =
@@ -337,6 +344,17 @@ end
         AbstractDevice[Interruptible(2, 0.0, 2.0, t.a, t.bc), FixedCapacitor(2, 0.1)],
         t.Pdc,
     )
+    # profit-seeking actors, and devices the fit leg cannot model next to the Interruptible
+    portfolio = [Portfolio(t.agg; objective = ProfitObjective(0.5))]
+    inter() = Interruptible(2, 0.0, 2.0, t.a, t.bc)
+    plus(d) = Aggregator(2, 1.0, AbstractDevice[inter(), d], t.Pdc)
+    bs_inter = TSODSO._device_baseline(inter(), M.T_INT)
+    unsupported = [
+        ("ElectricVehicle", plus(TSODSO._flex_ev(1_234_567, 2, 1, M.T_INT; scale = 0.02))),
+        ("HeatPump", plus(TSODSO._flex_heatpump(1_234_567, 2, 1, M.T_INT; scale = 0.02))),
+        ("SmartInverterPV", plus(TSODSO.SmartInverterPV(2, 0.5, fill(0.1, M.T_INT)))),
+        ("PartialCompliance", plus(PartialCompliance(inter(), 0.5, bs_inter.b, bs_inter.Ub))),
+    ]
     cases = [
         ("admm", g -> tight([t.agg]; engine = :admm, welfare_optimizer = g)),
         (
@@ -364,6 +382,12 @@ end
         ),
         ("empty", g -> tight([t.agg]; flex_market = FlexMarket[], welfare_optimizer = g)),
         ("capacitor", g -> tight([cap]; flex_market = FlexMarket(), welfare_optimizer = g)),
+        ("actors", g -> tight([t.agg]; actors = portfolio, welfare_optimizer = g)),
+        ("actors_not_a_vector", g -> tight([t.agg]; actors = :x, welfare_optimizer = g)),
+        ("ev", g -> tight([unsupported[1][2]]; welfare_optimizer = g)),
+        ("heatpump", g -> tight([unsupported[2][2]]; welfare_optimizer = g)),
+        ("smartinverterpv", g -> tight([unsupported[3][2]]; welfare_optimizer = g)),
+        ("wrapper", g -> tight([unsupported[4][2]]; welfare_optimizer = g)),
         (
             "lindistflow",
             g -> compare_tariffs(
@@ -428,6 +452,19 @@ end
     @test e_pf isa ArgumentError && occursin("ConvexBranchFlow", e_pf.msg)
     e_λ = refused(g -> cases[end - 1][2](g)).e
     @test e_λ isa ArgumentError && occursin("positive", e_λ.msg)
+    # the actors refusal names the scope decision, whatever the value passed
+    e_act = refused(g -> tight([t.agg]; actors = portfolio, welfare_optimizer = g)).e
+    @test e_act isa ArgumentError && occursin("actors", e_act.msg)
+    @test e_act isa ArgumentError && occursin("scope decision", e_act.msg)
+    e_sym = refused(g -> tight([t.agg]; actors = :x, welfare_optimizer = g)).e
+    @test e_sym isa ArgumentError && occursin("scope decision", e_sym.msg)
+    # devices the fit leg cannot model are refused before the DADP solve, by type name
+    for (dev_name, agg_x) in unsupported
+        ru = refused(g -> tight([agg_x]; welfare_optimizer = g))
+        @test ru.n == 0
+        @test ru.e isa ArgumentError && occursin("compare_tariffs", ru.e.msg)
+        @test ru.e isa ArgumentError && occursin(dev_name, ru.e.msg)
+    end
     # the same inputs without flex_market keep the default path (no new guard there)
     r_pf = compare_tariffs(
         M.feeder2(t.smax),

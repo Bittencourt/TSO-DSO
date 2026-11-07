@@ -250,7 +250,8 @@ end
 
 """
     clear_flex_market(feeder, pf, aggs, input::SettlementInput, fm::FlexMarket; T, λ₀,
-                      bins = nothing, optimizer = nothing, τ_batt = 1e-3) -> NamedTuple
+                      bins = nothing, optimizer = nothing, τ_batt = 1e-3,
+                      actors = nothing) -> NamedTuple
 
 Clear one DSO flexibility market ([`FlexMarket`](@ref)) after a DADP run and settle it on the
 same [`SettlementLedger`](@ref) as the tariff legs. For example, after
@@ -284,6 +285,11 @@ instead (losses included) and is exact only when the delivery shortfall is 0.
 flexibility product is active power only. The AC check runs on the delivered nets with the
 original aggregators (`ac_feasibility_status`) and reports, never gates.
 
+**Actors.** Settling profit-seeking aggregator actors (`Portfolio` / `ProfitObjective`) here
+is a recorded scope decision (future work), so `actors` must be `nothing`. An `input` built
+from an actor-objective run (`solve_welfare` or `solve_admm` with `actors`) is not detected:
+it settles like any other input, and its wedges are not carried into this ledger.
+
 **Returns** a NamedTuple with the fields, in order, `status`, `notes`, `market`,
 `baseline_price`, `physics`, `ledger`, `feasibility`, `payment_rows`, `flex_payments_total`,
 `baseline_overpayment`, `tariff_on_activation`, `flex_payment_on_delivered`,
@@ -295,9 +301,9 @@ cannot restore network feasibility), `"inexact_redispatch"` (the stage-2 SOCP is
 throws: `ledger`, `feasibility`, `payment_rows`, `p_import_lossless`, `bills` and `surplus` are
 `nothing`, and the money and welfare numbers are `missing`.
 
-Throws `ArgumentError` before any solve when `input.T != T`, when the aggregator buses are not
-exactly `input.buses` (one aggregator per bus, in ascending bus order), or when the default
-TOU bins do not exist for `T`; the physics guards of the clear apply too, also before any
+Throws `ArgumentError` before any solve when `actors` is not `nothing`, when `input.T != T`,
+when the aggregator buses are not exactly `input.buses` (one aggregator per bus, in ascending
+bus order), or when the default TOU bins do not exist for `T`; the physics guards of the clear apply too, also before any
 solve (among them, `pf` must be a `ConvexBranchFlow` and every `λ₀[t]` must be positive). A
 failure of the congested-hour price split after the redispatch is the status
 `"error:dlmp_split"`.
@@ -313,7 +319,16 @@ function clear_flex_market(
     bins::Union{Nothing, Vector{Vector{Int}}} = nothing,
     optimizer = nothing,
     τ_batt::Real = 1e-3,
+    actors = nothing,
 )
+    actors === nothing || throw(
+        ArgumentError(
+            "clear_flex_market: actors are not supported. Settling profit-seeking aggregator " *
+            "actors (Portfolio / ProfitObjective) through the flexibility market or the " *
+            "tariff comparison is a recorded scope decision (future work: wedge lines and " *
+            "flexibility payments in one ledger); pass actors = nothing.",
+        ),
+    )
     input.T == T || throw(
         ArgumentError("clear_flex_market: input.T = $(input.T) does not match T = $T."),
     )

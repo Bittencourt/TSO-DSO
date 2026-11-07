@@ -1615,6 +1615,73 @@ end
     @test e_phys isa ArgumentError && occursin("not ascending", e_phys.msg)
 end
 
+@testitem "flex market: actors are refused, behaviour wrappers clear" setup =
+    [FlexMarketFixtures] tags = [:flex_market] begin
+    using TSODSO
+    M = FlexMarketFixtures
+
+    f = M.market_agg(M.SEEDS[1])
+    input = M.market_dadp(f).input
+
+    # an explicit actors = nothing is the default call
+    r0 = M.market_clear(f, input, FlexMarket())
+    r1 = M.market_clear(f, input, FlexMarket(); actors = nothing)
+    @test isequal(r1.status, r0.status)
+    @test isequal(r1.baseline_price, r0.baseline_price)
+    @test isequal(r1.payment_rows, r0.payment_rows)
+    @test isequal(r1.flex_payments_total, r0.flex_payments_total)
+    @test isequal(r1.welfare_lossless, r0.welfare_lossless)
+    @test (r0.ledger === nothing) == (r1.ledger === nothing)
+    r0.ledger === nothing || @test isequal(r1.ledger.transfers, r0.ledger.transfers)
+
+    # profit-seeking actors are refused before any solve: the counting device never contributes
+    function refused_actors(f, input, actors)
+        agg, dev = M.failing_agg(f, 0)
+        e = M.caught(
+            () -> clear_flex_market(
+                M.feeder2(f.smax),
+                ConvexBranchFlow(),
+                [agg],
+                input,
+                FlexMarket();
+                T = M.T_INT,
+                λ₀ = f.π0,
+                actors = actors === :portfolio ?
+                         [Portfolio(agg; objective = ProfitObjective(0.5))] : actors,
+            ),
+        )
+        return (; e, calls = dev.calls[])
+    end
+    for actors in (:portfolio, :x)
+        ra = refused_actors(f, input, actors)
+        @test ra.e isa ArgumentError
+        @test ra.calls == 0
+        @test ra.e isa ArgumentError && startswith(ra.e.msg, "clear_flex_market:")
+        @test ra.e isa ArgumentError && occursin("scope decision", ra.e.msg)
+    end
+
+    # behaviour wrappers are device-level, not an actor channel: they clear
+    function clear_wrapped(f)
+        w = apply_behaviour([f.agg], BehaviourSpec(compliance = 0.5); T = M.T_INT)
+        fw = merge(f, (; agg = only(w)))
+        in_w = M.market_dadp(fw).input
+        out = Ref{Any}(nothing)
+        e = M.caught(() -> (out[] = M.market_clear(fw, in_w, FlexMarket()); nothing))
+        return (; e, res = out[], wrapped = only(only(w).devices))
+    end
+    cw = clear_wrapped(f)
+    @test cw.wrapped isa PartialCompliance
+    @test cw.e === nothing
+    res = cw.res
+    @test res !== nothing
+    if res !== nothing
+        @test res.status in ("ok", "infeasible_redispatch", "inexact_redispatch") ||
+              startswith(res.status, "error:")
+        @test res.status == "ok"
+        res.status == "ok" && @test ledger_residual(res.ledger) == 0.0
+    end
+end
+
 @testitem "flex market: baseline inflation changes money only" setup = [FlexMarketFixtures] tags =
     [:flex_market] begin
     using TSODSO

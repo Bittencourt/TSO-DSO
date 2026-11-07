@@ -251,7 +251,8 @@ end
                     τ_batt::Real = 1e-3, bins::Vector{Vector{Int}} = default_tou_bins(T),
                     houses = nothing, map_rows = nothing, fit_optimizer = nothing,
                     time_limit_s::Union{Nothing, Real} = nothing, agr_optimizer = nothing,
-                    flex_market = nothing, welfare_optimizer = nothing) ->
+                    flex_market = nothing, welfare_optimizer = nothing,
+                    actors = nothing) ->
         (; summary, household_bills, equity_breakouts, rebound)
 
 The SETL-02/05 comparison runner: settle ONE solved DADP run into a per-actor ledger and
@@ -293,6 +294,16 @@ primitives; `map_rows` are the matching `case_a_household_map`-shaped rows (1:1 
 missing `:pv_group` field, a house bus outside the aggregator buses, more than one
 aggregator per bus, an unknown engine, or a `λ₀` length ≠ `T` throws `ArgumentError`
 BEFORE any solving (T-41-19).
+
+Devices the fit leg cannot model (`ElectricVehicle`, `HeatPump`, `SmartInverterPV` and the
+behavioural wrappers `PartialCompliance` / `OptOut` / `Rebound`) are refused with the same
+`ArgumentError` as `fit_baseline`, but before any solve: the check runs per aggregator in the
+boundary guards, not inside the fit leg after the DADP, flat and TOU solves.
+
+`actors` must be `nothing` (the default, a no-op). Any other value throws `ArgumentError`
+before any solve: settling profit-seeking aggregator actors (`Portfolio` /
+`ProfitObjective`) through the tariff comparison or the flexibility market is a recorded
+scope decision (future work: wedge lines and flexibility payments in one ledger).
 
 `fit_optimizer` is the documented `fit_baseline` tightening seam (Pitfall 2): a
 differently-CONDITIONED optimizer factory — never a gate change; `fit_baseline` runs
@@ -352,8 +363,17 @@ function compare_tariffs(
     agr_optimizer = nothing,
     flex_market = nothing,
     welfare_optimizer = nothing,
+    actors = nothing,
 )
     # ---- boundary guards (T-41-19) — BEFORE any solving ---------------------------------
+    actors === nothing || throw(
+        ArgumentError(
+            "compare_tariffs: actors are not supported. Settling profit-seeking aggregator " *
+            "actors (Portfolio / ProfitObjective) through the tariff comparison or the " *
+            "flexibility market is a recorded scope decision (future work: wedge lines and " *
+            "flexibility payments in one ledger); pass actors = nothing.",
+        ),
+    )
     engine in (:centralized, :admm) || throw(
         ArgumentError(
             "compare_tariffs: unknown engine $(repr(engine)) — expected :centralized or :admm.",
@@ -371,6 +391,12 @@ function compare_tariffs(
             "compare_tariffs: aggregators share buses — the ledger requires exactly one aggregator per bus.",
         ),
     )
+    # The fit leg (fit_baseline / FIT-OPT) cannot model these devices; refuse them here, before
+    # the DADP, flat and TOU solves, rather than inside the fit leg after them.
+    fit_caller = "compare_tariffs (the fit leg runs fit_baseline / FIT-OPT)"
+    for a in aggs
+        _reject_unsupported_flex_devices(a.devices, fit_caller)
+    end
     if houses === nothing
         map_rows === nothing || throw(
             ArgumentError(
