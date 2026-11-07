@@ -56,3 +56,10 @@ Details are in `.planning/phases/47-v5-audit-gap-closure/47-REVIEW.md`.
 - **IN-07:** the `compare_tariffs` refusal message names only SmartInverterPV among the devices `clear_flex_market` refuses. It also refuses FourQuadBESS and FixedCapacitor. No test runs a full flex clear on a heat-pump population.
 - **IN-08:** the SmartInverterPV fence case uses a counted optimizer that only stage 2 uses. Pinning the `"_flex_physics:"` message prefix would prove directly that the refusal happens before any solve.
 - **IN-09:** the shared `fit_baseline` refusal message (`src/pricing/fit.jl`) still says "phase-43 / phase-44" and suggests dropping `flex_devices`, which is the wrong fix for behaviour wrappers.
+
+## Residual items from the v5.0 re-audit (2026-11-07)
+
+- **N1 (warning):** in `compare_tariffs`, the `houses` input skips the up-front device check (`src/settlement/comparison.jl:404` covers `aggs` only). The house legs also keep only `battery_certificate` (around lines 662 and 758), so a V2G EV in `houses` gets an honest battery `:not_checked`, but an EV `:refused` result is never shown. Fix: extend the up-front check to `houses`, or carry `ev_certificate` into the house legs.
+- **N2 (warning, predates v5.0):** `src/planning/subproblem.jl:365` runs only the battery certificate, and nothing refuses EV populations. Fix: refuse EVs there, or run `assert_ev_complementarity!`.
+- **N3 (info):** `build_settlement_ledger` accepts `actor_wedges` and `flex_payments` together with no guard (`run_inputs.jl:536-555`). It is a building block for hand-assembled ledgers. This ties in with the SETL-F2 provenance flag.
+- **N4 (info):** `TAU_EV_ADMM` is the default in the exported `price_taker_dispatch` signature, but it is neither exported nor `public`.
